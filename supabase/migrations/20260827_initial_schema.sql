@@ -40,9 +40,10 @@ create table if not exists public.profiles (
   constraint valid_username check (username ~* '^[a-z0-9_-]{3,30}$')
 );
 
--- Case-insensitive unique index for usernames
+-- Case-insensitive search indexes for username and display name
 create unique index if not exists profiles_username_lower_idx on public.profiles (lower(username));
 create index if not exists profiles_display_name_idx on public.profiles (display_name);
+create index if not exists profiles_display_name_lower_idx on public.profiles (lower(display_name));
 
 -- Trigger for profiles.updated_at
 create trigger set_profiles_updated_at
