@@ -6,15 +6,35 @@ import type {
   ConversationType,
   Message,
   UserStatus,
+  ReactionType,
 } from "./database";
 
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
+
+/** Aggregated reaction summary for a single emoji type on a message */
+export interface ReactionSummary {
+  reaction: ReactionType;
+  count: number;
+  /** IDs of users who used this reaction — used to detect if current user reacted */
+  userIds: string[];
+}
+
+/** Minimal preview of the message being replied to */
+export interface ReplyPreviewData {
+  messageId: string;
+  senderName: string;
+  /** Truncated content (~100 chars). Empty string when isDeleted is true. */
+  content: string;
+  isDeleted: boolean;
+}
 
 export interface ChatMessage extends Message {
   sender?: Profile | null;
   status?: MessageStatus;
   tempId?: string;
   readBy?: string[];
+  reactions?: ReactionSummary[];
+  replyPreview?: ReplyPreviewData | null;
 }
 
 export interface ConversationWithDetails extends Conversation {
@@ -58,3 +78,6 @@ export interface PresenceUser {
   status: UserStatus;
   lastSeen?: string;
 }
+
+// Re-export for convenience
+export type { ReactionType, ConversationType, FriendshipStatus };
