@@ -199,7 +199,9 @@ export function ConversationList({
                       isSelected ? "text-white/80" : "text-zinc-500 dark:text-zinc-400"
                     }`}
                   >
-                    {conv.type === "direct" && conv.otherMember
+                    {conv.lastMessage
+                      ? conv.lastMessage.content
+                      : conv.type === "direct" && conv.otherMember
                       ? `@${conv.otherMember.username}`
                       : conv.description || "Direct Conversation"}
                   </p>

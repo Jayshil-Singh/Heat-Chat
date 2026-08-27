@@ -1,4 +1,21 @@
-import type { Conversation, ConversationMember, Profile, FriendshipStatus, ConversationType } from "./database";
+import type {
+  Conversation,
+  ConversationMember,
+  Profile,
+  FriendshipStatus,
+  ConversationType,
+  Message,
+  UserStatus,
+} from "./database";
+
+export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
+
+export interface ChatMessage extends Message {
+  sender?: Profile | null;
+  status?: MessageStatus;
+  tempId?: string;
+  readBy?: string[];
+}
 
 export interface ConversationWithDetails extends Conversation {
   otherMember?: Profile | null;
@@ -27,4 +44,17 @@ export interface FriendshipRequest {
   receiverId: string;
   createdAt: string;
   profile: Profile;
+}
+
+export interface TypingUser {
+  userId: string;
+  displayName: string;
+  username: string;
+  timestamp: number;
+}
+
+export interface PresenceUser {
+  userId: string;
+  status: UserStatus;
+  lastSeen?: string;
 }

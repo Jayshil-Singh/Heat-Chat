@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "./use-auth";
-import type { Profile } from "@/types/database";
+import type { Profile, Message } from "@/types/database";
 import type { ConversationWithDetails } from "@/types/chat";
 
 export function useConversations() {
@@ -61,7 +61,7 @@ export function useConversations() {
       }
 
       // 3. Fetch all members for these conversations to identify other participant for direct chats
-      const { data: allMembers, error: allMembersError } = await supabase
+      const { data: allMembers } = await supabase
         .from("conversation_members")
         .select("conversation_id, user_id, role")
         .in("id", convIds as any);
@@ -77,7 +77,23 @@ export function useConversations() {
       const profilesMap = new Map<string, Profile>();
       (profilesData || []).forEach((p) => profilesMap.set(p.id, p as Profile));
 
-      // Construct conversation list with other participant info
+      // 4. Fetch the latest message for each conversation
+      const lastMessagesMap = new Map<string, Message>();
+      for (const convId of convIds) {
+        const { data: latestMsg } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", convId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestMsg) {
+          lastMessagesMap.set(convId, latestMsg as Message);
+        }
+      }
+
+      // Construct conversation list with other participant and last message preview
       const detailedConversations: ConversationWithDetails[] = (convData || []).map((conv) => {
         const convMembers = (allMembers || []).filter((m: any) => m.conversation_id === conv.id);
         const otherMemberItem = convMembers.find((m: any) => m.user_id !== user.id);
@@ -85,12 +101,20 @@ export function useConversations() {
         const memberProfiles = convMembers
           .map((m: any) => profilesMap.get(m.user_id))
           .filter(Boolean) as Profile[];
+        const latestMsg = lastMessagesMap.get(conv.id);
 
         return {
           ...conv,
           otherMember: otherMemberProfile,
           members: memberProfiles,
-          lastMessage: null,
+          lastMessage: latestMsg
+            ? {
+                content: latestMsg.content,
+                sender_id: latestMsg.sender_id,
+                created_at: latestMsg.created_at,
+                message_type: latestMsg.message_type,
+              }
+            : null,
           unreadCount: 0,
         };
       });
@@ -107,6 +131,30 @@ export function useConversations() {
   React.useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Realtime subscription for conversation updates
+  React.useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel("user:conversations")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase, fetchConversations]);
 
   const getOrCreateDirectChat = async (targetUserId: string): Promise<{ conversationId?: string; error?: string }> => {
     if (!user?.id) return { error: "Not authenticated" };
@@ -127,13 +175,11 @@ export function useConversations() {
       }
 
       // 2. Fallback if RPC is not deployed yet in environment
-      // Check if direct conversation exists
       const { data: existingConv } = await supabase
         .from("conversations")
         .select("id, type")
         .eq("type", "direct");
 
-      // Verify membership
       if (existingConv && existingConv.length > 0) {
         for (const c of existingConv) {
           const { data: members } = await supabase
