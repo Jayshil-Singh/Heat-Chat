@@ -345,6 +345,12 @@ export interface Database {
         };
         Returns: boolean;
       };
+      get_or_create_direct_conversation: {
+        Args: {
+          target_user_id: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;

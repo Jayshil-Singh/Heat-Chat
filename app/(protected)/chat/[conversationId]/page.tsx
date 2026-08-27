@@ -4,7 +4,15 @@ import * as React from "react";
 import { useConversations } from "@/hooks/use-conversations";
 import { ChatShell } from "@/components/chat/chat-shell";
 
-export default function ChatIndexPage() {
+interface ChatConversationPageProps {
+  params: Promise<{
+    conversationId: string;
+  }>;
+}
+
+export default function ChatConversationPage({ params }: ChatConversationPageProps) {
+  const unwrappedParams = React.use(params);
+  const conversationId = unwrappedParams.conversationId;
   const { conversations, isLoading } = useConversations();
 
   return (
@@ -12,7 +20,7 @@ export default function ChatIndexPage() {
       <ChatShell
         conversations={conversations}
         isLoading={isLoading}
-        activeConversationId={null}
+        activeConversationId={conversationId}
       />
     </div>
   );
