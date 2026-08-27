@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   MessageSquare,
   Users,
@@ -10,10 +10,13 @@ import {
   Flame,
   User,
   ShieldCheck,
+  LogOut,
+  LogIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ThemeToggle } from "./theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
+import { useAuth } from "@/hooks/use-auth";
 
 const navItems = [
   {
@@ -40,6 +43,13 @@ const navItems = [
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, profile, signOut, isLoading } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+  };
 
   return (
     <aside className="hidden md:flex h-full w-64 flex-col justify-between border-r border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/70 backdrop-blur-xl shrink-0">
@@ -85,7 +95,12 @@ export function SidebarNav() {
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={cn("h-4 w-4", isActive ? "text-white" : "text-zinc-400 dark:text-zinc-500")} />
+                <Icon
+                  className={cn(
+                    "h-4 w-4",
+                    isActive ? "text-white" : "text-zinc-400 dark:text-zinc-500"
+                  )}
+                />
                 <span>{item.label}</span>
               </Link>
             );
@@ -102,19 +117,54 @@ export function SidebarNav() {
           <ThemeToggle />
         </div>
 
-        {/* User preview placeholder for foundation */}
-        <div className="flex items-center gap-3 rounded-xl p-2 bg-white/70 dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-800 shadow-sm">
-          <Avatar name="Guest User" size="default" status="online" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-              Heat Chat Guest
-            </p>
-            <p className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <ShieldCheck className="h-3 w-3 text-emerald-500" />
-              Private & Encrypted
-            </p>
+        {/* User profile / Auth status */}
+        {!isLoading && user ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl p-2 bg-white/70 dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-800 shadow-sm">
+            <Link
+              href="/profile"
+              className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity"
+            >
+              <Avatar
+                src={profile?.avatar_url}
+                name={profile?.display_name || user.email || "User"}
+                size="default"
+                status={profile?.status || "online"}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  {profile?.display_name || user.email?.split("@")[0]}
+                </p>
+                <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                  @{profile?.username || "user"}
+                </p>
+              </div>
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800 dark:hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+              title="Log out"
+              aria-label="Log out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-        </div>
+        ) : !isLoading ? (
+          <div className="space-y-2">
+            <Link
+              href="/login"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-heat-500 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-heat-500/20 hover:bg-heat-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              <span>Log In / Register</span>
+            </Link>
+            <div className="flex items-center justify-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <ShieldCheck className="h-3 w-3 text-emerald-500" />
+              <span>Private & Encrypted</span>
+            </div>
+          </div>
+        ) : (
+          <div className="h-12 w-full animate-pulse rounded-xl bg-zinc-200/60 dark:bg-zinc-800/60" />
+        )}
       </div>
     </aside>
   );
