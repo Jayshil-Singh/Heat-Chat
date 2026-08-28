@@ -20,6 +20,7 @@ interface MessageFeedProps {
   messages: ChatMessage[];
   currentUserId: string;
   recipientName?: string;
+  isGroupChat?: boolean;
   isLoading: boolean;
   isLoadingOlder: boolean;
   hasMore: boolean;
@@ -63,6 +64,7 @@ export const MessageFeed = React.forwardRef<
     messages,
     currentUserId,
     recipientName = "your friend",
+    isGroupChat = false,
     isLoading,
     isLoadingOlder,
     hasMore,
@@ -117,7 +119,6 @@ export const MessageFeed = React.forwardRef<
   React.useImperativeHandle(ref, () => ({
     scrollToMessage: (messageId: string) => {
       if (!scrollAndHighlight(messageId) && hasMore) {
-        // Message not in current DOM — try loading older messages then retry
         onLoadOlder().then(() => {
           setTimeout(() => {
             scrollAndHighlight(messageId);
@@ -202,24 +203,31 @@ export const MessageFeed = React.forwardRef<
       container.scrollTop += heightDifference;
       previousScrollHeightRef.current = 0;
     }
-  }, [messages.length]);
+  }, [messages]);
 
-  // ── Auto-scroll on new message ────────────────────────────────────────────
+  // ── Auto-scroll on new outgoing messages ──────────────────────────────────
 
+  const prevMessagesLengthRef = React.useRef(messages.length);
   React.useEffect(() => {
-    if (isInitialLoadRef.current) return;
-    const container = containerRef.current;
-    if (!container) return;
+    const prevLen = prevMessagesLengthRef.current;
+    prevMessagesLengthRef.current = messages.length;
 
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    if (messages.length > prevLen) {
+      const newestMsg = messages[messages.length - 1];
+      const isFromMe = newestMsg.sender_id === currentUserId;
+      const container = containerRef.current;
+      if (!container) return;
 
-    if (distanceFromBottom < 160) {
-      bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth" });
-    } else {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.sender_id !== currentUserId) {
-        setUnreadNewCount((prev) => prev + 1);
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+
+      if (isFromMe || distanceFromBottom < 100) {
+        bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth" });
+        setShowScrollBottom(false);
+        setUnreadNewCount(0);
+      } else {
+        setShowScrollBottom(true);
+        setUnreadNewCount((c) => c + 1);
       }
     }
   }, [messages, currentUserId]);
@@ -230,11 +238,11 @@ export const MessageFeed = React.forwardRef<
     setUnreadNewCount(0);
   };
 
-  // ── States ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-heat-500" />
       </div>
     );
@@ -242,11 +250,11 @@ export const MessageFeed = React.forwardRef<
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-heat-50 text-heat-600 dark:bg-heat-950/50 dark:text-heat-400">
+      <div className="flex flex-1 flex-col items-center justify-center p-8 text-center animate-in fade-in">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-heat-50 dark:bg-heat-950/40 text-heat-500 shadow-xs mb-3">
           <MessageSquare className="h-7 w-7" />
         </div>
-        <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+        <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
           Start the conversation
         </h3>
         <p className="mt-1 max-w-xs text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
@@ -254,8 +262,7 @@ export const MessageFeed = React.forwardRef<
           <span className="font-semibold text-zinc-800 dark:text-zinc-200">
             {recipientName}
           </span>
-          . Your private messages are secured with end-to-end database
-          authorization.
+          . Your messages are secured with database authorization.
         </p>
       </div>
     );
@@ -301,6 +308,7 @@ export const MessageFeed = React.forwardRef<
                   message={msg}
                   isCurrentUser={msg.sender_id === currentUserId}
                   currentUserId={currentUserId}
+                  isGroupChat={isGroupChat}
                   showSenderInfo={showSenderInfo}
                   isHighlighted={highlightedMessageId === msg.id}
                   onRetry={onRetryMessage}

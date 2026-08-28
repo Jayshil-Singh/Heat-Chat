@@ -16,7 +16,8 @@ export function TypingIndicator({ typingUsers }: TypingIndicatorProps) {
   } else if (typingUsers.length === 2) {
     text = `${typingUsers[0].displayName} and ${typingUsers[1].displayName} are typing...`;
   } else {
-    text = `${typingUsers[0].displayName} and ${typingUsers.length - 1} others are typing...`;
+    const remaining = typingUsers.length - 2;
+    text = `${typingUsers[0].displayName}, ${typingUsers[1].displayName}, and ${remaining} other${remaining > 1 ? "s" : ""} are typing...`;
   }
 
   return (

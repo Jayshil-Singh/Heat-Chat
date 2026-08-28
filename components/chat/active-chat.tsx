@@ -149,6 +149,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         ref={feedRef}
         messages={messages}
         currentUserId={user?.id || ""}
+        isGroupChat={conversation.type === "group"}
         recipientName={
           conversation.otherMember?.display_name ||
           conversation.name ||

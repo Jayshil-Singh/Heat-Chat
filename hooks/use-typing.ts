@@ -115,8 +115,21 @@ export function useTyping(conversationId: string | null) {
     });
   }, [conversationId, user?.id, supabase]);
 
+  const typingStatusText = React.useMemo(() => {
+    if (typingUsers.length === 0) return null;
+    if (typingUsers.length === 1) {
+      return `${typingUsers[0].displayName} is typing...`;
+    }
+    if (typingUsers.length === 2) {
+      return `${typingUsers[0].displayName} and ${typingUsers[1].displayName} are typing...`;
+    }
+    const remaining = typingUsers.length - 2;
+    return `${typingUsers[0].displayName}, ${typingUsers[1].displayName}, and ${remaining} other${remaining > 1 ? "s" : ""} are typing...`;
+  }, [typingUsers]);
+
   return {
     typingUsers,
+    typingStatusText,
     sendTyping,
     stopTyping,
   };

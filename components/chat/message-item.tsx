@@ -9,16 +9,18 @@ import {
   RotateCcw,
   Pencil,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 import { MessageActions } from "./message-actions";
 import { MessageReactions } from "./message-reactions";
 import { ReplyPreview } from "./reply-preview";
-import type { ChatMessage, ReplyPreviewData } from "@/types/chat";
+import type { ChatMessage } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
 interface MessageItemProps {
   message: ChatMessage;
   isCurrentUser: boolean;
   currentUserId: string;
+  isGroupChat?: boolean;
   showSenderInfo?: boolean;
   isHighlighted?: boolean;
   onRetry?: (message: ChatMessage) => void;
@@ -38,20 +40,12 @@ function formatMessageTime(dateStr: string): string {
   }
 }
 
-/**
- * Reliable "was edited" check.
- * Condition: message has been updated (updated_at > created_at by more than
- * 1 second to avoid microsecond timestamp noise) AND is not soft-deleted.
- * Our DB trigger bumps updated_at on every UPDATE, so this is reliable
- * given the only UPDATEs we perform are content edits and soft-deletes.
- * Deleted messages explicitly exclude the (edited) indicator.
- */
 function isMessageEdited(message: ChatMessage): boolean {
   if (message.deleted_at) return false;
   if (!message.updated_at || !message.created_at) return false;
   const updatedMs = new Date(message.updated_at).getTime();
   const createdMs = new Date(message.created_at).getTime();
-  return updatedMs - createdMs > 1000; // >1 second diff
+  return updatedMs - createdMs > 1000;
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -60,7 +54,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
       await navigator.clipboard.writeText(text);
       return true;
     }
-    // Fallback for environments where clipboard API is unavailable
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.style.position = "fixed";
@@ -80,6 +73,7 @@ export function MessageItem({
   message,
   isCurrentUser,
   currentUserId,
+  isGroupChat = false,
   showSenderInfo = false,
   isHighlighted = false,
   onRetry,
@@ -106,36 +100,54 @@ export function MessageItem({
   );
 
   const handleCopy = async () => {
-    // Never copy deleted message content
     if (isDeleted) return;
     await copyToClipboard(message.content);
   };
+
+  const senderDisplayName = message.sender?.display_name || "Unknown User";
 
   return (
     <div
       data-message-id={message.id}
       className={`flex w-full flex-col ${
         isCurrentUser ? "items-end" : "items-start"
-      } mb-2 transition-colors duration-500 ${
-        isHighlighted
-          ? "bg-heat-100/60 dark:bg-heat-900/30 rounded-xl"
-          : ""
+      } mb-1.5 transition-colors duration-500 ${
+        isHighlighted ? "bg-heat-100/60 dark:bg-heat-900/30 rounded-xl" : ""
       }`}
     >
-      {/* Sender name for incoming group messages */}
-      {!isCurrentUser && showSenderInfo && message.sender && (
-        <span className="mb-1 ml-[3.5rem] text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-          {message.sender.display_name}
+      {/* Sender name for group chats */}
+      {isGroupChat && !isCurrentUser && showSenderInfo && (
+        <span
+          className="mb-1 ml-11 text-[11px] font-bold text-zinc-600 dark:text-zinc-300"
+          aria-label={`Sender: ${senderDisplayName}`}
+        >
+          {senderDisplayName}
         </span>
       )}
 
-      {/* Bubble row: actions beside bubble */}
+      {/* Bubble row: avatar + bubble + actions */}
       <div
-        className={`group flex w-full items-end gap-1.5 px-4 ${
+        className={`group flex w-full items-end gap-2 px-3 ${
           isCurrentUser ? "flex-row-reverse" : "flex-row"
         }`}
       >
-        {/* Bubble */}
+        {/* Group incoming message avatar */}
+        {isGroupChat && !isCurrentUser && (
+          <div className="shrink-0 w-7 mb-0.5">
+            {showSenderInfo ? (
+              <Avatar
+                src={message.sender?.avatar_url}
+                name={senderDisplayName}
+                size="sm"
+                className="h-7 w-7 text-[10px]"
+              />
+            ) : (
+              <div className="w-7 h-7" />
+            )}
+          </div>
+        )}
+
+        {/* Message Bubble */}
         <div
           className={`relative flex max-w-[78%] sm:max-w-[68%] md:max-w-[62%] flex-col rounded-2xl px-4 py-2.5 shadow-sm text-sm ${
             isCurrentUser
@@ -170,7 +182,7 @@ export function MessageItem({
                 />
               )}
 
-              {/* Message content — XSS-safe plain text */}
+              {/* Message content */}
               <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
                 {message.content}
               </p>
@@ -209,7 +221,7 @@ export function MessageItem({
                   </span>
                 )}
                 {!isSending && !isFailed && isRead && (
-                  <span title="Read">
+                  <span title={`Read by ${message.readBy?.length || 1}`}>
                     <CheckCheck className="h-3.5 w-3.5 text-white" />
                   </span>
                 )}
@@ -223,10 +235,10 @@ export function MessageItem({
           </div>
         </div>
 
-        {/* Message action buttons — hidden until hover/focus, always visible on mobile */}
+        {/* Message action buttons */}
         {!isTemp && (
           <div
-            className={`shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-60 max-sm:group-focus-within:opacity-100`}
+            className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-60 max-sm:group-focus-within:opacity-100"
             aria-label="Message actions"
           >
             <MessageActions
@@ -247,14 +259,16 @@ export function MessageItem({
 
       {/* Reactions below bubble */}
       {!isDeleted && (message.reactions || []).length > 0 && (
-        <MessageReactions
-          reactions={message.reactions || []}
-          currentUserId={currentUserId}
-          isCurrentUser={isCurrentUser}
-          onToggleReaction={(reaction) =>
-            onToggleReaction && onToggleReaction(message.id, reaction)
-          }
-        />
+        <div className={`${isGroupChat && !isCurrentUser ? "ml-9" : ""}`}>
+          <MessageReactions
+            reactions={message.reactions || []}
+            currentUserId={currentUserId}
+            isCurrentUser={isCurrentUser}
+            onToggleReaction={(reaction) =>
+              onToggleReaction && onToggleReaction(message.id, reaction)
+            }
+          />
+        </div>
       )}
 
       {/* Failed message retry prompt */}

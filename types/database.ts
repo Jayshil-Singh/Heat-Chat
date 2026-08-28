@@ -7,7 +7,7 @@ export type Json =
   | Json[];
 
 export type ConversationType = "direct" | "group";
-export type MemberRole = "member" | "admin";
+export type MemberRole = "owner" | "admin" | "member";
 export type MessageType = "text" | "image" | "file";
 export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥";
 export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked";
@@ -345,11 +345,69 @@ export interface Database {
         };
         Returns: boolean;
       };
+      is_conversation_owner: {
+        Args: {
+          conv_id: string;
+          check_user_id: string;
+        };
+        Returns: boolean;
+      };
+      get_conversation_role: {
+        Args: {
+          conv_id: string;
+          check_user_id: string;
+        };
+        Returns: string | null;
+      };
       get_or_create_direct_conversation: {
         Args: {
           target_user_id: string;
         };
         Returns: string;
+      };
+      create_group_conversation: {
+        Args: {
+          group_name: string;
+          member_user_ids: string[];
+          group_avatar_url?: string | null;
+        };
+        Returns: string;
+      };
+      add_group_members: {
+        Args: {
+          conv_id: string;
+          new_user_ids: string[];
+        };
+        Returns: void;
+      };
+      remove_group_member: {
+        Args: {
+          conv_id: string;
+          target_user_id: string;
+        };
+        Returns: void;
+      };
+      update_group_member_role: {
+        Args: {
+          conv_id: string;
+          target_user_id: string;
+          new_role: string;
+        };
+        Returns: void;
+      };
+      update_group_details: {
+        Args: {
+          conv_id: string;
+          new_name: string;
+          new_avatar_url?: string | null;
+        };
+        Returns: void;
+      };
+      leave_group: {
+        Args: {
+          conv_id: string;
+        };
+        Returns: void;
       };
     };
     Enums: {

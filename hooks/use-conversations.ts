@@ -3,8 +3,8 @@
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "./use-auth";
-import type { Profile, Message } from "@/types/database";
-import type { ConversationWithDetails } from "@/types/chat";
+import type { Profile, Message, MemberRole } from "@/types/database";
+import type { ConversationWithDetails, ConversationMemberWithProfile } from "@/types/chat";
 
 export function useConversations() {
   const { user } = useAuth();
@@ -60,11 +60,11 @@ export function useConversations() {
         return;
       }
 
-      // 3. Fetch all members for these conversations to identify other participant for direct chats
+      // 3. Batch-fetch all members for these conversations
       const { data: allMembers } = await supabase
         .from("conversation_members")
-        .select("conversation_id, user_id, role")
-        .in("id", convIds as any);
+        .select("conversation_id, user_id, role, joined_at")
+        .in("conversation_id", convIds);
 
       // Fetch profiles of all members
       const allUserIds = Array.from(new Set((allMembers || []).map((m: any) => m.user_id)));
@@ -77,7 +77,7 @@ export function useConversations() {
       const profilesMap = new Map<string, Profile>();
       (profilesData || []).forEach((p) => profilesMap.set(p.id, p as Profile));
 
-      // 4. Fetch the latest message for each conversation
+      // 4. Batch-fetch latest message for each conversation
       const lastMessagesMap = new Map<string, Message>();
       for (const convId of convIds) {
         const { data: latestMsg } = await supabase
@@ -93,20 +93,36 @@ export function useConversations() {
         }
       }
 
-      // Construct conversation list with other participant and last message preview
+      // Construct conversation list
       const detailedConversations: ConversationWithDetails[] = (convData || []).map((conv) => {
         const convMembers = (allMembers || []).filter((m: any) => m.conversation_id === conv.id);
         const otherMemberItem = convMembers.find((m: any) => m.user_id !== user.id);
         const otherMemberProfile = otherMemberItem ? profilesMap.get(otherMemberItem.user_id) : null;
-        const memberProfiles = convMembers
-          .map((m: any) => profilesMap.get(m.user_id))
-          .filter(Boolean) as Profile[];
+        const currentMemberItem = convMembers.find((m: any) => m.user_id === user.id);
+
+        const memberDetails: ConversationMemberWithProfile[] = convMembers
+          .map((m: any) => {
+            const prof = profilesMap.get(m.user_id);
+            if (!prof) return null;
+            return {
+              userId: m.user_id,
+              role: m.role as MemberRole,
+              joinedAt: m.joined_at,
+              profile: prof,
+            };
+          })
+          .filter(Boolean) as ConversationMemberWithProfile[];
+
+        const memberProfiles = memberDetails.map((md) => md.profile);
         const latestMsg = lastMessagesMap.get(conv.id);
 
         return {
           ...conv,
           otherMember: otherMemberProfile,
           members: memberProfiles,
+          memberDetails,
+          memberCount: convMembers.length,
+          currentMemberRole: (currentMemberItem?.role as MemberRole) || "member",
           lastMessage: latestMsg
             ? {
                 content: latestMsg.content,
@@ -132,18 +148,29 @@ export function useConversations() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Realtime subscription for conversation updates
+  // Realtime subscriptions for conversations & members updates
   React.useEffect(() => {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel("user:conversations")
+      .channel("user:conversations_membership")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "conversations",
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversation_members",
         },
         () => {
           fetchConversations();
@@ -161,7 +188,6 @@ export function useConversations() {
     if (user.id === targetUserId) return { error: "Cannot start a chat with yourself" };
 
     try {
-      // 1. First try secure RPC function
       const { data: rpcConvId, error: rpcError } = await (supabase.rpc as any)(
         "get_or_create_direct_conversation",
         {
@@ -174,51 +200,60 @@ export function useConversations() {
         return { conversationId: rpcConvId };
       }
 
-      // 2. Fallback if RPC is not deployed yet in environment
-      const { data: existingConv } = await supabase
-        .from("conversations")
-        .select("id, type")
-        .eq("type", "direct");
-
-      if (existingConv && existingConv.length > 0) {
-        for (const c of existingConv) {
-          const { data: members } = await supabase
-            .from("conversation_members")
-            .select("user_id")
-            .eq("conversation_id", c.id);
-
-          const memberIds = (members || []).map((m) => m.user_id);
-          if (memberIds.includes(user.id) && memberIds.includes(targetUserId)) {
-            await fetchConversations();
-            return { conversationId: c.id };
-          }
-        }
-      }
-
-      // Create conversation record
-      const { data: newConv, error: createError } = await supabase
-        .from("conversations")
-        .insert({
-          type: "direct",
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
-
-      if (createError || !newConv) {
-        return { error: createError?.message || "Failed to create conversation." };
-      }
-
-      // Insert both members
-      await supabase.from("conversation_members").insert([
-        { conversation_id: newConv.id, user_id: user.id, role: "member" },
-        { conversation_id: newConv.id, user_id: targetUserId, role: "member" },
-      ]);
-
-      await fetchConversations();
-      return { conversationId: newConv.id };
+      return { error: rpcError?.message || "Failed to establish direct chat." };
     } catch {
       return { error: "Network error starting conversation." };
+    }
+  };
+
+  const createGroup = async (
+    groupName: string,
+    friendIds: string[],
+    avatarUrl?: string
+  ): Promise<{ conversationId?: string; error?: string }> => {
+    if (!user?.id) return { error: "Not authenticated" };
+    const trimmed = groupName.trim();
+    if (!trimmed) return { error: "Group name cannot be empty" };
+    if (trimmed.length > 100) return { error: "Group name must be 100 characters or fewer" };
+    if (!friendIds || friendIds.length === 0) return { error: "Please select at least one friend" };
+
+    try {
+      const { data: convId, error: rpcError } = await (supabase.rpc as any)(
+        "create_group_conversation",
+        {
+          group_name: trimmed,
+          member_user_ids: friendIds,
+          group_avatar_url: avatarUrl || null,
+        }
+      );
+
+      if (rpcError) {
+        return { error: rpcError.message || "Failed to create group." };
+      }
+
+      await fetchConversations();
+      return { conversationId: convId };
+    } catch {
+      return { error: "Network error creating group." };
+    }
+  };
+
+  const leaveGroup = async (conversationId: string): Promise<{ success: boolean; error?: string }> => {
+    if (!user?.id) return { success: false, error: "Not authenticated" };
+
+    try {
+      const { error: rpcError } = await (supabase.rpc as any)("leave_group", {
+        conv_id: conversationId,
+      });
+
+      if (rpcError) {
+        return { success: false, error: rpcError.message || "Failed to leave group." };
+      }
+
+      await fetchConversations();
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error leaving group." };
     }
   };
 
@@ -228,5 +263,7 @@ export function useConversations() {
     error,
     refreshConversations: fetchConversations,
     getOrCreateDirectChat,
+    createGroup,
+    leaveGroup,
   };
 }

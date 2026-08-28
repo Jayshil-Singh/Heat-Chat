@@ -4,6 +4,7 @@ import type {
   Profile,
   FriendshipStatus,
   ConversationType,
+  MemberRole,
   Message,
   UserStatus,
   ReactionType,
@@ -37,9 +38,19 @@ export interface ChatMessage extends Message {
   replyPreview?: ReplyPreviewData | null;
 }
 
+export interface ConversationMemberWithProfile {
+  userId: string;
+  role: MemberRole;
+  joinedAt: string;
+  profile: Profile;
+}
+
 export interface ConversationWithDetails extends Conversation {
   otherMember?: Profile | null;
   members?: Profile[];
+  memberDetails?: ConversationMemberWithProfile[];
+  memberCount?: number;
+  currentMemberRole?: MemberRole;
   lastMessage?: {
     content: string;
     sender_id: string;
@@ -80,4 +91,4 @@ export interface PresenceUser {
 }
 
 // Re-export for convenience
-export type { ReactionType, ConversationType, FriendshipStatus };
+export type { ReactionType, ConversationType, FriendshipStatus, MemberRole };
