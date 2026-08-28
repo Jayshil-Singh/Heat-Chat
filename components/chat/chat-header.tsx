@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
@@ -19,6 +19,8 @@ interface ChatHeaderProps {
   isOnline?: boolean;
   onBack?: () => void;
   onRefreshConversation?: () => void;
+  onToggleSearch?: () => void;
+  onOpenStarred?: () => void;
 }
 
 export function ChatHeader({
@@ -27,6 +29,8 @@ export function ChatHeader({
   isOnline = false,
   onBack,
   onRefreshConversation,
+  onToggleSearch,
+  onOpenStarred,
 }: ChatHeaderProps) {
   const router = useRouter();
   const { isUserOnline } = usePresence();
@@ -143,6 +147,30 @@ export function ChatHeader({
 
         {/* Actions */}
         <div className="flex items-center gap-1">
+          {onToggleSearch && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onToggleSearch}
+              title="Search in conversation (Ctrl+F)"
+              aria-label="Search messages in conversation"
+            >
+              <Search className="h-4 w-4 text-zinc-500 hover:text-heat-500" />
+            </Button>
+          )}
+
+          {onOpenStarred && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onOpenStarred}
+              title="Starred messages"
+              aria-label="View starred messages"
+            >
+              <Star className="h-4 w-4 text-zinc-500 hover:text-amber-500" />
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon-sm"

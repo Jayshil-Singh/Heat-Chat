@@ -8,6 +8,9 @@ import { MobileTabBar } from "./mobile-tab-bar";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationProvider, useNotificationContext } from "@/components/notifications/notification-provider";
 import { NotificationCenter } from "@/components/notifications/notification-center";
+import { CommandPalette } from "@/components/search/command-palette";
+import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function MobileNotificationCenter() {
   const {
@@ -30,11 +33,25 @@ function MobileNotificationCenter() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+
+  // Global keyboard shortcut: Cmd+K / Ctrl+K
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <NotificationProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-50">
         {/* Desktop Sidebar */}
-        <SidebarNav />
+        <SidebarNav onOpenCommandPalette={() => setIsCommandPaletteOpen(true)} />
 
         {/* Main Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -49,6 +66,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </span>
             </Link>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                aria-label="Search Heat Chat"
+                title="Search (Cmd+K / Ctrl+K)"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               <MobileNotificationCenter />
               <ThemeToggle />
             </div>
@@ -63,6 +88,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <MobileTabBar />
         </div>
       </div>
+
+      {/* Global Command Palette */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </NotificationProvider>
   );
 }

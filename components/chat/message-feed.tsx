@@ -25,12 +25,14 @@ interface MessageFeedProps {
   isLoadingOlder: boolean;
   hasMore: boolean;
   typingUsers: TypingUser[];
+  starredMessageIds?: Set<string>;
   onLoadOlder: () => Promise<void>;
   onRetryMessage?: (message: ChatMessage) => void;
   onReplyToMessage?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, reaction: ReactionType) => void;
   onEditMessage?: (message: ChatMessage) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onToggleStar?: (messageId: string) => void;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -69,12 +71,14 @@ export const MessageFeed = React.forwardRef<
     isLoadingOlder,
     hasMore,
     typingUsers,
+    starredMessageIds,
     onLoadOlder,
     onRetryMessage,
     onReplyToMessage,
     onToggleReaction,
     onEditMessage,
     onDeleteMessage,
+    onToggleStar,
   },
   ref
 ) {
@@ -311,11 +315,13 @@ export const MessageFeed = React.forwardRef<
                   isGroupChat={isGroupChat}
                   showSenderInfo={showSenderInfo}
                   isHighlighted={highlightedMessageId === msg.id}
+                  isStarred={starredMessageIds?.has(msg.id)}
                   onRetry={onRetryMessage}
                   onReply={onReplyToMessage}
                   onToggleReaction={onToggleReaction}
                   onEdit={onEditMessage}
                   onDelete={onDeleteMessage}
+                  onToggleStar={onToggleStar}
                   onScrollToMessage={scrollAndHighlight}
                 />
               );

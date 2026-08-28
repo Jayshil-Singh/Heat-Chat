@@ -122,6 +122,50 @@ export interface NotificationWithDetails {
   isDeleted: boolean;
 }
 
+export interface StarredMessageWithDetails {
+  id: string;
+  userId: string;
+  messageId: string;
+  createdAt: string;
+  message: {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    messageType: string;
+    createdAt: string;
+    sender?: Profile | null;
+    conversationName?: string;
+    conversationType?: ConversationType;
+    attachments?: AttachmentWithUrl[];
+  };
+}
+
+export interface InChatSearchResult {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  messageType: string;
+  createdAt: string;
+  rank: number;
+}
+
+export interface GlobalSearchResult {
+  id: string;
+  conversationId: string;
+  conversationName: string;
+  conversationType: ConversationType;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string | null;
+  content: string;
+  messageType: string;
+  createdAt: string;
+  rank: number;
+}
+
 // Re-export for convenience
 export type { ReactionType, ConversationType, FriendshipStatus, MemberRole };
+
 

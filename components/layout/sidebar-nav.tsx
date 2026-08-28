@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   LogOut,
   LogIn,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { ThemeToggle } from "./theme-toggle";
@@ -63,7 +64,11 @@ const navItems = [
   },
 ];
 
-export function SidebarNav() {
+interface SidebarNavProps {
+  onOpenCommandPalette?: () => void;
+}
+
+export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, signOut, isLoading } = useAuth();
@@ -76,7 +81,7 @@ export function SidebarNav() {
   return (
     <aside className="hidden md:flex h-full w-64 flex-col justify-between border-r border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/70 backdrop-blur-xl shrink-0">
       {/* Brand Header */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-between px-2">
           <Link
             href="/"
@@ -101,8 +106,25 @@ export function SidebarNav() {
           {user && <SidebarNotificationCenter />}
         </div>
 
+        {/* Quick Search Button */}
+        {user && onOpenCommandPalette && (
+          <button
+            onClick={onOpenCommandPalette}
+            className="flex w-full items-center justify-between gap-2 rounded-xl border border-zinc-200/80 bg-white/80 px-3 py-2 text-xs text-zinc-500 transition-all hover:border-zinc-300 hover:bg-white hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+            aria-label="Quick search (Cmd+K / Ctrl+K)"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="h-3.5 w-3.5 text-zinc-400" />
+              <span>Search messages...</span>
+            </div>
+            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+              ⌘K
+            </span>
+          </button>
+        )}
+
         {/* Navigation Items */}
-        <nav className="space-y-1" aria-label="Main Navigation">
+        <nav className="space-y-1 pt-1" aria-label="Main Navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =

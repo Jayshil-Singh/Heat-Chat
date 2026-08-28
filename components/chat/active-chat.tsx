@@ -5,9 +5,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMessages } from "@/hooks/use-messages";
 import { useTyping } from "@/hooks/use-typing";
 import { usePresence } from "@/hooks/use-presence";
+import { useSearch } from "@/hooks/use-search";
+import { useStarredMessages } from "@/hooks/use-starred-messages";
 import { ChatHeader } from "./chat-header";
 import { MessageFeed, type MessageFeedHandle } from "./message-feed";
 import { MessageComposer } from "./message-composer";
+import { InChatSearch } from "./in-chat-search";
+import { StarredMessagesDialog } from "./starred-messages-dialog";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails, ChatMessage, ReplyPreviewData } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
@@ -52,6 +56,30 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
   const otherMemberId = conversation.otherMember?.id;
   const isRecipientOnline = otherMemberId ? isUserOnline(otherMemberId) : false;
 
+  // ── Starred messages ──────────────────────────────────────────────────────
+  const {
+    starredMessages,
+    starredMessageIds,
+    isLoading: isStarredLoading,
+    toggleStar,
+  } = useStarredMessages(conversation.id);
+
+  const [showStarredDialog, setShowStarredDialog] = React.useState(false);
+
+  // ── In-Chat Search ────────────────────────────────────────────────────────
+  const [showInChatSearch, setShowInChatSearch] = React.useState(false);
+  const {
+    inChatQuery,
+    inChatResults,
+    currentMatchIndex,
+    currentMatch,
+    isInChatSearching,
+    searchInChat,
+    nextMatch,
+    prevMatch,
+    clearInChatSearch,
+  } = useSearch();
+
   // ── Reply state ───────────────────────────────────────────────────────────
   const [replyTo, setReplyTo] = React.useState<ReplyPreviewData | null>(null);
 
@@ -61,6 +89,32 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
 
   // ── Feed ref for scrollToMessage ─────────────────────────────────────────
   const feedRef = React.useRef<MessageFeedHandle>(null);
+
+  // ── Keyboard shortcut: Ctrl+F / Cmd+F to open search ─────────────────────
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setShowInChatSearch((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // ── Jump to search match automatically when currentMatch changes ─────────
+  React.useEffect(() => {
+    if (currentMatch?.id && feedRef.current) {
+      feedRef.current.scrollToMessage(currentMatch.id);
+    }
+  }, [currentMatch?.id]);
+
+  // Jump to message (e.g. from Starred Messages dialog or reply quote)
+  const handleJumpToMessage = (convId: string, msgId: string) => {
+    if (convId === conversation.id && feedRef.current) {
+      feedRef.current.scrollToMessage(msgId);
+    }
+  };
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -90,7 +144,6 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
 
   /** Enter reply mode */
   const handleReplyToMessage = (message: ChatMessage) => {
-    // Exit edit mode if active
     setEditingMessage(null);
     setReplyTo({
       messageId: message.id,
@@ -106,9 +159,8 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
 
   /** Enter edit mode */
   const handleEditMessage = (message: ChatMessage) => {
-    if (message.sender_id !== user?.id) return; // guard — not enforced by UI
+    if (message.sender_id !== user?.id) return;
     if (message.deleted_at) return;
-    // Exit reply mode if active
     setReplyTo(null);
     setEditingMessage(message);
   };
@@ -118,11 +170,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     await deleteMessage(messageId);
   };
 
-  /**
-   * Toggle reaction — checks if user already reacted and calls
-   * addReaction or removeReaction accordingly.
-   * The current `messages` state is read here where it's fresh.
-   */
+  /** Toggle reaction */
   const handleToggleReaction = async (
     messageId: string,
     reaction: ReactionType
@@ -150,6 +198,24 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         connectionStatus={connectionStatus}
         isOnline={isRecipientOnline}
         onBack={onBack}
+        onToggleSearch={() => setShowInChatSearch((prev) => !prev)}
+        onOpenStarred={() => setShowStarredDialog(true)}
+      />
+
+      {/* In-Chat Search Overlay Banner */}
+      <InChatSearch
+        isOpen={showInChatSearch}
+        query={inChatQuery}
+        results={inChatResults}
+        currentIndex={currentMatchIndex}
+        isLoading={isInChatSearching}
+        onSearch={(q) => searchInChat(conversation.id, q)}
+        onNext={nextMatch}
+        onPrev={prevMatch}
+        onClose={() => {
+          setShowInChatSearch(false);
+          clearInChatSearch();
+        }}
       />
 
       {/* Message Feed */}
@@ -167,12 +233,14 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         isLoadingOlder={isLoadingOlder}
         hasMore={hasMore}
         typingUsers={typingUsers}
+        starredMessageIds={starredMessageIds}
         onLoadOlder={loadOlderMessages}
         onRetryMessage={retryMessage}
         onReplyToMessage={handleReplyToMessage}
         onToggleReaction={handleToggleReaction}
         onEditMessage={handleEditMessage}
         onDeleteMessage={handleDeleteMessage}
+        onToggleStar={toggleStar}
       />
 
       {/* Message Composer (handles reply banner + edit mode) */}
@@ -184,6 +252,17 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         editingMessage={editingMessage}
         onSaveEdit={handleSaveEdit}
         onCancelEdit={handleCancelEdit}
+      />
+
+      {/* Starred Messages Modal Dialog */}
+      <StarredMessagesDialog
+        isOpen={showStarredDialog}
+        onClose={() => setShowStarredDialog(false)}
+        starredMessages={starredMessages}
+        isLoading={isStarredLoading}
+        activeConversationId={conversation.id}
+        onUnstar={toggleStar}
+        onJumpToMessage={handleJumpToMessage}
       />
     </div>
   );

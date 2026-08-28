@@ -9,6 +9,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  Star,
 } from "lucide-react";
 import { ReactionPicker } from "./reaction-picker";
 import type { ReactionType } from "@/types/database";
@@ -19,22 +20,26 @@ interface MessageActionsProps {
   isDeleted: boolean;
   /** Reactions the current user already has on this message */
   currentUserReactions: ReactionType[];
+  isStarred?: boolean;
   onReply: () => void;
   onReact: (reaction: ReactionType) => void;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleStar?: () => void;
 }
 
 export function MessageActions({
   isCurrentUser,
   isDeleted,
   currentUserReactions,
+  isStarred = false,
   onReply,
   onReact,
   onCopy,
   onEdit,
   onDelete,
+  onToggleStar,
 }: MessageActionsProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [showReactionPicker, setShowReactionPicker] = React.useState(false);
@@ -167,6 +172,29 @@ export function MessageActions({
               <Reply className="h-3.5 w-3.5" aria-hidden="true" />
               Reply
             </button>
+
+            {/* Star / Unstar — non-deleted messages */}
+            {!isDeleted && onToggleStar && (
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  onToggleStar();
+                  setMenuOpen(false);
+                }}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700/50 focus-visible:outline-none focus-visible:bg-zinc-50"
+              >
+                <Star
+                  className={`h-3.5 w-3.5 ${
+                    isStarred
+                      ? "fill-amber-400 text-amber-400"
+                      : "text-zinc-500 dark:text-zinc-400"
+                  }`}
+                  aria-hidden="true"
+                />
+                {isStarred ? "Unstar message" : "Star message"}
+              </button>
+            )}
 
             {/* Copy — disabled for deleted messages */}
             <button

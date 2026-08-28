@@ -8,6 +8,7 @@ import {
   AlertCircle,
   RotateCcw,
   Pencil,
+  Star,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { MessageActions } from "./message-actions";
@@ -24,11 +25,13 @@ interface MessageItemProps {
   isGroupChat?: boolean;
   showSenderInfo?: boolean;
   isHighlighted?: boolean;
+  isStarred?: boolean;
   onRetry?: (message: ChatMessage) => void;
   onReply?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, reaction: ReactionType) => void;
   onEdit?: (message: ChatMessage) => void;
   onDelete?: (messageId: string) => void;
+  onToggleStar?: (messageId: string) => void;
   onScrollToMessage?: (messageId: string) => boolean | void;
 }
 
@@ -77,11 +80,13 @@ export function MessageItem({
   isGroupChat = false,
   showSenderInfo = false,
   isHighlighted = false,
+  isStarred = false,
   onRetry,
   onReply,
   onToggleReaction,
   onEdit,
   onDelete,
+  onToggleStar,
   onScrollToMessage,
 }: MessageItemProps) {
   const timeFormatted = formatMessageTime(message.created_at);
@@ -206,6 +211,14 @@ export function MessageItem({
               isCurrentUser ? "text-white/70" : "text-zinc-400 dark:text-zinc-500"
             }`}
           >
+            {isStarred && !isDeleted && (
+              <span
+                title="Starred message"
+                className="flex items-center text-amber-400 dark:text-amber-400 mr-0.5"
+              >
+                <Star className="h-2.5 w-2.5 fill-current" />
+              </span>
+            )}
             {edited && !isDeleted && (
               <span
                 className={`flex items-center gap-0.5 ${
@@ -255,6 +268,7 @@ export function MessageItem({
             <MessageActions
               isCurrentUser={isCurrentUser}
               isDeleted={isDeleted}
+              isStarred={isStarred}
               currentUserReactions={currentUserReactions}
               onReply={() => onReply && onReply(message)}
               onReact={(reaction) =>
@@ -263,6 +277,7 @@ export function MessageItem({
               onCopy={handleCopy}
               onEdit={() => onEdit && onEdit(message)}
               onDelete={() => onDelete && onDelete(message.id)}
+              onToggleStar={() => onToggleStar && onToggleStar(message.id)}
             />
           </div>
         )}

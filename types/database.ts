@@ -439,6 +439,40 @@ export interface Database {
           }
         ];
       };
+      starred_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          message_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          message_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          message_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "starred_messages_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "starred_messages_message_id_fkey";
+            columns: ["message_id"];
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -539,6 +573,66 @@ export interface Database {
         };
         Returns: boolean;
       };
+      search_conversation_messages: {
+        Args: {
+          p_conv_id: string;
+          p_query: string;
+          p_limit?: number;
+        };
+        Returns: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          message_type: string;
+          created_at: string;
+          rank: number;
+        }[];
+      };
+      search_global_messages: {
+        Args: {
+          p_query: string;
+          p_limit?: number;
+        };
+        Returns: {
+          id: string;
+          conversation_id: string;
+          conversation_name: string;
+          conversation_type: string;
+          sender_id: string;
+          sender_name: string;
+          sender_avatar: string | null;
+          content: string;
+          message_type: string;
+          created_at: string;
+          rank: number;
+        }[];
+      };
+      toggle_starred_message: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: boolean;
+      };
+      get_message_context_by_id: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          message_type: string;
+          reply_to_message_id: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+          sender_username: string;
+          sender_display_name: string;
+          sender_avatar_url: string | null;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -560,3 +654,4 @@ export type Friendship = Database["public"]["Tables"]["friendships"]["Row"];
 export type NotificationPreference = Database["public"]["Tables"]["notification_preferences"]["Row"];
 export type ConversationNotificationPreference = Database["public"]["Tables"]["conversation_notification_preferences"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
+export type StarredMessage = Database["public"]["Tables"]["starred_messages"]["Row"];
