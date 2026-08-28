@@ -417,25 +417,30 @@ async function runPhase8Verification() {
   // ─────────────────────────────────────────────────────────────────────────────
   console.log("\n--- SECTION 8: Attachment Deletion Security & Tamper Resistance ---");
 
-  // User B tries to delete User A's attachment in DM1
-  const { data: unauthDelData } = await users.B.client
-    .from("attachments")
-    .delete()
-    .eq("id", att1.id)
-    .select("*");
+  if (att1?.id) {
+    // User B tries to delete User A's attachment in DM1
+    const { data: unauthDelData } = await users.B.client
+      .from("attachments")
+      .delete()
+      .eq("id", att1.id)
+      .select("*");
 
-  assert(
-    (!unauthDelData || unauthDelData.length === 0),
-    "User B attempting to delete User A's attachment -> REJECTED by RLS (0 rows affected)."
-  );
+    assert(
+      (!unauthDelData || unauthDelData.length === 0),
+      "User B attempting to delete User A's attachment -> REJECTED by RLS (0 rows affected)."
+    );
 
-  // Follow-up SELECT: confirm attachment still exists intact
-  const { data: checkAtt1 } = await users.A.client
-    .from("attachments")
-    .select("*")
-    .eq("id", att1.id);
+    // Follow-up SELECT: confirm attachment still exists intact
+    const { data: checkAtt1 } = await users.A.client
+      .from("attachments")
+      .select("*")
+      .eq("id", att1.id);
 
-  assert(checkAtt1?.length === 1, "Follow-up SELECT confirms User A's attachment remains intact in database.");
+    assert(checkAtt1?.length === 1, "Follow-up SELECT confirms User A's attachment remains intact in database.");
+  } else {
+    assert(false, "User B attempting to delete User A's attachment -> att1 was not created.");
+    assert(false, "Follow-up SELECT confirms User A's attachment remains intact -> att1 was not created.");
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SECTION 9: Cross-Conversation Attachment Association Rejection
