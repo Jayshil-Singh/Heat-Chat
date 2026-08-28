@@ -17,6 +17,28 @@ import { cn } from "@/lib/utils/cn";
 import { ThemeToggle } from "./theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/use-auth";
+import { NotificationCenter } from "@/components/notifications/notification-center";
+import { useNotificationContext } from "@/components/notifications/notification-provider";
+
+function SidebarNotificationCenter() {
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    markAsRead,
+    markAllAsRead,
+  } = useNotificationContext();
+
+  return (
+    <NotificationCenter
+      notifications={notifications}
+      unreadCount={unreadCount}
+      isLoading={isLoading}
+      onMarkAsRead={markAsRead}
+      onMarkAllAsRead={markAllAsRead}
+    />
+  );
+}
 
 const navItems = [
   {
@@ -55,25 +77,29 @@ export function SidebarNav() {
     <aside className="hidden md:flex h-full w-64 flex-col justify-between border-r border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/70 backdrop-blur-xl shrink-0">
       {/* Brand Header */}
       <div className="space-y-6">
-        <Link
-          href="/"
-          className="flex items-center gap-3 px-2 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 rounded-xl"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-md shadow-heat-500/25">
-            <Flame className="h-5 w-5 fill-current" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-1.5">
-              Heat Chat
-              <span className="inline-flex items-center rounded-full bg-heat-100 px-1.5 py-0.5 text-[10px] font-semibold text-heat-700 dark:bg-heat-950 dark:text-heat-400 border border-heat-200 dark:border-heat-900">
-                v1
-              </span>
-            </h1>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-none mt-0.5">
-              Private friends chat
-            </p>
-          </div>
-        </Link>
+        <div className="flex items-center justify-between px-2">
+          <Link
+            href="/"
+            className="flex items-center gap-3 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 rounded-xl"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-md shadow-heat-500/25">
+              <Flame className="h-5 w-5 fill-current" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-1.5">
+                Heat Chat
+                <span className="inline-flex items-center rounded-full bg-heat-100 px-1.5 py-0.5 text-[10px] font-semibold text-heat-700 dark:bg-heat-950 dark:text-heat-400 border border-heat-200 dark:border-heat-900">
+                  v1
+                </span>
+              </h1>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-none mt-0.5">
+                Private friends chat
+              </p>
+            </div>
+          </Link>
+
+          {user && <SidebarNotificationCenter />}
+        </div>
 
         {/* Navigation Items */}
         <nav className="space-y-1" aria-label="Main Navigation">

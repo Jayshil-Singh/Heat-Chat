@@ -332,6 +332,113 @@ export interface Database {
           }
         ];
       };
+      notification_preferences: {
+        Row: {
+          user_id: string;
+          notifications_enabled: boolean;
+          sound_enabled: boolean;
+          desktop_notifications_enabled: boolean;
+          message_preview_enabled: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          notifications_enabled?: boolean;
+          sound_enabled?: boolean;
+          desktop_notifications_enabled?: boolean;
+          message_preview_enabled?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          notifications_enabled?: boolean;
+          sound_enabled?: boolean;
+          desktop_notifications_enabled?: boolean;
+          message_preview_enabled?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      conversation_notification_preferences: {
+        Row: {
+          conversation_id: string;
+          user_id: string;
+          muted: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          conversation_id: string;
+          user_id: string;
+          muted?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          conversation_id?: string;
+          user_id?: string;
+          muted?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_notification_preferences_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          conversation_id: string;
+          message_id: string | null;
+          sender_id: string;
+          type: string;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          conversation_id: string;
+          message_id?: string | null;
+          sender_id: string;
+          type?: string;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          conversation_id?: string;
+          message_id?: string | null;
+          sender_id?: string;
+          type?: string;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_message_id_fkey";
+            columns: ["message_id"];
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_sender_id_fkey";
+            columns: ["sender_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -415,6 +522,23 @@ export interface Database {
         };
         Returns: void;
       };
+      mark_notification_as_read: {
+        Args: {
+          notif_id: string;
+        };
+        Returns: boolean;
+      };
+      mark_all_notifications_as_read: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      toggle_conversation_mute: {
+        Args: {
+          conv_id: string;
+          is_muted: boolean;
+        };
+        Returns: boolean;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -433,3 +557,6 @@ export type MessageReaction = Database["public"]["Tables"]["message_reactions"][
 export type MessageRead = Database["public"]["Tables"]["message_reads"]["Row"];
 export type Attachment = Database["public"]["Tables"]["attachments"]["Row"];
 export type Friendship = Database["public"]["Tables"]["friendships"]["Row"];
+export type NotificationPreference = Database["public"]["Tables"]["notification_preferences"]["Row"];
+export type ConversationNotificationPreference = Database["public"]["Tables"]["conversation_notification_preferences"]["Row"];
+export type Notification = Database["public"]["Tables"]["notifications"]["Row"];

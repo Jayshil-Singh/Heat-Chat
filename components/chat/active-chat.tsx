@@ -8,6 +8,7 @@ import { usePresence } from "@/hooks/use-presence";
 import { ChatHeader } from "./chat-header";
 import { MessageFeed, type MessageFeedHandle } from "./message-feed";
 import { MessageComposer } from "./message-composer";
+import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails, ChatMessage, ReplyPreviewData } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
@@ -20,6 +21,12 @@ interface ActiveChatProps {
 
 export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
   const { user } = useAuth();
+  const { setActiveConversationId } = useNotificationContext();
+
+  React.useEffect(() => {
+    setActiveConversationId(conversation.id);
+    return () => setActiveConversationId(null);
+  }, [conversation.id, setActiveConversationId]);
 
   // ── Message state + actions ───────────────────────────────────────────────
   const {

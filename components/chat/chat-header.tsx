@@ -3,12 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
 import { GroupDetailsDialog } from "./group-details-dialog";
 import { usePresence } from "@/hooks/use-presence";
+import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails } from "@/types/chat";
 import type { ConnectionStatus } from "@/hooks/use-realtime-chat";
 
@@ -29,10 +30,18 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const router = useRouter();
   const { isUserOnline } = usePresence();
+  const { isConversationMuted, toggleMute } = useNotificationContext();
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [showGroupModal, setShowGroupModal] = React.useState(false);
 
   if (!conversation) return null;
+
+  const isMuted = isConversationMuted(conversation.id);
+
+  const handleToggleMute = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await toggleMute(conversation.id, !isMuted);
+  };
 
   const isGroup = conversation.type === "group";
   const displayName = isGroup
@@ -134,6 +143,20 @@ export function ChatHeader({
 
         {/* Actions */}
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleToggleMute}
+            title={isMuted ? "Unmute notifications" : "Mute notifications"}
+            aria-label={isMuted ? "Unmute conversation notifications" : "Mute conversation notifications"}
+          >
+            {isMuted ? (
+              <BellOff className="h-4 w-4 text-amber-500 hover:text-amber-600" />
+            ) : (
+              <Bell className="h-4 w-4 text-zinc-500 hover:text-heat-500" />
+            )}
+          </Button>
+
           {isGroup ? (
             <Button
               variant="ghost"

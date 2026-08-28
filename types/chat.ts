@@ -105,5 +105,23 @@ export interface PresenceUser {
   lastSeen?: string;
 }
 
+export interface NotificationWithDetails {
+  id: string;
+  userId: string;
+  conversationId: string;
+  messageId: string | null;
+  senderId: string;
+  type: string;
+  readAt: string | null;
+  createdAt: string;
+  sender?: Profile | null;
+  conversationName?: string;
+  conversationType?: ConversationType;
+  /** Safe message preview text ("This message was deleted" if soft-deleted) */
+  preview: string;
+  isDeleted: boolean;
+}
+
 // Re-export for convenience
 export type { ReactionType, ConversationType, FriendshipStatus, MemberRole };
+
