@@ -152,8 +152,9 @@ export function useConversations() {
   React.useEffect(() => {
     if (!user?.id) return;
 
+    const channelName = `user-conversations-${user.id}-${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
-      .channel("user:conversations_membership")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
