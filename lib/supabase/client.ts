@@ -5,22 +5,22 @@ let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = nul
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabasePublishableKey) {
     if (process.env.NODE_ENV === "development") {
       console.warn(
-        "Supabase credentials not found in environment. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
+        "Supabase credentials not found in environment. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local"
       );
     }
   }
 
   // Fallback to avoid crashes during early setup/build if env vars are pending
   const url = supabaseUrl || "https://placeholder.supabase.co";
-  const anonKey = supabaseAnonKey || "placeholder-anon-key";
+  const key = supabasePublishableKey || "placeholder-key";
 
   if (!browserClient) {
-    browserClient = createBrowserClient<Database>(url, anonKey);
+    browserClient = createBrowserClient<Database>(url, key);
   }
 
   return browserClient;
