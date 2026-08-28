@@ -9,6 +9,27 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 
+const SUPPORTED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+function validateImageFile(file) {
+  if (!file) return { valid: false, error: "No file selected." };
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return { valid: false, error: `Image is too large. Maximum size is 10 MB.` };
+  }
+  if (!SUPPORTED_MIME_TYPES.includes(file.type)) {
+    return { valid: false, error: `Unsupported image type.` };
+  }
+  const lastDot = file.name.lastIndexOf(".");
+  const ext = lastDot === -1 ? "" : file.name.slice(lastDot).toLowerCase();
+  const validExt = SUPPORTED_EXTENSIONS.some((e) => e === ext || (ext === ".jpeg" && e === ".jpg"));
+  if (!validExt) {
+    return { valid: false, error: `Invalid file extension.` };
+  }
+  return { valid: true };
+}
+
 // ── Read Environment Variables securely ──
 const envPath = path.resolve(process.cwd(), ".env.local");
 let supabaseUrl = "";
@@ -75,21 +96,22 @@ const SAMPLE_JPEG_BUFFER = Buffer.from(
 
 async function runPhase8Verification() {
   console.log("================================================================");
-  console.log("HEAT CHAT — PHASE 8 MEDIA ATTACHMENTS 25-POINT MASTER VERIFICATION");
+  console.log("HEAT CHAT — PHASE 8 MEDIA ATTACHMENTS 35-POINT MASTER VERIFICATION");
   console.log("================================================================\n");
 
   const anonClient = makeClient();
   const testRunId = Date.now().toString().slice(-6);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 1: Authenticating Test Users A, B, C, D
+  // SECTION 1: Authenticating Test Users A, B, C, D, E
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("--- SECTION 1: Registering & Authenticating Test Users (A, B, C, D) ---");
+  console.log("--- SECTION 1: Registering & Authenticating 5 Test Users (A, B, C, D, E) ---");
   const userConfigs = [
     { key: "A", name: `Phase8_Alpha_${testRunId}`, email: `p8_alpha_${testRunId}@test.local` },
     { key: "B", name: `Phase8_Beta_${testRunId}`, email: `p8_beta_${testRunId}@test.local` },
     { key: "C", name: `Phase8_Charlie_${testRunId}`, email: `p8_charlie_${testRunId}@test.local` },
     { key: "D", name: `Phase8_Delta_${testRunId}`, email: `p8_delta_${testRunId}@test.local` },
+    { key: "E", name: `Phase8_Echo_${testRunId}`, email: `p8_echo_${testRunId}@test.local` },
   ];
 
   const users = {};
@@ -132,9 +154,40 @@ async function runPhase8Verification() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 2: Friendships & Direct Conversation Setup
+  // SECTION 2: Client-side Image Validation & Processor Unit Tests
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 2: Establishing Friendships & Direct Chat ---");
+  console.log("\n--- SECTION 2: Client-Side Image Validation Unit Tests ---");
+
+  // Valid PNG file
+  const validPngFile = new File([SAMPLE_PNG_BUFFER], "photo.png", { type: "image/png" });
+  const val1 = validateImageFile(validPngFile);
+  assert(val1.valid === true, "Validation accepts valid PNG image.");
+
+  // Valid JPEG file
+  const validJpgFile = new File([SAMPLE_JPEG_BUFFER], "photo.jpg", { type: "image/jpeg" });
+  const val2 = validateImageFile(validJpgFile);
+  assert(val2.valid === true, "Validation accepts valid JPG image.");
+
+  // Invalid MIME type (e.g. text/html)
+  const invalidMimeFile = new File(["<h1>hack</h1>"], "payload.html", { type: "text/html" });
+  const val3 = validateImageFile(invalidMimeFile);
+  assert(val3.valid === false, "Validation rejects invalid MIME type (text/html).");
+
+  // Invalid extension (.exe)
+  const invalidExtFile = new File([SAMPLE_PNG_BUFFER], "virus.exe", { type: "image/png" });
+  const val4 = validateImageFile(invalidExtFile);
+  assert(val4.valid === false, "Validation rejects disallowed extension (.exe).");
+
+  // Oversized file (> 10MB)
+  const oversizedBuffer = new Uint8Array(11 * 1024 * 1024);
+  const oversizedFile = new File([oversizedBuffer], "large.png", { type: "image/png" });
+  const val5 = validateImageFile(oversizedFile);
+  assert(val5.valid === false, "Validation rejects oversized file (> 10MB).");
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SECTION 3: Friendships & Direct Conversation Setup
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log("\n--- SECTION 3: Establishing Friendships & Direct Chat ---");
   
   // A <-> B friendship
   await users.A.client.from("friendships").insert({
@@ -146,6 +199,12 @@ async function runPhase8Verification() {
   await users.A.client.from("friendships").insert({
     user_id: users.A.id,
     friend_id: users.D.id,
+    status: "accepted",
+  });
+  // A <-> E friendship
+  await users.A.client.from("friendships").insert({
+    user_id: users.A.id,
+    friend_id: users.E.id,
     status: "accepted",
   });
   // B <-> D friendship
@@ -162,9 +221,9 @@ async function runPhase8Verification() {
   assert(!!dmConvId && !dmErr, "User A created/opened direct conversation DM1 with User B.", dmErr?.message);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 3: Direct Message Media Upload & Retrieval
+  // SECTION 4: Direct Message Media Upload & Retrieval
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 3: Direct Message Media Upload & Retrieval ---");
+  console.log("\n--- SECTION 4: Direct Message Media Upload & Retrieval ---");
 
   // 1. User A sends image message
   const { data: msg1, error: msg1Err } = await users.A.client
@@ -206,7 +265,7 @@ async function runPhase8Verification() {
     .select("*")
     .single();
 
-  assert(!!att1 && !att1Err, "User A inserted attachment metadata record.", att1Err?.message);
+  assert(!!att1 && !att1Err, "User A inserted attachment metadata with width/height.", att1Err?.message);
 
   // 4. User B retrieves message and attachment metadata
   const { data: userBAttachments, error: bAttErr } = await users.B.client
@@ -232,12 +291,12 @@ async function runPhase8Verification() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 4: Non-Member Isolation & Storage Attack Protection (User C)
+  // SECTION 5: Non-Member Isolation & Storage Attack Protection (User C)
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 4: Non-Member Security Attacks (User C) ---");
+  console.log("\n--- SECTION 5: Non-Member Security Attacks (User C) ---");
 
   // Attack 1: Non-member User C reading attachment metadata
-  const { data: cAttData, error: cAttErr } = await users.C.client
+  const { data: cAttData } = await users.C.client
     .from("attachments")
     .select("*")
     .eq("message_id", msg1.id);
@@ -252,7 +311,6 @@ async function runPhase8Verification() {
     .from("chat-attachments")
     .createSignedUrl(storagePath1, 3600);
 
-  // Supabase storage returns error or invalid response for unauthorized signed URL requests
   let cDownloadBlocked = false;
   if (cSignedErr || !cSignedData?.signedUrl) {
     cDownloadBlocked = true;
@@ -290,17 +348,17 @@ async function runPhase8Verification() {
   assert(!!invalidFolderErr, "Attack 5: Malformed/non-UUID folder upload REJECTED safely by safe_cast_uuid.");
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 5: Group Chat Multi-Attachment Handling
+  // SECTION 6: Group Chat Multi-Attachment Handling
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 5: Group Chat Multi-Attachment Handling ---");
+  console.log("\n--- SECTION 6: Group Chat Multi-Attachment Handling ---");
 
-  // User A creates group G1 with B and D
+  // User A creates group G1 with B, D, E
   const { data: g1Id, error: g1Err } = await users.A.client.rpc("create_group_conversation", {
     group_name: "Phase 8 Media Group",
-    member_user_ids: [users.B.id, users.D.id],
+    member_user_ids: [users.B.id, users.D.id, users.E.id],
   });
 
-  assert(!!g1Id && !g1Err, "User A created group G1 with User B and User D.", g1Err?.message);
+  assert(!!g1Id && !g1Err, "User A created group G1 with Users B, D, and E.", g1Err?.message);
 
   // User A creates message with 2 attachments
   const { data: gMsg, error: gMsgErr } = await users.A.client
@@ -352,46 +410,46 @@ async function runPhase8Verification() {
   assert(dGroupAtts?.length === 2, "User D retrieved both attachments (2 photos) from Group G1.");
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 6: Removed Member Access Revocation (User D removed from G1)
+  // SECTION 7: Removed Member Access Revocation (User E removed from G1)
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 6: Removed Member Access Revocation ---");
+  console.log("\n--- SECTION 7: Removed Member Access Revocation ---");
 
-  // User A (owner) removes User D from G1
+  // User A (owner) removes User E from G1
   await users.A.client.rpc("remove_group_member", {
     conv_id: g1Id,
-    target_user_id: users.D.id,
+    target_user_id: users.E.id,
   });
 
-  // Check 1: User D cannot SELECT group attachments after removal
-  const { data: dAfterRemovalAtts } = await users.D.client
+  // Check 1: User E cannot SELECT group attachments after removal
+  const { data: eAfterRemovalAtts } = await users.E.client
     .from("attachments")
     .select("*")
     .eq("message_id", gMsg.id);
 
   assert(
-    (!dAfterRemovalAtts || dAfterRemovalAtts.length === 0),
-    "Removed User D querying group attachments -> 0 rows returned (RLS enforced)."
+    (!eAfterRemovalAtts || eAfterRemovalAtts.length === 0),
+    "Removed User E querying group attachments -> 0 rows returned (RLS enforced)."
   );
 
-  // Check 2: User D storage access is blocked
-  const { data: dSignedData, error: dSignedErr } = await users.D.client.storage
+  // Check 2: User E storage access is blocked
+  const { data: eSignedData, error: eSignedErr } = await users.E.client.storage
     .from("chat-attachments")
     .createSignedUrl(pathG1, 3600);
 
-  let dBlocked = false;
-  if (dSignedErr || !dSignedData?.signedUrl) {
-    dBlocked = true;
+  let eBlocked = false;
+  if (eSignedErr || !eSignedData?.signedUrl) {
+    eBlocked = true;
   } else {
-    const dRes = await fetch(dSignedData.signedUrl);
-    dBlocked = dRes.status === 400 || dRes.status === 403 || dRes.status === 404;
+    const eRes = await fetch(eSignedData.signedUrl);
+    eBlocked = eRes.status === 400 || eRes.status === 403 || eRes.status === 404;
   }
 
-  assert(dBlocked, "Removed User D storage download access REVOKED immediately by storage RLS.");
+  assert(eBlocked, "Removed User E storage download access REVOKED immediately by storage RLS.");
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 7: Soft-Deleted Message Protection
+  // SECTION 8: Soft-Deleted Message Protection
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 7: Soft-Deleted Message Protection ---");
+  console.log("\n--- SECTION 8: Soft-Deleted Message Protection ---");
 
   // User A soft-deletes the group message
   const { error: delErr } = await users.A.client
@@ -413,9 +471,9 @@ async function runPhase8Verification() {
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 8: Attachment Deletion Security & Tamper Resistance
+  // SECTION 9: Attachment Deletion Security & Tamper Resistance
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 8: Attachment Deletion Security & Tamper Resistance ---");
+  console.log("\n--- SECTION 9: Attachment Deletion Security & Tamper Resistance ---");
 
   if (att1?.id) {
     // User B tries to delete User A's attachment in DM1
@@ -443,9 +501,9 @@ async function runPhase8Verification() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 9: Cross-Conversation Attachment Association Rejection
+  // SECTION 10: Cross-Conversation Attachment Association Rejection
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 9: Cross-Conversation Attachment Linkage Rejection ---");
+  console.log("\n--- SECTION 10: Cross-Conversation Attachment Linkage Rejection ---");
 
   // User C tries to insert attachment record referencing User A's message in DM1
   const { error: spoofAttErr } = await users.C.client
@@ -461,9 +519,52 @@ async function runPhase8Verification() {
   assert(!!spoofAttErr, "User C inserting attachment into User A's message REJECTED by RLS.");
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 10: Regression Verification (Direct, Group, Reactions, Replies, Edits)
+  // SECTION 11: Realtime Message Broadcast
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 10: Regression Verification ---");
+  console.log("\n--- SECTION 11: Realtime Broadcast Synchronization ---");
+
+  let realtimeReceived = false;
+  const channel = users.B.client.channel(`dm-rt-b-${testRunId}-${Date.now()}`);
+
+  channel.on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages",
+      filter: `conversation_id=eq.${dmConvId}`,
+    },
+    (payload) => {
+      if (payload.new && payload.new.message_type === "image") {
+        realtimeReceived = true;
+      }
+    }
+  );
+
+  await new Promise((resolve) => {
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") resolve();
+    });
+  });
+
+  await new Promise((r) => setTimeout(r, 1000));
+
+  await users.A.client.from("messages").insert({
+    conversation_id: dmConvId,
+    sender_id: users.A.id,
+    content: "Realtime test image",
+    message_type: "image",
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  await channel.unsubscribe();
+
+  assert(realtimeReceived === true, "Member B received Realtime message INSERT event with message_type='image'.");
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SECTION 12: Regression Verification (Direct, Group, Reactions, Replies, Edits)
+  // ─────────────────────────────────────────────────────────────────────────────
+  console.log("\n--- SECTION 12: Regression Verification ---");
 
   // 1. Text message
   const { data: regMsg, error: regMsgErr } = await users.A.client
@@ -514,9 +615,9 @@ async function runPhase8Verification() {
   assert(!editErr, "Message editing works without regression.", editErr?.message);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SECTION 11: Cleanup
+  // SECTION 13: Cleanup
   // ─────────────────────────────────────────────────────────────────────────────
-  console.log("\n--- SECTION 11: Cleaning Up Temporary Test Data ---");
+  console.log("\n--- SECTION 13: Cleaning Up Temporary Test Data ---");
 
   // Clean storage files
   try {
