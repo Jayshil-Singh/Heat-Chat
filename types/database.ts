@@ -257,6 +257,8 @@ export interface Database {
           file_name: string;
           file_type: string;
           file_size: number;
+          width: number | null;
+          height: number | null;
           created_at: string;
         };
         Insert: {
@@ -266,6 +268,8 @@ export interface Database {
           file_name: string;
           file_type: string;
           file_size: number;
+          width?: number | null;
+          height?: number | null;
           created_at?: string;
         };
         Update: {
@@ -275,6 +279,8 @@ export interface Database {
           file_name?: string;
           file_type?: string;
           file_size?: number;
+          width?: number | null;
+          height?: number | null;
           created_at?: string;
         };
         Relationships: [

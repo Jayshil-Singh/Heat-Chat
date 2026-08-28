@@ -59,15 +59,16 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
 
   /** Send (or reply) — called by MessageComposer */
   const handleSendMessage = async (
-    content: string
+    content: string,
+    stagedAttachments?: import("@/hooks/use-media-upload").PendingAttachment[]
   ): Promise<{ success: boolean; error?: string }> => {
     stopTyping();
     if (replyTo) {
-      const res = await sendReply(content, replyTo.messageId);
+      const res = await sendReply(content, replyTo.messageId, stagedAttachments);
       if (res.success) setReplyTo(null);
       return res;
     }
-    return sendMessage(content);
+    return sendMessage(content, null, stagedAttachments);
   };
 
   /** Save an edit — called by MessageComposer in edit mode */

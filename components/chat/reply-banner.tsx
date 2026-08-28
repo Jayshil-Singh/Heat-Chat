@@ -27,7 +27,7 @@ export function ReplyBanner({ replyTo, onCancel }: ReplyBannerProps) {
         <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block truncate leading-relaxed">
           {replyTo.isDeleted
             ? "Original message was deleted"
-            : replyTo.content}
+            : replyTo.content || "📷 Photo"}
         </span>
       </div>
       <button

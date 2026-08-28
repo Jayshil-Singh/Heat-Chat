@@ -1128,3 +1128,119 @@ exception
   when others then null;
 end $$;
 
+-- ==============================================================================
+-- PHASE 8: MEDIA ATTACHMENTS & STORAGE POLICIES
+-- ==============================================================================
+
+-- 1. Safe UUID casting function
+create or replace function public.safe_cast_uuid(val text)
+returns uuid as $$
+begin
+  if val is null or val = '' then
+    return null;
+  end if;
+  return val::uuid;
+exception
+  when others then
+    return null;
+end;
+$$ language plpgsql immutable security definer set search_path = public, pg_temp;
+
+-- 2. Extend attachments table
+alter table public.attachments add column if not exists width integer;
+alter table public.attachments add column if not exists height integer;
+
+create index if not exists attachments_message_id_idx on public.attachments(message_id);
+
+-- 3. Strict Row Level Security on public.attachments
+alter table public.attachments enable row level security;
+
+drop policy if exists "Members can view attachments in their conversations" on public.attachments;
+drop policy if exists "Senders can attach records to their messages" on public.attachments;
+drop policy if exists "Senders can delete their attachments" on public.attachments;
+drop policy if exists "Authorized users can delete attachments" on public.attachments;
+
+create policy "Members can view attachments in their conversations"
+  on public.attachments for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and m.deleted_at is null
+        and public.is_conversation_member(m.conversation_id, auth.uid())
+    )
+  );
+
+create policy "Senders can attach records to their messages"
+  on public.attachments for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and m.sender_id = auth.uid()
+        and public.is_conversation_member(m.conversation_id, auth.uid())
+    )
+  );
+
+create policy "Authorized users can delete attachments"
+  on public.attachments for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and (
+          m.sender_id = auth.uid()
+          or public.is_conversation_admin(m.conversation_id, auth.uid())
+        )
+    )
+  );
+
+-- 4. Storage policies for chat-attachments
+insert into storage.buckets (id, name, public)
+values ('chat-attachments', 'chat-attachments', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists "Authenticated users can upload chat attachments" on storage.objects;
+drop policy if exists "Conversation members can read chat attachments" on storage.objects;
+drop policy if exists "Conversation members can upload chat attachments" on storage.objects;
+drop policy if exists "Authorized users can delete chat attachments" on storage.objects;
+
+create policy "Conversation members can upload chat attachments"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'chat-attachments'
+    and public.is_conversation_member(
+      public.safe_cast_uuid((storage.foldername(name))[1]),
+      auth.uid()
+    )
+  );
+
+create policy "Conversation members can read chat attachments"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'chat-attachments'
+    and public.is_conversation_member(
+      public.safe_cast_uuid((storage.foldername(name))[1]),
+      auth.uid()
+    )
+  );
+
+create policy "Authorized users can delete chat attachments"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'chat-attachments'
+    and (
+      owner = auth.uid()
+      or public.is_conversation_admin(
+        public.safe_cast_uuid((storage.foldername(name))[1]),
+        auth.uid()
+      )
+    )
+  );
+

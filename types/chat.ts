@@ -8,6 +8,7 @@ import type {
   Message,
   UserStatus,
   ReactionType,
+  Attachment,
 } from "./database";
 
 export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
@@ -29,6 +30,19 @@ export interface ReplyPreviewData {
   isDeleted: boolean;
 }
 
+/** Chat attachment with resolved signed URL for client rendering */
+export interface AttachmentWithUrl {
+  id: string;
+  messageId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  width?: number | null;
+  height?: number | null;
+  storagePath: string;
+  signedUrl: string;
+}
+
 export interface ChatMessage extends Message {
   sender?: Profile | null;
   status?: MessageStatus;
@@ -36,6 +50,7 @@ export interface ChatMessage extends Message {
   readBy?: string[];
   reactions?: ReactionSummary[];
   replyPreview?: ReplyPreviewData | null;
+  attachments?: AttachmentWithUrl[];
 }
 
 export interface ConversationMemberWithProfile {

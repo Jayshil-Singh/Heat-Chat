@@ -13,6 +13,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { MessageActions } from "./message-actions";
 import { MessageReactions } from "./message-reactions";
 import { ReplyPreview } from "./reply-preview";
+import { MessageAttachment } from "./message-attachment";
 import type { ChatMessage } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
@@ -182,10 +183,20 @@ export function MessageItem({
                 />
               )}
 
+              {/* Media Attachments */}
+              {message.attachments && message.attachments.length > 0 && (
+                <MessageAttachment
+                  attachments={message.attachments}
+                  isCurrentUser={isCurrentUser}
+                />
+              )}
+
               {/* Message content */}
-              <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
-                {message.content}
-              </p>
+              {message.content && (
+                <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
+                  {message.content}
+                </p>
+              )}
             </>
           )}
 

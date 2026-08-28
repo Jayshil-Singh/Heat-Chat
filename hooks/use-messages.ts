@@ -6,13 +6,15 @@ import { useAuth } from "./use-auth";
 import { useRealtimeChat } from "./use-realtime-chat";
 import { validateMessageContent } from "@/lib/validation/message";
 import type {
+  Attachment,
   Message,
   MessageRead,
   MessageReaction,
   Profile,
   ReactionType,
 } from "@/types/database";
-import type { ChatMessage, ReactionSummary, ReplyPreviewData } from "@/types/chat";
+import type { ChatMessage, ReactionSummary, ReplyPreviewData, AttachmentWithUrl } from "@/types/chat";
+import type { PendingAttachment } from "./use-media-upload";
 
 const PAGE_SIZE = 50;
 const REPLY_CONTENT_TRUNCATE = 100;
@@ -61,17 +63,18 @@ export function useMessages(conversationId: string | null) {
 
   /**
    * Enrich raw DB message rows with sender profiles, read receipts,
-   * reactions, and reply previews — using batched queries (not per-message).
+   * reactions, reply previews, and attachments — using batched queries (not per-message).
    */
   const enrichMessages = React.useCallback(
     async (rawMessages: Message[]): Promise<ChatMessage[]> => {
       if (rawMessages.length === 0) return [];
 
       const messageIds = rawMessages.map((m) => m.id);
+      const nonDeletedIds = rawMessages.filter((m) => !m.deleted_at).map((m) => m.id);
       const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
 
       // Batch-fetch all enrichment data in parallel
-      const [profilesRes, readsRes, reactionsRes] = await Promise.all([
+      const [profilesRes, readsRes, reactionsRes, attachmentsRes] = await Promise.all([
         supabase.from("profiles").select("*").in("id", senderIds),
         supabase
           .from("message_reads")
@@ -81,6 +84,9 @@ export function useMessages(conversationId: string | null) {
           .from("message_reactions")
           .select("message_id, user_id, reaction")
           .in("message_id", messageIds),
+        nonDeletedIds.length > 0
+          ? supabase.from("attachments").select("*").in("message_id", nonDeletedIds)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const profilesMap = new Map<string, Profile>();
@@ -102,6 +108,34 @@ export function useMessages(conversationId: string | null) {
           reaction: ReactionType;
         }[]
       );
+
+      // Batch-resolve signed URLs for all attachments
+      const rawAttachments = (attachmentsRes.data || []) as Attachment[];
+      const attachmentsMap = new Map<string, AttachmentWithUrl[]>();
+
+      if (rawAttachments.length > 0) {
+        const paths = rawAttachments.map((a) => a.storage_path);
+        const { data: signedUrlsData } = await supabase.storage
+          .from("chat-attachments")
+          .createSignedUrls(paths, 3600);
+
+        rawAttachments.forEach((att, idx) => {
+          const signedUrl = signedUrlsData?.[idx]?.signedUrl || "";
+          const list = attachmentsMap.get(att.message_id) || [];
+          list.push({
+            id: att.id,
+            messageId: att.message_id,
+            fileName: att.file_name,
+            fileType: att.file_type,
+            fileSize: att.file_size,
+            width: att.width,
+            height: att.height,
+            storagePath: att.storage_path,
+            signedUrl,
+          });
+          attachmentsMap.set(att.message_id, list);
+        });
+      }
 
       // Batch-fetch parent messages for replies (one query, not per-message)
       const replyParentIds = [
@@ -177,6 +211,7 @@ export function useMessages(conversationId: string | null) {
           readBy: readsMap.get(m.id) || [],
           reactions: reactionsMap.get(m.id) || [],
           replyPreview,
+          attachments: m.deleted_at ? [] : attachmentsMap.get(m.id) || [],
         };
       });
     },
@@ -218,16 +253,23 @@ export function useMessages(conversationId: string | null) {
       setMessages(formatted);
 
       // Mark incoming unread messages as read (batch insert)
-      const unreadIncoming = formatted.filter(
-        (m) =>
-          m.sender_id !== user.id &&
-          !(m.readBy || []).includes(user.id)
+      const unreadIncoming = chronMessages.filter(
+        (m) => m.sender_id !== user.id
       );
 
       if (unreadIncoming.length > 0) {
-        await supabase.from("message_reads").insert(
-          unreadIncoming.map((m) => ({ message_id: m.id, user_id: user.id }))
-        );
+        const readsPayload: MessageRead[] = unreadIncoming.map((m) => ({
+          message_id: m.id,
+          user_id: user.id,
+          read_at: new Date().toISOString(),
+        }));
+
+        await supabase
+          .from("message_reads")
+          .upsert(readsPayload, {
+            onConflict: "message_id,user_id",
+            ignoreDuplicates: true,
+          });
       }
     } catch (err) {
       console.error("Failed to load messages:", err);
@@ -241,7 +283,7 @@ export function useMessages(conversationId: string | null) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // ─── Reverse pagination ──────────────────────────────────────────────────────
+  // ─── Pagination: Load older messages ─────────────────────────────────────────
 
   const loadOlderMessages = React.useCallback(async () => {
     if (
@@ -255,18 +297,19 @@ export function useMessages(conversationId: string | null) {
     }
 
     setIsLoadingOlder(true);
-    const oldestMessage = messages[0];
+    const oldestCreatedAt = messages[0].created_at;
 
     try {
-      const { data: olderRaw, error: olderError } = await supabase
+      const { data: olderRaw, error: olderErr } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .lt("created_at", oldestMessage.created_at)
+        .lt("created_at", oldestCreatedAt)
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE);
 
-      if (olderError) {
+      if (olderErr) {
+        console.warn("Error loading older messages:", olderErr.message);
         setIsLoadingOlder(false);
         return;
       }
@@ -303,44 +346,10 @@ export function useMessages(conversationId: string | null) {
     async (newMsg: Message) => {
       if (newMsg.conversation_id !== conversationId) return;
 
-      const tempId = pendingTempIdsRef.current.get(newMsg.content);
+      const [enriched] = await enrichMessages([newMsg]);
+      if (!enriched) return;
 
-      // Fetch sender profile + reply preview for incoming messages
-      const [senderRes, replyParentData] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", newMsg.sender_id)
-          .single(),
-        newMsg.reply_to_message_id
-          ? supabase
-              .from("messages")
-              .select("id, sender_id, content, deleted_at")
-              .eq("id", newMsg.reply_to_message_id)
-              .single()
-          : Promise.resolve({ data: null }),
-      ]);
-
-      let replyPreview: ReplyPreviewData | null = null;
-      if (replyParentData.data) {
-        const parent = replyParentData.data;
-        const { data: pProfile } = await supabase
-          .from("profiles")
-          .select("id, display_name")
-          .eq("id", parent.sender_id)
-          .single();
-
-        replyPreview = {
-          messageId: parent.id,
-          senderName: pProfile?.display_name || "Unknown",
-          content: parent.deleted_at
-            ? ""
-            : parent.content.slice(0, REPLY_CONTENT_TRUNCATE),
-          isDeleted: parent.deleted_at !== null,
-        };
-      }
-
-      const senderProfile = senderRes.data as Profile | null;
+      const tempId = pendingTempIdsRef.current.get(newMsg.content || newMsg.id);
 
       setMessages((prev) => {
         // Dedup: already in list
@@ -351,55 +360,52 @@ export function useMessages(conversationId: string | null) {
           return prev.map((m) =>
             m.tempId === tempId
               ? {
-                  ...newMsg,
-                  sender: senderProfile || m.sender,
+                  ...enriched,
                   status: "sent" as const,
                   readBy: m.readBy || [],
                   reactions: m.reactions || [],
-                  replyPreview: replyPreview || m.replyPreview || null,
                 }
               : m
           );
         }
 
-        // New message from another user
+        // New message from another user or self
         return [
           ...prev,
           {
-            ...newMsg,
-            sender: senderProfile,
+            ...enriched,
             status:
               newMsg.sender_id === user?.id ? ("sent" as const) : undefined,
-            readBy: [],
-            reactions: [],
-            replyPreview,
           },
         ];
       });
 
       // Mark incoming message as read
-      if (user?.id && newMsg.sender_id !== user.id) {
-        await supabase
-          .from("message_reads")
-          .insert({ message_id: newMsg.id, user_id: user.id });
+      if (newMsg.sender_id !== user?.id && user?.id) {
+        await supabase.from("message_reads").upsert(
+          {
+            message_id: newMsg.id,
+            user_id: user.id,
+            read_at: new Date().toISOString(),
+          },
+          { onConflict: "message_id,user_id", ignoreDuplicates: true }
+        );
       }
     },
-    [conversationId, user?.id, supabase]
+    [conversationId, user?.id, enrichMessages, supabase]
   );
 
-  /** Merge content/deleted_at/updated_at from a realtime UPDATE event */
   const handleRealtimeMessageUpdate = React.useCallback(
     (updatedMsg: Message) => {
       setMessages((prev) =>
         prev.map((m) => {
           if (m.id !== updatedMsg.id) return m;
-          // Keep all enriched data (sender, reactions, replyPreview, readBy)
-          // and merge only the mutable DB fields
           return {
             ...m,
             content: updatedMsg.content,
             updated_at: updatedMsg.updated_at,
             deleted_at: updatedMsg.deleted_at,
+            attachments: updatedMsg.deleted_at ? [] : m.attachments,
           };
         })
       );
@@ -407,35 +413,43 @@ export function useMessages(conversationId: string | null) {
     []
   );
 
-  /** Handle physical DELETE (should not happen with soft-delete, but guard it) */
   const handleRealtimeMessageDelete = React.useCallback(
     (messageId: string) => {
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    },
-    []
-  );
-
-  const handleRealtimeReadReceipt = React.useCallback(
-    (receipt: MessageRead) => {
       setMessages((prev) =>
         prev.map((m) => {
-          if (m.id !== receipt.message_id) return m;
-          const currentReads = m.readBy || [];
-          if (currentReads.includes(receipt.user_id)) return m;
-          return { ...m, readBy: [...currentReads, receipt.user_id] };
+          if (m.id !== messageId) return m;
+          return {
+            ...m,
+            deleted_at: new Date().toISOString(),
+            attachments: [],
+          };
         })
       );
     },
     []
   );
 
-  /**
-   * Realtime reaction INSERT handler.
-   * Filters to messages currently in state — deduplicates if optimistic
-   * update already applied the same reaction.
-   */
+  const handleRealtimeReadReceipt = React.useCallback(
+    (read: Pick<MessageRead, "message_id" | "user_id">) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== read.message_id) return m;
+          const currentReadBy = m.readBy || [];
+          if (currentReadBy.includes(read.user_id)) return m;
+          return { ...m, readBy: [...currentReadBy, read.user_id] };
+        })
+      );
+    },
+    []
+  );
+
   const handleRealtimeReactionInsert = React.useCallback(
-    (reaction: MessageReaction) => {
+    (
+      reaction: Pick<
+        MessageReaction,
+        "id" | "message_id" | "user_id" | "reaction"
+      >
+    ) => {
       setMessages((prev) =>
         prev.map((m) => {
           if (m.id !== reaction.message_id) return m;
@@ -444,7 +458,6 @@ export function useMessages(conversationId: string | null) {
             (r) => r.reaction === reaction.reaction
           );
           if (found) {
-            // Already tracked this reaction — deduplicate
             if (found.userIds.includes(reaction.user_id)) return m;
             return {
               ...m,
@@ -463,7 +476,11 @@ export function useMessages(conversationId: string | null) {
             ...m,
             reactions: [
               ...existingReactions,
-              { reaction: reaction.reaction, count: 1, userIds: [reaction.user_id] },
+              {
+                reaction: reaction.reaction,
+                count: 1,
+                userIds: [reaction.user_id],
+              },
             ],
           };
         })
@@ -510,21 +527,43 @@ export function useMessages(conversationId: string | null) {
     onReconnectSync: fetchMessages,
   });
 
-  // ─── Send message (with optional reply) ─────────────────────────────────────
+  // ─── Send message (with optional reply & attachments) ───────────────────────────
 
   const sendMessage = async (
     content: string,
-    replyToMessageId?: string | null
+    replyToMessageId?: string | null,
+    stagedAttachments?: PendingAttachment[]
   ): Promise<{ success: boolean; error?: string }> => {
     if (!conversationId || !user?.id) {
       return { success: false, error: "Not in an active conversation" };
     }
 
-    const validationErr = validateMessageContent(content);
-    if (validationErr) return { success: false, error: validationErr };
-
     const trimmedContent = content.trim();
+    const hasAttachments = stagedAttachments && stagedAttachments.length > 0;
+
+    if (!trimmedContent && !hasAttachments) {
+      return { success: false, error: "Cannot send an empty message." };
+    }
+
+    if (trimmedContent) {
+      const validationErr = validateMessageContent(trimmedContent);
+      if (validationErr) return { success: false, error: validationErr };
+    }
+
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Build optimistic attachments
+    const optimisticAttachments: AttachmentWithUrl[] = (stagedAttachments || []).map((att, i) => ({
+      id: `temp_att_${i}`,
+      messageId: tempId,
+      fileName: att.processed?.originalFileName || att.originalFile.name,
+      fileType: att.processed?.mimeType || att.originalFile.type,
+      fileSize: att.processed?.fileSize || att.originalFile.size,
+      width: att.processed?.width || null,
+      height: att.processed?.height || null,
+      storagePath: "",
+      signedUrl: att.processed?.previewUrl || "",
+    }));
 
     const optimisticMessage: ChatMessage = {
       id: tempId,
@@ -532,7 +571,7 @@ export function useMessages(conversationId: string | null) {
       conversation_id: conversationId,
       sender_id: user.id,
       content: trimmedContent,
-      message_type: "text",
+      message_type: hasAttachments ? "image" : "text",
       reply_to_message_id: replyToMessageId || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -541,10 +580,13 @@ export function useMessages(conversationId: string | null) {
       readBy: [],
       reactions: [],
       replyPreview: null,
+      attachments: optimisticAttachments,
     };
 
-    pendingTempIdsRef.current.set(trimmedContent, tempId);
+    pendingTempIdsRef.current.set(trimmedContent || tempId, tempId);
     setMessages((prev) => [...prev, optimisticMessage]);
+
+    const createdStoragePaths: string[] = [];
 
     try {
       const insertPayload: {
@@ -555,11 +597,9 @@ export function useMessages(conversationId: string | null) {
         reply_to_message_id?: string | null;
       } = {
         conversation_id: conversationId,
-        // sender_id is included here but RLS enforces auth.uid() = sender_id.
-        // Any mismatch is rejected by PostgreSQL — the UI value is untrusted.
         sender_id: user.id,
         content: trimmedContent,
-        message_type: "text" as const,
+        message_type: hasAttachments ? "image" : "text",
       };
 
       if (replyToMessageId) {
@@ -578,11 +618,69 @@ export function useMessages(conversationId: string | null) {
             m.tempId === tempId ? { ...m, status: "failed" } : m
           )
         );
-        pendingTempIdsRef.current.delete(trimmedContent);
+        pendingTempIdsRef.current.delete(trimmedContent || tempId);
         return {
           success: false,
           error: insertError?.message || "Failed to send message.",
         };
+      }
+
+      // If attachments exist, upload each object and insert rows into public.attachments
+      const finalAttachments: AttachmentWithUrl[] = [];
+
+      if (hasAttachments) {
+        for (const item of stagedAttachments!) {
+          if (!item.processed) continue;
+          const processed = item.processed;
+          const storagePath = `${conversationId}/${insertedMsg.id}/${processed.fileName}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from("chat-attachments")
+            .upload(storagePath, processed.file, {
+              contentType: processed.mimeType,
+              upsert: false,
+            });
+
+          if (uploadErr) {
+            throw new Error(`Upload failed: ${uploadErr.message}`);
+          }
+
+          createdStoragePaths.push(storagePath);
+
+          const { data: insertedAtt, error: attDbErr } = await supabase
+            .from("attachments")
+            .insert({
+              message_id: insertedMsg.id,
+              storage_path: storagePath,
+              file_name: processed.originalFileName,
+              file_type: processed.mimeType,
+              file_size: processed.fileSize,
+              width: processed.width,
+              height: processed.height,
+            })
+            .select("*")
+            .single();
+
+          if (attDbErr || !insertedAtt) {
+            throw new Error(`Failed to save attachment metadata: ${attDbErr?.message}`);
+          }
+
+          const { data: signedData } = await supabase.storage
+            .from("chat-attachments")
+            .createSignedUrl(storagePath, 3600);
+
+          finalAttachments.push({
+            id: insertedAtt.id,
+            messageId: insertedAtt.message_id,
+            fileName: insertedAtt.file_name,
+            fileType: insertedAtt.file_type,
+            fileSize: insertedAtt.file_size,
+            width: insertedAtt.width,
+            height: insertedAtt.height,
+            storagePath: insertedAtt.storage_path,
+            signedUrl: signedData?.signedUrl || processed.previewUrl,
+          });
+        }
       }
 
       setMessages((prev) =>
@@ -594,32 +692,41 @@ export function useMessages(conversationId: string | null) {
                 readBy: [],
                 reactions: [],
                 replyPreview: null,
+                attachments: finalAttachments,
               }
             : m
         )
       );
 
-      pendingTempIdsRef.current.delete(trimmedContent);
+      pendingTempIdsRef.current.delete(trimmedContent || tempId);
       return { success: true };
-    } catch {
+    } catch (err: any) {
+      // Compensating rollback: delete uploaded storage files & delete message row
+      if (createdStoragePaths.length > 0) {
+        try {
+          await supabase.storage.from("chat-attachments").remove(createdStoragePaths);
+        } catch {}
+      }
+
       setMessages((prev) =>
         prev.map((m) =>
           m.tempId === tempId ? { ...m, status: "failed" } : m
         )
       );
-      pendingTempIdsRef.current.delete(trimmedContent);
-      return { success: false, error: "Network error sending message." };
+      pendingTempIdsRef.current.delete(trimmedContent || tempId);
+      return { success: false, error: err.message || "Failed to send message." };
     }
   };
 
   const sendReply = (
     content: string,
-    replyToMessageId: string
+    replyToMessageId: string,
+    stagedAttachments?: PendingAttachment[]
   ): Promise<{ success: boolean; error?: string }> =>
-    sendMessage(content, replyToMessageId);
+    sendMessage(content, replyToMessageId, stagedAttachments);
 
   const retryMessage = async (failedMsg: ChatMessage) => {
-    if (!failedMsg.content) return;
+    if (!failedMsg.content && (!failedMsg.attachments || failedMsg.attachments.length === 0)) return;
     setMessages((prev) =>
       prev.filter(
         (m) => m.id !== failedMsg.id && m.tempId !== failedMsg.tempId
@@ -664,7 +771,6 @@ export function useMessages(conversationId: string | null) {
     );
 
     try {
-      // user_id is included here; RLS enforces auth.uid() = user_id.
       const { error } = await supabase.from("message_reactions").insert({
         message_id: messageId,
         user_id: user.id,
@@ -704,7 +810,7 @@ export function useMessages(conversationId: string | null) {
           return { ...m, reactions };
         })
       );
-      return { success: false, error: "Unable to add reaction." };
+      return { success: false, error: "Network error adding reaction." };
     }
   };
 
@@ -716,22 +822,21 @@ export function useMessages(conversationId: string | null) {
   ): Promise<{ success: boolean; error?: string }> => {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
-    // Snapshot for rollback
-    const snapshot =
-      messagesRef.current.find((m) => m.id === messageId)?.reactions || [];
+    const originalMsg = messagesRef.current.find((m) => m.id === messageId);
+    const snapshot = originalMsg?.reactions || [];
 
     // Optimistic remove
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== messageId) return m;
-        const reactions = (m.reactions || [])
+        const updated = (m.reactions || [])
           .map((r) => {
             if (r.reaction !== reaction) return r;
             const newUserIds = r.userIds.filter((id) => id !== user.id);
             return { ...r, count: newUserIds.length, userIds: newUserIds };
           })
           .filter((r) => r.count > 0);
-        return { ...m, reactions };
+        return { ...m, reactions: updated };
       })
     );
 
@@ -740,15 +845,13 @@ export function useMessages(conversationId: string | null) {
         .from("message_reactions")
         .delete()
         .eq("message_id", messageId)
-        .eq("user_id", user.id) // RLS also enforces this
+        .eq("user_id", user.id)
         .eq("reaction", reaction);
 
       if (error) {
         // Rollback
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId ? { ...m, reactions: snapshot } : m
-          )
+          prev.map((m) => (m.id === messageId ? { ...m, reactions: snapshot } : m))
         );
         return { success: false, error: "Unable to remove reaction." };
       }
@@ -756,15 +859,13 @@ export function useMessages(conversationId: string | null) {
       return { success: true };
     } catch {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId ? { ...m, reactions: snapshot } : m
-        )
+        prev.map((m) => (m.id === messageId ? { ...m, reactions: snapshot } : m))
       );
-      return { success: false, error: "Unable to remove reaction." };
+      return { success: false, error: "Network error removing reaction." };
     }
   };
 
-  // ─── Edit message (optimistic + rollback) ────────────────────────────────────
+  // ─── Edit message (optimistic + rollback) ─────────────────────────────────────
 
   const editMessage = async (
     messageId: string,
@@ -776,20 +877,18 @@ export function useMessages(conversationId: string | null) {
     if (validationErr) return { success: false, error: validationErr };
 
     const trimmedContent = newContent.trim();
+    const originalMsg = messagesRef.current.find((m) => m.id === messageId);
 
-    // Guard: cannot edit deleted message or another user's message (client-side guard;
-    // the database UPDATE policy enforces auth.uid() = sender_id AND deleted_at IS NULL)
-    const msg = messagesRef.current.find((m) => m.id === messageId);
-    if (!msg) return { success: false, error: "Message not found." };
-    if (msg.deleted_at)
-      return { success: false, error: "Cannot edit a deleted message." };
-    if (msg.sender_id !== user.id)
+    if (!originalMsg) return { success: false, error: "Message not found." };
+    if (originalMsg.sender_id !== user.id)
       return { success: false, error: "You can only edit your own messages." };
+    if (originalMsg.deleted_at)
+      return { success: false, error: "Cannot edit a deleted message." };
 
-    const snapshotContent = msg.content;
-    const snapshotUpdatedAt = msg.updated_at;
+    const snapshotContent = originalMsg.content;
+    const snapshotUpdatedAt = originalMsg.updated_at;
 
-    // Optimistic update
+    // Optimistic edit
     setMessages((prev) =>
       prev.map((m) =>
         m.id === messageId
@@ -803,8 +902,8 @@ export function useMessages(conversationId: string | null) {
         .from("messages")
         .update({ content: trimmedContent })
         .eq("id", messageId)
-        .eq("sender_id", user.id) // belt-and-suspenders; RLS enforces this too
-        .is("deleted_at", null); // cannot edit deleted message at DB level
+        .eq("sender_id", user.id)
+        .is("deleted_at", null);
 
       if (error) {
         // Rollback
@@ -847,10 +946,10 @@ export function useMessages(conversationId: string | null) {
 
     const deletedAt = new Date().toISOString();
 
-    // Optimistic soft-delete
+    // Optimistic soft-delete: immediately wipe attachments from rendered state
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === messageId ? { ...m, deleted_at: deletedAt } : m
+        m.id === messageId ? { ...m, deleted_at: deletedAt, attachments: [] } : m
       )
     );
 
@@ -859,14 +958,14 @@ export function useMessages(conversationId: string | null) {
         .from("messages")
         .update({ deleted_at: deletedAt })
         .eq("id", messageId)
-        .eq("sender_id", user.id) // RLS enforces auth.uid() = sender_id
-        .is("deleted_at", null); // idempotency guard
+        .eq("sender_id", user.id)
+        .is("deleted_at", null);
 
       if (error) {
         // Rollback
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === messageId ? { ...m, deleted_at: null } : m
+            m.id === messageId ? { ...m, deleted_at: null, attachments: msg.attachments } : m
           )
         );
         return {
@@ -879,7 +978,7 @@ export function useMessages(conversationId: string | null) {
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === messageId ? { ...m, deleted_at: null } : m
+          m.id === messageId ? { ...m, deleted_at: null, attachments: msg.attachments } : m
         )
       );
       return { success: false, error: "Failed to delete message." };

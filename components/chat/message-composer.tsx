@@ -1,18 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, X, Check, Pencil } from "lucide-react";
+import { Send, Loader2, X, Check, Pencil, ImagePlus, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   MAX_MESSAGE_LENGTH,
   validateMessageContent,
 } from "@/lib/validation/message";
 import { ReplyBanner } from "./reply-banner";
+import { AttachmentPreview } from "./attachment-preview";
+import { useMediaUpload, type PendingAttachment } from "@/hooks/use-media-upload";
 import type { ChatMessage, ReplyPreviewData } from "@/types/chat";
 
 interface MessageComposerProps {
   /** Called for normal sends (and replies — active-chat adds reply context) */
-  onSendMessage: (content: string) => Promise<{ success: boolean; error?: string }>;
+  onSendMessage: (
+    content: string,
+    stagedAttachments?: PendingAttachment[]
+  ) => Promise<{ success: boolean; error?: string }>;
   onTyping?: () => void;
   disabled?: boolean;
   /** When set, a reply banner is shown and the send clears reply state */
@@ -39,10 +44,21 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const [content, setContent] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [validationError, setValidationError] = React.useState<string | null>(
-    null
-  );
+  const [validationError, setValidationError] = React.useState<string | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const {
+    stagedAttachments,
+    isProcessing: isMediaProcessing,
+    isUploading: isMediaUploading,
+    uploadError: mediaUploadError,
+    addFiles,
+    removeAttachment,
+    clearAll: clearAttachments,
+  } = useMediaUpload();
 
   // Draft storage — preserves the in-progress text when edit mode is entered/left
   const draftRef = React.useRef<string>("");
@@ -54,7 +70,6 @@ export function MessageComposer({
   // Enter / leave edit mode
   React.useEffect(() => {
     if (editingMessage) {
-      // Save current draft, pre-fill with message content
       draftRef.current = contentRef.current;
       setContent(editingMessage.content);
       setValidationError(null);
@@ -64,7 +79,6 @@ export function MessageComposer({
         textareaRef.current?.setSelectionRange(len, len);
       }, 50);
     } else {
-      // Restore draft after exiting edit mode
       setContent(draftRef.current);
       draftRef.current = "";
       setValidationError(null);
@@ -81,9 +95,7 @@ export function MessageComposer({
     }
   }, [content]);
 
-  // Focus textarea when a new reply target is set.
-  // Using replyTo?.messageId (not the full object) so focus only fires
-  // when the reply target changes, not on every re-render.
+  // Focus textarea on reply
   React.useEffect(() => {
     if (replyTo?.messageId) {
       textareaRef.current?.focus();
@@ -112,16 +124,77 @@ export function MessageComposer({
     }
   };
 
+  // Clipboard paste support for images
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (editingMessage) return; // Don't paste attachments in edit mode
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+
+    if (imageFiles.length > 0) {
+      addFiles(imageFiles);
+    }
+  };
+
+  // Drag & drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    if (editingMessage) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (editingMessage) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(e.target.files);
+      e.target.value = ""; // Reset input so same file can be re-selected if removed
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     const trimmed = content.trim();
-    if (!trimmed || isSubmitting || disabled) return;
+    const readyAttachments = stagedAttachments.filter(
+      (a) => a.status === "ready" && a.processed
+    );
 
-    const error = validateMessageContent(trimmed);
-    if (error) {
-      setValidationError(error);
+    // Cannot submit if both text and attachments are empty
+    if ((!trimmed && readyAttachments.length === 0) || isSubmitting || disabled) {
       return;
+    }
+
+    // If text exists, validate length
+    if (trimmed) {
+      const error = validateMessageContent(trimmed);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -129,9 +202,8 @@ export function MessageComposer({
 
     try {
       if (editingMessage && onSaveEdit) {
-        // Edit mode — save edit
+        // Edit mode
         if (trimmed === editingMessage.content.trim()) {
-          // No change — just cancel
           onCancelEdit?.();
           return;
         }
@@ -143,10 +215,11 @@ export function MessageComposer({
           setValidationError(res.error);
         }
       } else {
-        // Normal send (or reply — active-chat handles the reply context)
-        const res = await onSendMessage(trimmed);
+        // Normal send or reply (with optional attachments)
+        const res = await onSendMessage(trimmed, readyAttachments);
         if (res.success) {
           setContent("");
+          clearAttachments();
           if (textareaRef.current) {
             textareaRef.current.style.height = "auto";
             textareaRef.current.focus();
@@ -163,15 +236,35 @@ export function MessageComposer({
   const isOverLength = content.length > MAX_MESSAGE_LENGTH;
   const isNearLength = content.length > MAX_MESSAGE_LENGTH * 0.85;
   const isEditing = !!editingMessage;
+  const hasValidInput = content.trim().length > 0 || stagedAttachments.some((a) => a.status === "ready");
 
   return (
     <div
-      className={`shrink-0 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 safe-bottom ${
-        isEditing
-          ? "border-t-2 border-heat-400 dark:border-heat-600"
-          : ""
-      }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`relative shrink-0 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 safe-bottom transition-colors ${
+        isEditing ? "border-t-2 border-heat-400 dark:border-heat-600" : ""
+      } ${isDraggingOver ? "bg-heat-50/60 dark:bg-heat-950/40 ring-2 ring-inset ring-heat-500" : ""}`}
     >
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        multiple
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        aria-hidden="true"
+      />
+
+      {/* Drag & Drop Visual Overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-heat-500/10 backdrop-blur-2xs text-heat-600 dark:text-heat-400 font-semibold text-xs pointer-events-none">
+          Drop image files here to attach
+        </div>
+      )}
+
       {/* Edit mode header */}
       {isEditing && (
         <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-1.5 dark:border-zinc-800">
@@ -195,20 +288,47 @@ export function MessageComposer({
         <ReplyBanner replyTo={replyTo} onCancel={onCancelReply || (() => {})} />
       )}
 
-      {/* Validation error */}
-      {validationError && (
+      {/* Staged Attachments Preview */}
+      {!isEditing && (
+        <AttachmentPreview
+          attachments={stagedAttachments}
+          onRemove={removeAttachment}
+          disabled={isSubmitting || disabled}
+        />
+      )}
+
+      {/* Errors (validation or media upload) */}
+      {(validationError || mediaUploadError) && (
         <div className="px-4 pb-1 pt-1.5 text-xs font-medium text-red-500" role="alert">
-          {validationError}
+          {validationError || mediaUploadError}
         </div>
       )}
 
       <form
         onSubmit={handleSubmit}
         className="flex items-end gap-2 p-3"
-        aria-label={
-          isEditing ? "Edit message form" : "Send message form"
-        }
+        aria-label={isEditing ? "Edit message form" : "Send message form"}
       >
+        {/* Attachment picker trigger button */}
+        {!isEditing && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || isSubmitting || isMediaProcessing}
+            title="Attach images (JPG, PNG, WebP)"
+            aria-label="Attach images"
+            className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
+          >
+            {isMediaProcessing ? (
+              <Loader2 className="h-5 w-5 animate-spin text-heat-500" />
+            ) : (
+              <ImagePlus className="h-5 w-5" />
+            )}
+          </Button>
+        )}
+
         <div className="relative flex-1">
           <textarea
             ref={textareaRef}
@@ -216,8 +336,13 @@ export function MessageComposer({
             value={content}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={
-              isEditing ? "Edit your message…" : "Type a message…"
+              isEditing
+                ? "Edit your message…"
+                : stagedAttachments.length > 0
+                ? "Add a caption… (optional)"
+                : "Type a message…"
             }
             disabled={disabled}
             aria-label={isEditing ? "Edit message text" : "Message text"}
@@ -227,9 +352,7 @@ export function MessageComposer({
           {isNearLength && (
             <span
               className={`absolute bottom-2 right-3 text-[10px] ${
-                isOverLength
-                  ? "font-bold text-red-500"
-                  : "text-zinc-400"
+                isOverLength ? "font-bold text-red-500" : "text-zinc-400"
               }`}
               aria-live="polite"
             >
@@ -253,9 +376,7 @@ export function MessageComposer({
               type="submit"
               variant="heat"
               size="icon"
-              disabled={
-                !content.trim() || isSubmitting || disabled || isOverLength
-              }
+              disabled={!content.trim() || isSubmitting || disabled || isOverLength}
               aria-label="Save edit"
               className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
             >
@@ -271,9 +392,7 @@ export function MessageComposer({
             type="submit"
             variant="heat"
             size="icon"
-            disabled={
-              !content.trim() || isSubmitting || disabled || isOverLength
-            }
+            disabled={!hasValidInput || isSubmitting || disabled || isOverLength || isMediaProcessing}
             aria-label="Send message"
             className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
           >

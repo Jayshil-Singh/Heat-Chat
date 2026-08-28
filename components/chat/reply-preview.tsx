@@ -43,7 +43,7 @@ export function ReplyPreview({
       >
         {replyPreview.isDeleted
           ? "Original message was deleted"
-          : replyPreview.content}
+          : replyPreview.content || "📷 Photo"}
       </span>
     </button>
   );
