@@ -1,0 +1,16 @@
+{
+  "name": "Heat Chat",
+  "short_name": "Heat Chat",
+  "description": "A fast, lightweight, and secure private chat application for close friends.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
