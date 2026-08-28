@@ -433,7 +433,47 @@ async function runVerification() {
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    console.log("\n9. Search Sanitization, Injection & Special Characters...");
+    console.log("\n9. Group-Message Starring, Delete RLS Isolation & Context RPC...");
+
+    // Star group message
+    const { data: grpStarRes } = await clients.B.rpc("toggle_starred_message", {
+      p_message_id: grpMsg.data.id,
+    });
+    assert(grpStarRes === true, "User B stars group message (returns true)");
+
+    // User B verifies group message is in starred list
+    const { data: grpStarredList } = await clients.B.from("starred_messages").select("*").eq("message_id", grpMsg.data.id);
+    assert(grpStarredList?.length === 1, "User B queries starred group message successfully");
+
+    // Cross-user deletion isolation: User C attempts to delete User B's starred message
+    const { data: delAttempt } = await clients.C.from("starred_messages").delete().eq("id", grpStarredList[0].id).select();
+    assert(!delAttempt || delAttempt.length === 0, "User C cannot delete User B's starred message (DELETE RLS policy)");
+
+    // get_message_context_by_id: User A fetches context for valid message in active conversation
+    const { data: ctxA, error: ctxAErr } = await clients.A.rpc("get_message_context_by_id", {
+      p_message_id: msgB1.data.id,
+    });
+    assert(
+      !ctxAErr && ctxA?.length === 1 && ctxA[0].sender_username === `user_phase10_beta_${testRunId.toLowerCase()}`,
+      "get_message_context_by_id returns complete message and sender profile metadata for conversation member"
+    );
+
+    // get_message_context_by_id: Non-member User E attempts to fetch context
+    const { data: ctxE } = await clients.E.rpc("get_message_context_by_id", {
+      p_message_id: msgB1.data.id,
+    });
+    assert(ctxE?.length === 0, "Non-member User E receives 0 rows from get_message_context_by_id");
+
+    // Search result limit enforcement: query with p_limit = 1
+    const { data: limitTest } = await clients.A.rpc("search_conversation_messages", {
+      p_conv_id: convABId,
+      p_query: "Tokyo",
+      p_limit: 1,
+    });
+    assert(limitTest?.length === 1, "search_conversation_messages enforces p_limit parameter strictly");
+
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log("\n10. Search Sanitization, Injection & Special Characters...");
 
     // Search special characters: no crash, empty result or sanitized match
     const specialChars = "quantum!@#$%^&*()_+=-{}[]:;'\"<>,.?/|\\`~";
