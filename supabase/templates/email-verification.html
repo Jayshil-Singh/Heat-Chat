@@ -56,8 +56,8 @@
       letter-spacing: -0.3px;
     }
     .description {
-      font-size: 14px;
-      line-height: 22px;
+      font-size: 15px;
+      line-height: 24px;
       color: #a1a1aa;
       margin-bottom: 24px;
     }
@@ -76,49 +76,36 @@
       text-transform: uppercase;
       letter-spacing: 1.5px;
       color: #ef4444;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .otp-code {
       font-family: 'Courier New', Courier, monospace, monospace;
-      font-size: 38px;
+      font-size: 40px;
       font-weight: 900;
-      letter-spacing: 8px;
+      letter-spacing: 10px;
       color: #ffffff;
       margin: 0;
-      line-height: 1;
+      line-height: 1.2;
     }
     .otp-expiry {
-      font-size: 11px;
+      font-size: 12px;
       color: #71717a;
-      margin-top: 8px;
+      margin-top: 10px;
     }
-    .notice-box {
+    .instruction-box {
       background-color: #27272a;
       border-left: 4px solid #ef4444;
       border-radius: 8px;
-      padding: 12px 16px;
+      padding: 14px 16px;
       text-align: left;
-      margin-bottom: 24px;
+      margin: 24px 0 12px;
     }
-    .notice-text {
+    .instruction-text {
       font-size: 13px;
       color: #e4e4e7;
       font-weight: 500;
       margin: 0;
-    }
-    .btn-container {
-      margin: 28px 0 16px;
-    }
-    .btn {
-      display: inline-block;
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      color: #ffffff !important;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 14px;
-      padding: 12px 28px;
-      border-radius: 10px;
-      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+      line-height: 20px;
     }
     .footer {
       padding: 24px 32px;
@@ -127,10 +114,6 @@
       font-size: 12px;
       color: #71717a;
       line-height: 18px;
-    }
-    .link {
-      color: #ef4444;
-      text-decoration: none;
     }
   </style>
 </head>
@@ -143,36 +126,26 @@
       </div>
     </div>
     <div class="content">
-      <h1 class="title">Verify your Heat Chat email address</h1>
+      <h1 class="title">Verify your email address</h1>
       <p class="description">
-        Thank you for joining Heat Chat. Enter the 6-digit verification code below in the verification screen to activate your account:
+        Enter this 6-digit verification code in Heat Chat to complete your registration:
       </p>
 
-      <!-- 6-Digit Email OTP Box -->
+      <!-- 6-DIGIT OTP CODE -->
       <div class="otp-card">
         <div class="otp-label">Verification Code</div>
         <div class="otp-code">{{ .Token }}</div>
         <div class="otp-expiry">This code will expire in 10 minutes.</div>
       </div>
 
-      <div class="notice-box">
-        <p class="notice-text">
-          🔒 <strong>Security Notice:</strong> Never share this code with anyone. You must verify your email before signing in.
+      <div class="instruction-box">
+        <p class="instruction-text">
+          🔒 <strong>Security Notice:</strong> Enter this code on the Heat Chat verification page. Never share this code with anyone.
         </p>
       </div>
-
-      <div class="btn-container">
-        <a href="{{ .ConfirmationURL }}" class="btn" target="_blank">Direct Verification Link (Optional)</a>
-      </div>
-
-      <p class="description" style="font-size: 11px; margin-bottom: 0; color: #71717a;">
-        Or paste this verification URL into your browser:<br />
-        <a href="{{ .ConfirmationURL }}" class="link" style="word-break: break-all;">{{ .ConfirmationURL }}</a>
-      </p>
     </div>
     <div class="footer">
-      If you did not create an account on Heat Chat, you can safely ignore this email.<br />
-      Contact support at <a href="mailto:support@heatchat.app" class="link">support@heatchat.app</a>.
+      If you did not create an account on Heat Chat, you can safely ignore this email.
     </div>
   </div>
 </body>

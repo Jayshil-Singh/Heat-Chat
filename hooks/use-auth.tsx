@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getCallbackUrl } from "@/lib/utils/site-url";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Profile } from "@/types/database";
 
@@ -105,16 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "No email address provided." };
       }
       try {
-        const siteUrl =
-          typeof window !== "undefined"
-            ? window.location.origin
-            : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+        const callbackUrl = getCallbackUrl("/auth/callback");
 
         const { error: resendError } = await supabase.auth.resend({
           type: "signup",
           email: emailToSend,
           options: {
-            emailRedirectTo: `${siteUrl}/auth/callback`,
+            emailRedirectTo: callbackUrl,
           },
         });
 

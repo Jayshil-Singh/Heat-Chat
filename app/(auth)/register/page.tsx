@@ -25,6 +25,7 @@ import {
   validateDisplayName,
   sanitizeUsername,
 } from "@/lib/validation/auth";
+import { getCallbackUrl } from "@/lib/utils/site-url";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -71,10 +72,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const siteUrl =
-        typeof window !== "undefined"
-          ? window.location.origin
-          : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+      const callbackUrl = getCallbackUrl("/auth/callback");
 
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -84,7 +82,7 @@ export default function RegisterPage() {
             username: username.toLowerCase().trim(),
             display_name: displayName.trim(),
           },
-          emailRedirectTo: `${siteUrl}/auth/callback`,
+          emailRedirectTo: callbackUrl,
         },
       });
 
@@ -102,13 +100,7 @@ export default function RegisterPage() {
         return;
       }
 
-      if (data.user && data.user.email_confirmed_at) {
-        router.replace("/chat");
-        router.refresh();
-        return;
-      }
-
-      // Default: User must verify email before entering Heat Chat
+      // User must verify email via 6-digit OTP code before entering Heat Chat
       router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch {
       setErrors({ general: "A network error occurred. Please try again." });

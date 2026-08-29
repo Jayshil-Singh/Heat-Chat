@@ -11,24 +11,28 @@ function assert(condition, message) {
 
 async function runEmailOtpVerificationSuite() {
   console.log("==================================================================");
-  console.log(" HEAT CHAT — 6-DIGIT EMAIL OTP VERIFICATION & EXPLICIT LOGIN QA");
+  console.log(" HEAT CHAT — OTP-ONLY NORMAL USER EMAIL VERIFICATION QA");
   console.log("==================================================================\n");
 
-  // 1. Template Validation
-  console.log("--- 1. Email Templates & 6-Digit OTP Token Validation ---");
+  // 1. Template Validation — OTP-ONLY (Zero Confirmation Links)
+  console.log("--- 1. Email Templates & OTP-Only Invariants ---");
   const verificationTemplatePath = path.join(process.cwd(), "supabase", "templates", "email-verification.html");
   assert(fs.existsSync(verificationTemplatePath), "Email verification template exists");
 
   const verContent = fs.readFileSync(verificationTemplatePath, "utf-8");
   assert(verContent.includes("{{ .Token }}"), "Verification template includes 6-digit OTP token variable {{ .Token }}");
-  assert(verContent.includes("{{ .ConfirmationURL }}"), "Verification template includes fallback confirmation URL {{ .ConfirmationURL }}");
+  assert(!verContent.includes("{{ .ConfirmationURL }}"), "Verification template contains NO {{ .ConfirmationURL }}");
+  assert(!verContent.includes("Confirm email address"), "Verification template contains NO 'Confirm email address' link text");
+  assert(!verContent.includes("Click to confirm"), "Verification template contains NO 'Click to confirm' link text");
+  assert(!verContent.includes("Or click the direct confirmation link"), "Verification template contains NO direct confirmation link text");
+  assert(!verContent.includes("<a href="), "Verification template contains NO clickable verification <a> tags in body");
   assert(!verContent.includes("token="), "Verification template does not hardcode static tokens");
   assert(verContent.includes("Heat Chat") || verContent.includes("HEAT"), "Branded as Heat Chat");
   assert(verContent.includes("Verification Code"), "Template features prominent Verification Code box");
   assert(verContent.includes("This code will expire in 10 minutes"), "Template displays expiration information");
   assert(verContent.includes("If you did not create an account on Heat Chat, you can safely ignore this email"), "Template includes security warning");
 
-  // 2. 6-Digit OTP Input & Interaction Mechanics Simulation
+  // 2. 6-Digit OTP Input & Formatting Verification
   console.log("\n--- 2. 6-Digit Input & Formatting Verification ---");
   
   function simulateOtpInput(inputs) {
@@ -89,7 +93,7 @@ async function runEmailOtpVerificationSuite() {
       };
     }
 
-    verifyOtp(email, token, type = "signup") {
+    verifyOtp(email, token, type = "email") {
       const otpRecord = this.activeOtps.get(email.trim());
       if (!otpRecord) {
         return { error: { message: "Token has expired or is invalid." } };
@@ -141,7 +145,7 @@ async function runEmailOtpVerificationSuite() {
   assert(reg.session === null, "Signup does NOT grant application session");
 
   // Step B: Invalid OTP code test
-  const invalidRes = authMock.verifyOtp("alex@example.com", "000000");
+  const invalidRes = authMock.verifyOtp("alex@example.com", "000000", "email");
   assert(invalidRes.error && invalidRes.error.message.includes("invalid"), "Invalid OTP code is rejected");
 
   // Step C: Resend with cooldown
@@ -152,16 +156,13 @@ async function runEmailOtpVerificationSuite() {
   assert(resendOk.success, "Resend succeeds after cooldown expires");
 
   // Step D: Valid OTP Verification
-  const validRes = authMock.verifyOtp("alex@example.com", resendOk.newCode);
+  const validRes = authMock.verifyOtp("alex@example.com", resendOk.newCode, "email");
   assert(validRes.user.email_confirmed_at !== null, "Valid OTP confirms email (email_confirmed_at != null)");
 
   // Step E: Enforce Explicit Login (Do NOT auto-enter /chat)
   function handlePostOtpVerification(verifiedUser) {
-    // 1. Check verified
     if (!verifiedUser.email_confirmed_at) throw new Error("Unverified");
-    // 2. Clear token session
     const clearedSession = null;
-    // 3. Target route
     const targetRoute = "/login?verified=true";
     return { clearedSession, targetRoute };
   }
@@ -204,14 +205,56 @@ async function runEmailOtpVerificationSuite() {
   assert(evaluateRouteAccess("/chat", verifiedUser).allow, "Verified user allowed on /chat");
   assert(evaluatePresenceConnect(verifiedUser) === true, "Presence connects for verified user");
 
-  // 5. Admin TOTP MFA Isolation
-  console.log("\n--- 5. Admin MFA Separation Verification ---");
+  // 5. Site URL & Callback URL Helper Consistency
+  console.log("\n--- 5. Authoritative Site URL & Redirect Configuration ---");
+  function getSiteUrl(envSiteUrl, envAppUrl, windowOrigin) {
+    let url = envSiteUrl || envAppUrl || windowOrigin || "http://localhost:3000";
+    url = url.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+    return url.replace(/\/+$/, "");
+  }
+
+  function getCallbackUrl(path = "/auth/callback", envSiteUrl, envAppUrl, windowOrigin) {
+    const base = getSiteUrl(envSiteUrl, envAppUrl, windowOrigin);
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${cleanPath}`;
+  }
+
+  const customDomainCallback = getCallbackUrl("/auth/callback", "https://heatchat.app");
+  assert(customDomainCallback === "https://heatchat.app/auth/callback", "Custom domain resolves /auth/callback correctly");
+
+  const unadornedDomainCallback = getCallbackUrl("/auth/callback", "heatchat.app");
+  assert(unadornedDomainCallback === "https://heatchat.app/auth/callback", "Auto-appends https to domain without protocol");
+
+  // 6. Admin TOTP MFA Isolation
+  console.log("\n--- 6. Admin MFA Separation Verification ---");
   const adminMfaType = "TOTP_APP_AUTHENTICATOR";
   const userVerificationType = "EMAIL_6_DIGIT_OTP";
   assert(adminMfaType !== userVerificationType, "Admin TOTP MFA is strictly separate from user email OTP");
 
+  // 7. Secret Isolation Audit
+  console.log("\n--- 7. Secret Isolation & Zero Leakage Audit ---");
+  const srcFiles = [
+    "app/(auth)/register/page.tsx",
+    "app/(auth)/login/page.tsx",
+    "app/(auth)/verify-email/page.tsx",
+    "app/auth/callback/route.ts",
+    "lib/utils/site-url.ts"
+  ];
+  for (const relFile of srcFiles) {
+    const fPath = path.join(process.cwd(), relFile);
+    if (fs.existsSync(fPath)) {
+      const content = fs.readFileSync(fPath, "utf-8");
+      assert(!content.includes("SMTP_PASSWORD"), `${relFile} does not leak SMTP_PASSWORD`);
+      assert(!content.includes("SMTP_HOST"), `${relFile} does not leak SMTP_HOST`);
+      assert(!content.includes("SMTP_USERNAME"), `${relFile} does not leak SMTP_USERNAME`);
+    }
+  }
+
   console.log("\n==================================================================");
-  console.log(" SUMMARY: 6-DIGIT EMAIL OTP VERIFICATION QA PASSED (100%)");
+  console.log(" SUMMARY: OTP-ONLY EMAIL VERIFICATION QA PASSED (100%)");
   console.log("==================================================================\n");
 }
 

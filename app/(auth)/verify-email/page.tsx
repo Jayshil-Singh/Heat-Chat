@@ -140,21 +140,23 @@ function VerifyEmailContent() {
     setResendStatus(null);
 
     try {
-      // 1. Verify 6-digit OTP code with Supabase Auth
-      // Primary: type 'signup' (or fallback to 'email')
+      // 1. Verify 6-digit OTP code with Supabase Auth using type: "email"
       let verifyRes = await supabase.auth.verifyOtp({
         email: displayEmail.trim(),
         token: fullCode,
-        type: "signup",
+        type: "email",
       });
 
       if (verifyRes.error) {
-        // Fallback check for email change/verification
-        verifyRes = await supabase.auth.verifyOtp({
+        // Fallback check with type: "signup"
+        const signupRes = await supabase.auth.verifyOtp({
           email: displayEmail.trim(),
           token: fullCode,
-          type: "email",
+          type: "signup",
         });
+        if (!signupRes.error) {
+          verifyRes = signupRes;
+        }
       }
 
       if (verifyRes.error) {
