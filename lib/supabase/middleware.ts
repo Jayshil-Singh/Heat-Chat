@@ -34,6 +34,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const isEmailVerified = Boolean(user?.email_confirmed_at);
   const pathname = request.nextUrl.pathname;
 
   // Protected route paths
@@ -49,6 +50,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/register" ||
     pathname === "/reset-password";
 
+  // Unauthenticated user attempting to access protected route
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -56,10 +58,35 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  // Authenticated user with UNVERIFIED email attempting to access protected route
+  if (user && !isEmailVerified && isProtectedRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/verify-email";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Fully verified authenticated user visiting auth routes
+  if (user && isEmailVerified && isAuthRoute) {
     const redirectTo = request.nextUrl.searchParams.get("redirectTo") || "/chat";
     const url = request.nextUrl.clone();
     url.pathname = redirectTo;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Fully verified authenticated user visiting verify-email route
+  if (user && isEmailVerified && pathname === "/verify-email") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/chat";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Unverified user visiting login/register routes
+  if (user && !isEmailVerified && (pathname === "/login" || pathname === "/register")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/verify-email";
     url.search = "";
     return NextResponse.redirect(url);
   }

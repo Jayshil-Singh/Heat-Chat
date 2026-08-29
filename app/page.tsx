@@ -15,6 +15,7 @@ import {
   Lock,
   Sparkles,
   HeartHandshake,
+  Mail,
   Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function HomePage() {
-  const { user, profile, isLoading } = useAuth();
+  const { user, profile, isLoading, isEmailVerified } = useAuth();
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 selection:bg-heat-500 selection:text-white dark:bg-zinc-950 dark:text-zinc-50 flex flex-col justify-between">
@@ -59,11 +60,18 @@ export default function HomePage() {
             <ThemeToggle />
             {!isLoading && (
               <>
-                {user ? (
+                {user && isEmailVerified ? (
                   <Link href="/chat">
                     <Button variant="heat" size="sm" className="gap-2 shadow-sm shadow-heat-500/20">
                       <MessageSquare className="h-4 w-4" />
                       <span>Enter Chat</span>
+                    </Button>
+                  </Link>
+                ) : user && !isEmailVerified ? (
+                  <Link href="/verify-email">
+                    <Button variant="heat" size="sm" className="gap-2 shadow-sm shadow-heat-500/20">
+                      <Mail className="h-4 w-4" />
+                      <span>Verify Email</span>
                     </Button>
                   </Link>
                 ) : (
@@ -113,11 +121,19 @@ export default function HomePage() {
 
           {/* Hero CTAs */}
           <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
-            {!isLoading && user ? (
+            {!isLoading && user && isEmailVerified ? (
               <Link href="/chat">
                 <Button variant="heat" size="lg" className="gap-2 px-8 shadow-lg shadow-heat-500/30 text-base font-semibold">
                   <MessageSquare className="h-5 w-5" />
                   <span>Open Heat Chat</span>
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </Link>
+            ) : !isLoading && user && !isEmailVerified ? (
+              <Link href="/verify-email">
+                <Button variant="heat" size="lg" className="gap-2 px-8 shadow-lg shadow-heat-500/30 text-base font-semibold">
+                  <Mail className="h-5 w-5" />
+                  <span>Verify Email to Continue</span>
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
               </Link>
@@ -334,11 +350,18 @@ export default function HomePage() {
               Create an account in seconds and experience fast, private messaging with the people who matter most.
             </p>
             <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-              {!isLoading && user ? (
+              {!isLoading && user && isEmailVerified ? (
                 <Link href="/chat">
                   <Button variant="heat" size="lg" className="gap-2 px-8 shadow-lg shadow-heat-500/30 font-semibold">
                     <span>Enter Heat Chat</span>
                     <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              ) : !isLoading && user && !isEmailVerified ? (
+                <Link href="/verify-email">
+                  <Button variant="heat" size="lg" className="gap-2 px-8 shadow-lg shadow-heat-500/30 font-semibold">
+                    <Mail className="h-4 w-4" />
+                    <span>Verify Email</span>
                   </Button>
                 </Link>
               ) : (

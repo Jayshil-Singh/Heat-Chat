@@ -20,7 +20,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
   const supabase = React.useMemo(() => createClient(), []);
 
   React.useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || !user?.email_confirmed_at) {
       setOnlineUserIds(new Set());
       return;
     }
@@ -79,7 +79,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
       channel.untrack().catch(() => {});
       supabase.removeChannel(channel);
     };
-  }, [user?.id, supabase]);
+  }, [user?.id, user?.email_confirmed_at, supabase]);
 
   const isUserOnline = React.useCallback(
     (userId: string) => {

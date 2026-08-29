@@ -14,9 +14,12 @@ export interface AuthState {
   status: AuthStatus;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isEmailVerified: boolean;
   error: string | null;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
+  resendVerificationEmail: (targetEmail?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = React.createContext<AuthState | undefined>(undefined);
@@ -58,6 +61,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(p);
     }
   }, [user?.id, fetchProfile]);
+
+  const refreshUser = React.useCallback(async () => {
+    try {
+      const {
+        data: { user: freshUser },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !freshUser) {
+        return null;
+      }
+
+      setUser(freshUser);
+      if (freshUser.email_confirmed_at && freshUser.id) {
+        const p = await fetchProfile(freshUser.id);
+        setProfile(p);
+      }
+      return freshUser;
+    } catch (err) {
+      console.error("Error refreshing user:", err);
+      return null;
+    }
+  }, [supabase, fetchProfile]);
+
+  const resendVerificationEmail = React.useCallback(
+    async (targetEmail?: string) => {
+      const emailToSend = (targetEmail || user?.email || "").trim();
+      if (!emailToSend) {
+        return { success: false, error: "No email address provided." };
+      }
+      try {
+        const siteUrl =
+          typeof window !== "undefined"
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+        const { error: resendError } = await supabase.auth.resend({
+          type: "signup",
+          email: emailToSend,
+          options: {
+            emailRedirectTo: `${siteUrl}/auth/callback`,
+          },
+        });
+
+        if (resendError) {
+          return { success: false, error: resendError.message };
+        }
+        return { success: true };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err.message || "Failed to resend verification email.",
+        };
+      }
+    },
+    [supabase, user?.email]
+  );
 
   React.useEffect(() => {
     let isMounted = true;
@@ -141,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
+  const isEmailVerified = Boolean(user?.email_confirmed_at);
 
   const contextValue = React.useMemo<AuthState>(
     () => ({
@@ -150,11 +211,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       isLoading,
       isAuthenticated,
+      isEmailVerified,
       error,
       signOut,
       refreshProfile,
+      refreshUser,
+      resendVerificationEmail,
     }),
-    [user, profile, session, status, isLoading, isAuthenticated, error, signOut, refreshProfile]
+    [
+      user,
+      profile,
+      session,
+      status,
+      isLoading,
+      isAuthenticated,
+      isEmailVerified,
+      error,
+      signOut,
+      refreshProfile,
+      refreshUser,
+      resendVerificationEmail,
+    ]
   );
 
   return (

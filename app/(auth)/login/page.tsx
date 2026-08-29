@@ -49,10 +49,16 @@ function LoginForm() {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please try again." });
         } else if (error.message.includes("Email not confirmed")) {
-          setErrors({ general: "Please verify your email address before logging in." });
+          router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+          return;
         } else {
           setErrors({ general: error.message || "Failed to sign in. Please try again." });
         }
+        return;
+      }
+
+      if (data.user && !data.user.email_confirmed_at) {
+        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
         return;
       }
 

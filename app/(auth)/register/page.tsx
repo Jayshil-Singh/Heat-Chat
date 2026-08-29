@@ -71,6 +71,11 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
+      const siteUrl =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -79,25 +84,33 @@ export default function RegisterPage() {
             username: username.toLowerCase().trim(),
             display_name: displayName.trim(),
           },
+          emailRedirectTo: `${siteUrl}/auth/callback`,
         },
       });
 
       if (error) {
-        if (error.message.includes("already registered") || error.message.includes("User already exists")) {
+        if (
+          error.message.includes("already registered") ||
+          error.message.includes("User already exists")
+        ) {
           setErrors({ email: "An account with this email address already exists." });
         } else {
-          setErrors({ general: error.message || "Failed to create account. Please try again." });
+          setErrors({
+            general: error.message || "Failed to create account. Please try again.",
+          });
         }
         return;
       }
 
-      if (data.session) {
-        // Automatically signed in (Email confirmation disabled or local dev)
+      if (data.user && !data.user.email_confirmed_at) {
+        // Redirect to dedicated verification page with email parameter
+        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
+
+      if (data.user && data.user.email_confirmed_at) {
         router.push("/chat");
         router.refresh();
-      } else {
-        // Email confirmation enabled
-        setIsSuccess(true);
       }
     } catch {
       setErrors({ general: "A network error occurred. Please try again." });
@@ -140,6 +153,12 @@ export default function RegisterPage() {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Join Heat Chat to connect privately with your friends.
         </p>
+      </div>
+
+      <div className="rounded-2xl bg-heat-500/10 p-3 text-xs leading-relaxed text-heat-700 dark:text-heat-300 border border-heat-500/20">
+        <span className="font-semibold">Email verification required:</span> After
+        registering, we&apos;ll send a verification email. You must verify your email
+        before entering Heat Chat.
       </div>
 
       {errors.general && (
