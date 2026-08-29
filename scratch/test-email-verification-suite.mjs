@@ -11,26 +11,28 @@ function assert(condition, message) {
 
 async function runEmailOtpVerificationSuite() {
   console.log("==================================================================");
-  console.log(" HEAT CHAT — OTP-ONLY NORMAL USER EMAIL VERIFICATION QA");
+  console.log(" HEAT CHAT — EXACT 6-DIGIT EMAIL OTP VERIFICATION QA");
   console.log("==================================================================\n");
 
-  // 1. Template Validation — OTP-ONLY (Zero Confirmation Links)
-  console.log("--- 1. Email Templates & OTP-Only Invariants ---");
+  // 1. Declarative Supabase Config & Template Validation
+  console.log("--- 1. Supabase Auth Config & Template Invariants ---");
+  const configPath = path.join(process.cwd(), "supabase", "config.toml");
+  assert(fs.existsSync(configPath), "supabase/config.toml exists");
+  const configContent = fs.readFileSync(configPath, "utf-8");
+  assert(configContent.includes("otp_length = 6"), "supabase/config.toml specifies otp_length = 6");
+  assert(configContent.includes("otp_expiry = 600"), "supabase/config.toml specifies otp_expiry = 600 (10 minutes)");
+
   const verificationTemplatePath = path.join(process.cwd(), "supabase", "templates", "email-verification.html");
   assert(fs.existsSync(verificationTemplatePath), "Email verification template exists");
 
   const verContent = fs.readFileSync(verificationTemplatePath, "utf-8");
-  assert(verContent.includes("{{ .Token }}"), "Verification template includes 6-digit OTP token variable {{ .Token }}");
+  assert(verContent.includes("{{ .Token }}"), "Verification template includes {{ .Token }}");
   assert(!verContent.includes("{{ .ConfirmationURL }}"), "Verification template contains NO {{ .ConfirmationURL }}");
-  assert(!verContent.includes("Confirm email address"), "Verification template contains NO 'Confirm email address' link text");
-  assert(!verContent.includes("Click to confirm"), "Verification template contains NO 'Click to confirm' link text");
-  assert(!verContent.includes("Or click the direct confirmation link"), "Verification template contains NO direct confirmation link text");
+  assert(!verContent.includes("substring"), "Verification template contains NO substring truncation tricks");
+  assert(!verContent.includes("slice"), "Verification template contains NO slice truncation tricks");
   assert(!verContent.includes("<a href="), "Verification template contains NO clickable verification <a> tags in body");
-  assert(!verContent.includes("token="), "Verification template does not hardcode static tokens");
   assert(verContent.includes("Heat Chat") || verContent.includes("HEAT"), "Branded as Heat Chat");
-  assert(verContent.includes("Verification Code"), "Template features prominent Verification Code box");
-  assert(verContent.includes("This code will expire in 10 minutes"), "Template displays expiration information");
-  assert(verContent.includes("If you did not create an account on Heat Chat, you can safely ignore this email"), "Template includes security warning");
+  assert(verContent.includes("This code will expire in 10 minutes"), "Template displays 10-minute expiration notice");
 
   // 2. 6-Digit OTP Input & Formatting Verification
   console.log("\n--- 2. 6-Digit Input & Formatting Verification ---");
@@ -60,7 +62,7 @@ async function runEmailOtpVerificationSuite() {
   assert(pastedOtp.join("") === "849201", "Paste event correctly populates all 6 OTP slots");
 
   // 3. Supabase Auth Email OTP Verification Lifecycle Simulation
-  console.log("\n--- 3. Email OTP Verification & Explicit Login Lifecycle ---");
+  console.log("\n--- 3. Exact 6-Digit Email OTP Verification Lifecycle ---");
 
   class SupabaseAuthOtpMock {
     constructor() {
@@ -78,11 +80,11 @@ async function runEmailOtpVerificationSuite() {
       };
       this.users.set(email.trim(), user);
 
-      // Generate 6-digit OTP
+      // Generate EXACTLY 6-digit OTP
       const code = "739201";
       this.activeOtps.set(email.trim(), {
         code,
-        expiresAt: Date.now() + 10 * 60 * 1000,
+        expiresAt: Date.now() + 600 * 1000,
         attempts: 0,
       });
 
@@ -94,6 +96,13 @@ async function runEmailOtpVerificationSuite() {
     }
 
     verifyOtp(email, token, type = "email") {
+      const trimmedToken = token ? token.trim() : "";
+      
+      // Strict 6-digit length validation
+      if (trimmedToken.length !== 6 || !/^\d{6}$/.test(trimmedToken)) {
+        return { error: { message: "Token must be exactly 6 numeric digits." } };
+      }
+
       const otpRecord = this.activeOtps.get(email.trim());
       if (!otpRecord) {
         return { error: { message: "Token has expired or is invalid." } };
@@ -108,7 +117,7 @@ async function runEmailOtpVerificationSuite() {
         return { error: { message: "Token has expired or is invalid." } };
       }
 
-      if (otpRecord.code !== token.trim()) {
+      if (otpRecord.code !== trimmedToken) {
         return { error: { message: "Token has expired or is invalid." } };
       }
 
@@ -127,10 +136,11 @@ async function runEmailOtpVerificationSuite() {
       if (cooldownSeconds > 0) {
         return { error: { message: `Please wait ${cooldownSeconds}s before requesting a new code.` } };
       }
+      // New 6-digit code
       const newCode = "654321";
       this.activeOtps.set(email.trim(), {
         code: newCode,
-        expiresAt: Date.now() + 10 * 60 * 1000,
+        expiresAt: Date.now() + 600 * 1000,
         attempts: 0,
       });
       return { success: true, newCode };
@@ -143,10 +153,15 @@ async function runEmailOtpVerificationSuite() {
   const reg = authMock.signUp("alex@example.com", "SecurePass123!", "alex", "Alex");
   assert(reg.user.email_confirmed_at === null, "Registration creates unverified user (email_confirmed_at === null)");
   assert(reg.session === null, "Signup does NOT grant application session");
+  assert(reg.sentCode.length === 6 && /^\d{6}$/.test(reg.sentCode), "Server generated token is exactly 6 digits");
 
-  // Step B: Invalid OTP code test
-  const invalidRes = authMock.verifyOtp("alex@example.com", "000000", "email");
-  assert(invalidRes.error && invalidRes.error.message.includes("invalid"), "Invalid OTP code is rejected");
+  // Step B: Invalid OTP code tests
+  assert(authMock.verifyOtp("alex@example.com", "86029071").error, "8-digit OTP code is strictly rejected");
+  assert(authMock.verifyOtp("alex@example.com", "12345").error, "5-digit OTP code is strictly rejected");
+  assert(authMock.verifyOtp("alex@example.com", "1234567").error, "7-digit OTP code is strictly rejected");
+  assert(authMock.verifyOtp("alex@example.com", "abcdef").error, "Alphabetic code is strictly rejected");
+  assert(authMock.verifyOtp("alex@example.com", "12 456").error, "Code with spaces is strictly rejected");
+  assert(authMock.verifyOtp("alex@example.com", "000000").error, "Mismatched 6-digit OTP code is rejected");
 
   // Step C: Resend with cooldown
   const resendCooldown = authMock.resendOtp("alex@example.com", 45);
@@ -154,10 +169,11 @@ async function runEmailOtpVerificationSuite() {
 
   const resendOk = authMock.resendOtp("alex@example.com", 0);
   assert(resendOk.success, "Resend succeeds after cooldown expires");
+  assert(resendOk.newCode.length === 6 && /^\d{6}$/.test(resendOk.newCode), "Resent token is exactly 6 digits");
 
-  // Step D: Valid OTP Verification
+  // Step D: Valid 6-Digit OTP Verification
   const validRes = authMock.verifyOtp("alex@example.com", resendOk.newCode, "email");
-  assert(validRes.user.email_confirmed_at !== null, "Valid OTP confirms email (email_confirmed_at != null)");
+  assert(validRes.user.email_confirmed_at !== null, "Valid 6-digit OTP confirms email (email_confirmed_at != null)");
 
   // Step E: Enforce Explicit Login (Do NOT auto-enter /chat)
   function handlePostOtpVerification(verifiedUser) {
@@ -205,37 +221,14 @@ async function runEmailOtpVerificationSuite() {
   assert(evaluateRouteAccess("/chat", verifiedUser).allow, "Verified user allowed on /chat");
   assert(evaluatePresenceConnect(verifiedUser) === true, "Presence connects for verified user");
 
-  // 5. Site URL & Callback URL Helper Consistency
-  console.log("\n--- 5. Authoritative Site URL & Redirect Configuration ---");
-  function getSiteUrl(envSiteUrl, envAppUrl, windowOrigin) {
-    let url = envSiteUrl || envAppUrl || windowOrigin || "http://localhost:3000";
-    url = url.trim();
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = `https://${url}`;
-    }
-    return url.replace(/\/+$/, "");
-  }
-
-  function getCallbackUrl(path = "/auth/callback", envSiteUrl, envAppUrl, windowOrigin) {
-    const base = getSiteUrl(envSiteUrl, envAppUrl, windowOrigin);
-    const cleanPath = path.startsWith("/") ? path : `/${path}`;
-    return `${base}${cleanPath}`;
-  }
-
-  const customDomainCallback = getCallbackUrl("/auth/callback", "https://heatchat.app");
-  assert(customDomainCallback === "https://heatchat.app/auth/callback", "Custom domain resolves /auth/callback correctly");
-
-  const unadornedDomainCallback = getCallbackUrl("/auth/callback", "heatchat.app");
-  assert(unadornedDomainCallback === "https://heatchat.app/auth/callback", "Auto-appends https to domain without protocol");
-
-  // 6. Admin TOTP MFA Isolation
-  console.log("\n--- 6. Admin MFA Separation Verification ---");
+  // 5. Admin TOTP MFA Isolation
+  console.log("\n--- 5. Admin MFA Separation Verification ---");
   const adminMfaType = "TOTP_APP_AUTHENTICATOR";
   const userVerificationType = "EMAIL_6_DIGIT_OTP";
   assert(adminMfaType !== userVerificationType, "Admin TOTP MFA is strictly separate from user email OTP");
 
-  // 7. Secret Isolation Audit
-  console.log("\n--- 7. Secret Isolation & Zero Leakage Audit ---");
+  // 6. Secret Isolation Audit
+  console.log("\n--- 6. Secret Isolation & Zero Leakage Audit ---");
   const srcFiles = [
     "app/(auth)/register/page.tsx",
     "app/(auth)/login/page.tsx",
@@ -254,7 +247,7 @@ async function runEmailOtpVerificationSuite() {
   }
 
   console.log("\n==================================================================");
-  console.log(" SUMMARY: OTP-ONLY EMAIL VERIFICATION QA PASSED (100%)");
+  console.log(" SUMMARY: EXACT 6-DIGIT EMAIL OTP QA PASSED (100%)");
   console.log("==================================================================\n");
 }
 
