@@ -90,7 +90,7 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
       <div className="space-y-4">
         <div className="flex items-center justify-between md:justify-center lg:justify-between px-1">
           <Link
-            href="/"
+            href="/chat"
             className="flex items-center gap-3 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 rounded-xl"
             title="Heat Chat"
           >

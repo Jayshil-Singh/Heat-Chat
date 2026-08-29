@@ -587,8 +587,11 @@ export function useMessages(conversationId: string | null) {
     setMessages((prev) => [...prev, optimisticMessage]);
 
     const createdStoragePaths: string[] = [];
+    let createdMessageId: string | null = null;
 
     try {
+      const messageContent = trimmedContent || (hasAttachments ? "Photo" : "");
+
       const insertPayload: {
         conversation_id: string;
         sender_id: string;
@@ -598,7 +601,7 @@ export function useMessages(conversationId: string | null) {
       } = {
         conversation_id: conversationId,
         sender_id: user.id,
-        content: trimmedContent,
+        content: messageContent,
         message_type: hasAttachments ? "image" : "text",
       };
 
@@ -624,6 +627,8 @@ export function useMessages(conversationId: string | null) {
           error: insertError?.message || "Failed to send message.",
         };
       }
+
+      createdMessageId = insertedMsg.id;
 
       // If attachments exist, upload each object and insert rows into public.attachments
       const finalAttachments: AttachmentWithUrl[] = [];
@@ -705,6 +710,11 @@ export function useMessages(conversationId: string | null) {
       if (createdStoragePaths.length > 0) {
         try {
           await supabase.storage.from("chat-attachments").remove(createdStoragePaths);
+        } catch {}
+      }
+      if (createdMessageId) {
+        try {
+          await supabase.from("messages").delete().eq("id", createdMessageId);
         } catch {}
       }
 

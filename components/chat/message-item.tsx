@@ -197,11 +197,18 @@ export function MessageItem({
               )}
 
               {/* Message content */}
-              {message.content && (
-                <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
-                  {message.content}
-                </p>
-              )}
+              {message.content &&
+                !(
+                  message.attachments &&
+                  message.attachments.length > 0 &&
+                  (message.content === "Photo" ||
+                    message.content === "[Image]" ||
+                    message.content === "📷 Photo")
+                ) && (
+                  <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
+                    {message.content}
+                  </p>
+                )}
             </>
           )}
 

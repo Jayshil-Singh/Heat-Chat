@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* Mobile Header */}
             <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden shrink-0 pt-[env(safe-area-inset-top)]">
-              <Link href="/" className="flex items-center gap-2.5">
+              <Link href="/chat" className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-heat-600 to-amber-400 text-white shadow-sm shadow-heat-500/30">
                   <Flame className="h-4 w-4 fill-current" />
                 </div>
