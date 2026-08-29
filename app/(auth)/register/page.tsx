@@ -102,16 +102,14 @@ export default function RegisterPage() {
         return;
       }
 
-      if (data.user && !data.user.email_confirmed_at) {
-        // Redirect to dedicated verification page with email parameter
-        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+      if (data.user && data.user.email_confirmed_at) {
+        router.replace("/chat");
+        router.refresh();
         return;
       }
 
-      if (data.user && data.user.email_confirmed_at) {
-        router.push("/chat");
-        router.refresh();
-      }
+      // Default: User must verify email before entering Heat Chat
+      router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch {
       setErrors({ general: "A network error occurred. Please try again." });
     } finally {

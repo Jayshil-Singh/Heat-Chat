@@ -49,7 +49,7 @@ function LoginForm() {
         if (error.message.includes("Invalid login credentials")) {
           setErrors({ general: "Invalid email or password. Please try again." });
         } else if (error.message.includes("Email not confirmed")) {
-          router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+          router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
           return;
         } else {
           setErrors({ general: error.message || "Failed to sign in. Please try again." });
@@ -58,12 +58,12 @@ function LoginForm() {
       }
 
       if (data.user && !data.user.email_confirmed_at) {
-        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+        router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
         return;
       }
 
       if (data.session) {
-        router.push(redirectTo);
+        router.replace(redirectTo);
         router.refresh();
       }
     } catch {
