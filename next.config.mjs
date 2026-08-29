@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: __dirname,
+  serverExternalPackages: ["@supabase/supabase-js", "@supabase/ssr"],
 };
 
 export default nextConfig;
