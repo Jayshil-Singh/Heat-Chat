@@ -22,6 +22,7 @@ import {
   Settings,
   ScrollText,
   UserCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -50,6 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
       { name: "Users", href: "/admin/users", icon: Users },
       { name: "Roles & Permissions", href: "/admin/roles", icon: Shield },
       { name: "Sessions", href: "/admin/sessions", icon: Radio },
+      { name: "Deletion Operations", href: "/admin/users/deletions", icon: ShieldAlert },
     ],
   },
   {

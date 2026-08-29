@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
 import type { AdminRole, AdminUserSummary, ModerationReport, AdminAuditLog } from "@/types/admin";
 
 export default function AdminUserDetailPage() {
@@ -32,6 +33,8 @@ export default function AdminUserDetailPage() {
   const [auditHistory, setAuditHistory] = React.useState<AdminAuditLog[]>([]);
   const [allRoles, setAllRoles] = React.useState<AdminRole[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
 
   // Role Assignment State
   const [selectedRole, setSelectedRole] = React.useState("");
@@ -42,9 +45,10 @@ export default function AdminUserDetailPage() {
   const fetchUserDetail = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [uRes, rRes] = await Promise.all([
+      const [uRes, rRes, meRes] = await Promise.all([
         fetch(`/api/admin/users/${userId}`),
         fetch("/api/admin/roles"),
+        fetch("/api/admin/auth/me"),
       ]);
 
       if (uRes.ok) {
@@ -56,6 +60,10 @@ export default function AdminUserDetailPage() {
       if (rRes.ok) {
         const rData = await rRes.json();
         setAllRoles(rData.roles || []);
+      }
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        setIsSuperAdmin(Boolean(meData.user?.isSuperAdmin));
       }
     } catch (err) {
       console.error("Failed to load user details:", err);
@@ -352,6 +360,51 @@ export default function AdminUserDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Danger Zone: Permanent User Deletion (SuperAdmin Only) */}
+      {isSuperAdmin && (
+        <div className="rounded-3xl border border-red-200 bg-red-50/40 p-6 shadow-sm dark:border-red-950/80 dark:bg-red-950/20 space-y-4">
+          <div className="flex items-center gap-2 border-b border-red-200/60 pb-3 dark:border-red-900/40">
+            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <h2 className="text-sm font-bold text-red-900 dark:text-red-200">
+              Danger Zone
+            </h2>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                Permanently Delete User Account
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 max-w-lg">
+                Permanently purge this user&apos;s authentication account, conversations, and attachments. This action cannot be undone.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-2 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/20 shrink-0"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete User Permanently</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {user && (
+        <DeleteUserDialog
+          user={user}
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onSuccess={() => {
+            setIsDeleteDialogOpen(false);
+            router.push("/admin/users");
+          }}
+        />
+      )}
     </div>
   );
 }

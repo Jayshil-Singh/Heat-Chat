@@ -902,6 +902,63 @@ export interface Database {
           }
         ];
       };
+      admin_user_deletions: {
+        Row: {
+          id: string;
+          target_user_id: string;
+          target_email: string | null;
+          target_username: string | null;
+          target_display_name: string | null;
+          actor_user_id: string;
+          reason: string;
+          state: string;
+          last_error: string | null;
+          storage_paths_to_delete: string[] | null;
+          retry_count: number;
+          last_reconciled_at: string | null;
+          reconciled_by: string | null;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_user_id: string;
+          target_email?: string | null;
+          target_username?: string | null;
+          target_display_name?: string | null;
+          actor_user_id: string;
+          reason: string;
+          state: string;
+          last_error?: string | null;
+          storage_paths_to_delete?: string[] | null;
+          retry_count?: number;
+          last_reconciled_at?: string | null;
+          reconciled_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          target_user_id?: string;
+          target_email?: string | null;
+          target_username?: string | null;
+          target_display_name?: string | null;
+          actor_user_id?: string;
+          reason?: string;
+          state?: string;
+          last_error?: string | null;
+          storage_paths_to_delete?: string[] | null;
+          retry_count?: number;
+          last_reconciled_at?: string | null;
+          reconciled_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1212,6 +1269,58 @@ export interface Database {
           p_verified?: boolean;
         };
         Returns: boolean;
+      };
+      admin_delete_user: {
+        Args: {
+          p_target_user_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      admin_initiate_user_deletion: {
+        Args: {
+          p_target_user_id: string;
+          p_reason: string;
+          p_target_email?: string | null;
+          p_target_username?: string | null;
+          p_target_display_name?: string | null;
+          p_storage_paths?: string[];
+        };
+        Returns: Json;
+      };
+      admin_advance_deletion_state: {
+        Args: {
+          p_deletion_id: string;
+          p_next_state: string;
+          p_last_error?: string | null;
+        };
+        Returns: boolean;
+      };
+      admin_get_stuck_deletions: {
+        Args: {
+          p_timeout_minutes?: number;
+        };
+        Returns: {
+          id: string;
+          target_user_id: string;
+          target_email: string | null;
+          target_username: string | null;
+          target_display_name: string | null;
+          actor_user_id: string;
+          reason: string;
+          state: string;
+          last_error: string | null;
+          retry_count: number;
+          created_at: string;
+          updated_at: string;
+          is_stuck: boolean;
+        }[];
+      };
+      admin_start_deletion_reconciliation: {
+        Args: {
+          p_operation_id: string;
+        };
+        Returns: Json;
       };
     };
     Enums: {

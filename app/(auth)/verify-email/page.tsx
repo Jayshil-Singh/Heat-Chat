@@ -11,23 +11,29 @@ import {
   ArrowRight,
   LogOut,
   Send,
+  ShieldCheck,
+  KeyRound,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isEmailVerified, refreshUser, resendVerificationEmail, signOut } =
-    useAuth();
+  const { user, refreshUser, resendVerificationEmail, signOut } = useAuth();
+  const supabase = React.useMemo(() => createClient(), []);
 
   const urlEmail = searchParams.get("email") || "";
   const urlError = searchParams.get("error") || "";
 
-  const displayEmail = user?.email || urlEmail || "your email address";
+  const displayEmail = user?.email || urlEmail || "";
 
+  const [otp, setOtp] = React.useState<string[]>(["", "", "", "", "", ""]);
+  const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+
+  const [isVerifying, setIsVerifying] = React.useState(false);
   const [isResending, setIsResending] = React.useState(false);
-  const [isChecking, setIsChecking] = React.useState(false);
   const [resendStatus, setResendStatus] = React.useState<{
     success?: boolean;
     message?: string;
@@ -37,12 +43,10 @@ function VerifyEmailContent() {
     urlError ? decodeURIComponent(urlError) : null
   );
 
-  // If already verified, route to /chat immediately
+  // Auto-focus first input on mount
   React.useEffect(() => {
-    if (isEmailVerified || user?.email_confirmed_at) {
-      router.replace("/chat");
-    }
-  }, [isEmailVerified, user?.email_confirmed_at, router]);
+    inputRefs.current[0]?.focus();
+  }, []);
 
   // Resend cooldown timer
   React.useEffect(() => {
@@ -53,66 +57,168 @@ function VerifyEmailContent() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // Multi-tab check on window focus / visibility change
-  React.useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible") {
-        const fresh = await refreshUser();
-        if (fresh?.email_confirmed_at) {
-          router.replace("/chat");
-        }
-      }
-    };
+  const handleOtpChange = (index: number, value: string) => {
+    // Only accept numeric characters
+    const cleanVal = value.replace(/\D/g, "");
+    if (!cleanVal && value !== "") return;
 
-    window.addEventListener("focus", handleVisibilityChange);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      window.removeEventListener("focus", handleVisibilityChange);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [refreshUser, router]);
+    setErrorMessage(null);
+    const newOtp = [...otp];
+
+    if (cleanVal.length > 1) {
+      // User typed or autofilled multiple digits
+      const digits = cleanVal.slice(0, 6).split("");
+      for (let i = 0; i < 6; i++) {
+        newOtp[i] = digits[i] || "";
+      }
+      setOtp(newOtp);
+      const nextIdx = Math.min(digits.length, 5);
+      inputRefs.current[nextIdx]?.focus();
+      return;
+    }
+
+    newOtp[index] = cleanVal;
+    setOtp(newOtp);
+
+    // Auto-advance to next input
+    if (cleanVal && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!otp[index] && index > 0) {
+        // Empty box backspace: move to previous and clear it
+        const newOtp = [...otp];
+        newOtp[index - 1] = "";
+        setOtp(newOtp);
+        inputRefs.current[index - 1]?.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = "";
+        setOtp(newOtp);
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "");
+    if (!pastedData) return;
+
+    setErrorMessage(null);
+    const digits = pastedData.slice(0, 6).split("");
+    const newOtp = ["", "", "", "", "", ""];
+    for (let i = 0; i < digits.length; i++) {
+      newOtp[i] = digits[i];
+    }
+    setOtp(newOtp);
+
+    const focusIdx = Math.min(digits.length, 5);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
+  const fullCode = otp.join("");
+  const isComplete = fullCode.length === 6;
+
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!isComplete || isVerifying) return;
+
+    if (!displayEmail) {
+      setErrorMessage("No email address provided. Please return to the login screen.");
+      return;
+    }
+
+    setIsVerifying(true);
+    setErrorMessage(null);
+    setResendStatus(null);
+
+    try {
+      // 1. Verify 6-digit OTP code with Supabase Auth
+      // Primary: type 'signup' (or fallback to 'email')
+      let verifyRes = await supabase.auth.verifyOtp({
+        email: displayEmail.trim(),
+        token: fullCode,
+        type: "signup",
+      });
+
+      if (verifyRes.error) {
+        // Fallback check for email change/verification
+        verifyRes = await supabase.auth.verifyOtp({
+          email: displayEmail.trim(),
+          token: fullCode,
+          type: "email",
+        });
+      }
+
+      if (verifyRes.error) {
+        const msg = verifyRes.error.message.toLowerCase();
+        if (msg.includes("expired") || msg.includes("invalid")) {
+          setErrorMessage("That code is invalid or has expired. Please request a new code.");
+        } else if (msg.includes("rate limit") || msg.includes("too many")) {
+          setErrorMessage("Too many attempts. Please wait and try again.");
+        } else {
+          setErrorMessage("That code is invalid or has expired. Please request a new code.");
+        }
+        setIsVerifying(false);
+        return;
+      }
+
+      // 2. CRITICAL: Clear temporary session to require explicit credential sign-in
+      await supabase.auth.signOut();
+
+      // 3. Redirect to /login?verified=true (DO NOT auto-enter /chat)
+      router.replace("/login?verified=true");
+    } catch (err) {
+      console.error("OTP verification error:", err);
+      setErrorMessage("A network error occurred during verification. Please try again.");
+      setIsVerifying(false);
+    }
+  };
 
   const handleResend = async () => {
     if (cooldown > 0 || isResending) return;
+    if (!displayEmail) {
+      setErrorMessage("No email address provided to resend code.");
+      return;
+    }
+
     setIsResending(true);
     setResendStatus(null);
     setErrorMessage(null);
 
-    const target = user?.email || urlEmail;
-    const res = await resendVerificationEmail(target);
+    try {
+      const res = await resendVerificationEmail(displayEmail);
 
-    if (res.success) {
-      setResendStatus({
-        success: true,
-        message: "Verification email sent! Please check your inbox and spam folder.",
-      });
-      setCooldown(60);
-    } else {
+      if (res.success) {
+        setResendStatus({
+          success: true,
+          message: "A new 6-digit code has been sent to your email.",
+        });
+        setCooldown(60);
+        // Clear previous input
+        setOtp(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+      } else {
+        setResendStatus({
+          success: false,
+          message: res.error || "Failed to resend code. Please try again.",
+        });
+      }
+    } catch {
       setResendStatus({
         success: false,
-        message: res.error || "Failed to resend verification email. Please try again.",
+        message: "Failed to resend code. Please try again.",
       });
+    } finally {
+      setIsResending(false);
     }
-    setIsResending(false);
-  };
-
-  const handleCheckStatus = async () => {
-    setIsChecking(true);
-    setErrorMessage(null);
-
-    const freshUser = await refreshUser();
-    if (freshUser?.email_confirmed_at) {
-      setResendStatus({
-        success: true,
-        message: "Email verified! Redirecting to Heat Chat...",
-      });
-      setTimeout(() => {
-        router.replace("/chat");
-      }, 500);
-    } else {
-      setErrorMessage("Your email has not been verified yet.");
-    }
-    setIsChecking(false);
   };
 
   const handleSignOutAndChange = async () => {
@@ -123,22 +229,19 @@ function VerifyEmailContent() {
   return (
     <div className="space-y-6">
       {/* Icon & Title */}
-      <div className="space-y-3 text-center">
+      <div className="space-y-2 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-heat-500/10 text-heat-600 dark:bg-heat-950/60 dark:text-heat-400 border border-heat-500/20 shadow-sm">
-          <Mail className="h-7 w-7" />
+          <KeyRound className="h-7 w-7" />
         </div>
         <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          Check your email
+          Verify your email
         </h2>
         <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-sm mx-auto">
-          We&apos;ve sent a verification link to:
+          Enter the 6-digit code we sent to:
           <br />
           <span className="font-semibold text-zinc-900 dark:text-zinc-200 break-all">
-            {displayEmail}
+            {displayEmail || "your email"}
           </span>
-        </p>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-          Click the link in the email to activate your Heat Chat account.
         </p>
       </div>
 
@@ -153,7 +256,7 @@ function VerifyEmailContent() {
         </div>
       )}
 
-      {/* Success Alert */}
+      {/* Success / Resend Alert */}
       {resendStatus?.success && (
         <div
           className="flex items-start gap-2.5 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
@@ -164,56 +267,85 @@ function VerifyEmailContent() {
         </div>
       )}
 
-      {/* Primary Action Buttons */}
-      <div className="space-y-3 pt-2">
-        <Button
-          onClick={handleCheckStatus}
-          variant="heat"
-          size="lg"
-          className="w-full gap-2 font-semibold shadow-md shadow-heat-500/20"
-          disabled={isChecking}
-        >
-          {isChecking ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          ) : (
-            <>
-              <span>I&apos;ve verified my email</span>
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
-        </Button>
+      {/* 6-Digit OTP Form */}
+      <form onSubmit={handleVerifyOtp} className="space-y-6">
+        <div className="flex items-center justify-center gap-2 sm:gap-3">
+          {otp.map((digit, idx) => (
+            <input
+              key={idx}
+              ref={(el) => {
+                inputRefs.current[idx] = el;
+              }}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete={idx === 0 ? "one-time-code" : "off"}
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(idx, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(idx, e)}
+              onPaste={handlePaste}
+              aria-label={`Digit ${idx + 1} of verification code`}
+              className={`h-12 w-10 sm:h-14 sm:w-12 rounded-xl text-center font-mono text-xl font-bold text-zinc-900 dark:text-white transition-all outline-none border ${
+                digit
+                  ? "border-heat-500 bg-heat-500/5 ring-2 ring-heat-500/20"
+                  : "border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/80 focus:border-heat-500 focus:ring-2 focus:ring-heat-500/20"
+              }`}
+            />
+          ))}
+        </div>
 
-        <Button
-          onClick={handleResend}
-          variant="outline"
-          size="default"
-          className="w-full gap-2 text-xs"
-          disabled={cooldown > 0 || isResending}
-        >
-          {isResending ? (
-            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
-          ) : (
-            <>
-              <Send className="h-3.5 w-3.5" />
-              <span>
-                {cooldown > 0
-                  ? `Resend available in ${cooldown}s`
-                  : "Resend verification email"}
-              </span>
-            </>
-          )}
-        </Button>
-      </div>
+        {/* Primary Action Button */}
+        <div className="space-y-3">
+          <Button
+            type="submit"
+            variant="heat"
+            size="lg"
+            className="w-full gap-2 font-semibold shadow-md shadow-heat-500/20"
+            disabled={!isComplete || isVerifying}
+          >
+            {isVerifying ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <>
+                <span>Verify Email</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+
+          {/* Resend Button */}
+          <Button
+            type="button"
+            onClick={handleResend}
+            variant="outline"
+            size="default"
+            className="w-full gap-2 text-xs"
+            disabled={cooldown > 0 || isResending}
+          >
+            {isResending ? (
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+            ) : (
+              <>
+                <Send className="h-3.5 w-3.5" />
+                <span>
+                  {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend Code"}
+                </span>
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
 
       {/* Secondary Options */}
-      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-col items-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-col items-center gap-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
         <button
           type="button"
           onClick={handleSignOutAndChange}
           className="flex items-center gap-1.5 font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
         >
           <LogOut className="h-3.5 w-3.5" />
-          <span>Sign in with a different account</span>
+          <span>Use a different email / account</span>
         </button>
         <Link
           href="/login"

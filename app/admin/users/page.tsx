@@ -17,10 +17,13 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
+import { DeleteUserDialog } from "@/components/admin/delete-user-dialog";
 import type { AdminUserSummary } from "@/types/admin";
 
 export default function AdminUsersPage() {
@@ -31,6 +34,8 @@ export default function AdminUsersPage() {
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = React.useState<AdminUserSummary | null>(null);
 
   // Modals state
   const [actionUser, setActionUser] = React.useState<AdminUserSummary | null>(null);
@@ -50,12 +55,20 @@ export default function AdminUsersPage() {
       });
       if (search.trim()) params.set("search", search.trim());
 
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const [res, meRes] = await Promise.all([
+        fetch(`/api/admin/users?${params.toString()}`),
+        fetch("/api/admin/auth/me"),
+      ]);
+
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
         setTotal(data.total || 0);
         setTotalPages(data.totalPages || 1);
+      }
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        setIsSuperAdmin(Boolean(meData.user?.isSuperAdmin));
       }
     } catch (err) {
       console.error("Failed to load users:", err);
@@ -127,6 +140,15 @@ export default function AdminUsersPage() {
             {total} registered platform users. Inspect accounts, audit sessions, and manage status.
           </p>
         </div>
+
+        {isSuperAdmin && (
+          <Link href="/admin/users/deletions">
+            <Button variant="outline" size="sm" className="gap-2 text-xs font-semibold">
+              <ShieldAlert className="h-3.5 w-3.5 text-red-500" />
+              Deletion Operations
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filters & Search Toolbar */}
@@ -296,6 +318,20 @@ export default function AdminUsersPage() {
                         >
                           <Radio className="h-3.5 w-3.5" />
                         </Button>
+
+                        {isSuperAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeleteTargetUser(u);
+                            }}
+                            className="h-8 px-2 text-xs text-red-600 hover:text-red-700"
+                            title="Permanently Delete User"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -424,6 +460,19 @@ export default function AdminUsersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* SuperAdmin Permanent User Deletion Dialog */}
+      {deleteTargetUser && (
+        <DeleteUserDialog
+          user={deleteTargetUser}
+          isOpen={Boolean(deleteTargetUser)}
+          onClose={() => setDeleteTargetUser(null)}
+          onSuccess={() => {
+            setDeleteTargetUser(null);
+            fetchUsers();
+          }}
+        />
       )}
     </div>
   );

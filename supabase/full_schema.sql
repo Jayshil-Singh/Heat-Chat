@@ -2562,3 +2562,429 @@ BEGIN
   RETURN true;
 END;
 $$;
+
+-- Permanent User Deletion (SuperAdmin Only)
+CREATE OR REPLACE FUNCTION public.admin_delete_user(
+  p_target_user_id uuid,
+  p_reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id uuid;
+  v_is_superadmin boolean;
+  v_target_is_primary boolean;
+  v_target_profile record;
+BEGIN
+  -- 1. Derive caller strictly from authenticated context
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required for administrative operations.' USING ERRCODE = '42501';
+  END IF;
+
+  -- 2. Verify caller is an active SuperAdmin
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.admin_user_roles aur
+    JOIN public.admin_roles ar ON aur.role_id = ar.id
+    WHERE aur.user_id = v_caller_id
+      AND aur.account_state = 'ACTIVE'
+      AND (ar.name = 'SuperAdmin' OR aur.is_primary_superadmin = true)
+  ) INTO v_is_superadmin;
+
+  IF NOT v_is_superadmin THEN
+    RAISE EXCEPTION 'Access denied: Permanent user deletion is strictly restricted to SuperAdmin.' USING ERRCODE = '42501';
+  END IF;
+
+  -- 3. Prevent Self-Deletion
+  IF p_target_user_id = v_caller_id THEN
+    RAISE EXCEPTION 'Security violation: Administrators cannot delete their own account.' USING ERRCODE = '42501';
+  END IF;
+
+  -- 4. Prevent Primary SuperAdmin Deletion
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.admin_user_roles 
+    WHERE user_id = p_target_user_id 
+      AND is_primary_superadmin = true
+  ) INTO v_target_is_primary;
+
+  IF v_target_is_primary THEN
+    RAISE EXCEPTION 'Security violation: Primary SuperAdmin account cannot be deleted.' USING ERRCODE = '42501';
+  END IF;
+
+  -- 5. Capture target metadata before deletion
+  SELECT * INTO v_target_profile
+  FROM public.profiles
+  WHERE id = p_target_user_id;
+
+  -- 6. Purge dependent application records in safe dependency order
+  DELETE FROM public.admin_mfa_recovery_codes WHERE user_id = p_target_user_id;
+  DELETE FROM public.admin_user_roles WHERE user_id = p_target_user_id;
+  DELETE FROM public.starred_messages WHERE user_id = p_target_user_id;
+  DELETE FROM public.message_reads WHERE user_id = p_target_user_id;
+  DELETE FROM public.message_reactions WHERE user_id = p_target_user_id;
+  DELETE FROM public.attachments WHERE uploader_id = p_target_user_id;
+  DELETE FROM public.messages WHERE sender_id = p_target_user_id;
+  DELETE FROM public.conversation_members WHERE user_id = p_target_user_id;
+  DELETE FROM public.friendships WHERE user_id = p_target_user_id OR friend_id = p_target_user_id;
+  DELETE FROM public.notifications WHERE user_id = p_target_user_id OR actor_id = p_target_user_id;
+  DELETE FROM public.notification_preferences WHERE user_id = p_target_user_id;
+  DELETE FROM public.conversation_notification_preferences WHERE user_id = p_target_user_id;
+  DELETE FROM public.profiles WHERE id = p_target_user_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'deleted_user_id', p_target_user_id,
+    'username', v_target_profile.username,
+    'display_name', v_target_profile.display_name,
+    'reason', p_reason
+  );
+END;
+$$;
+
+-- Table for tracking durable user deletion lifecycle & reconciliation
+CREATE TABLE IF NOT EXISTS public.admin_user_deletions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  target_user_id uuid NOT NULL UNIQUE,
+  target_email text,
+  target_username text,
+  target_display_name text,
+  actor_user_id uuid NOT NULL,
+  reason text NOT NULL,
+  state text NOT NULL CHECK (state IN (
+    'DELETION_REQUESTED',
+    'DELETING_STORAGE',
+    'DELETING_APPLICATION_DATA',
+    'DELETING_AUTH',
+    'COMPLETED',
+    'FAILED_REQUIRES_RECONCILIATION'
+  )),
+  last_error text,
+  storage_paths_to_delete text[],
+  created_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+  completed_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_user_deletions_target ON public.admin_user_deletions(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_user_deletions_state ON public.admin_user_deletions(state);
+
+DROP TRIGGER IF EXISTS set_admin_user_deletions_updated_at ON public.admin_user_deletions;
+CREATE TRIGGER set_admin_user_deletions_updated_at
+  BEFORE UPDATE ON public.admin_user_deletions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_updated_at();
+
+ALTER TABLE public.admin_user_deletions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "SuperAdmins can manage deletion records" ON public.admin_user_deletions;
+CREATE POLICY "SuperAdmins can manage deletion records"
+  ON public.admin_user_deletions
+  FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.admin_user_roles aur
+      JOIN public.admin_roles ar ON aur.role_id = ar.id
+      WHERE aur.user_id = auth.uid()
+        AND aur.account_state = 'ACTIVE'
+        AND (ar.name = 'SuperAdmin' OR aur.is_primary_superadmin = true)
+    )
+  );
+
+CREATE OR REPLACE FUNCTION public.admin_initiate_user_deletion(
+  p_target_user_id uuid,
+  p_reason text,
+  p_target_email text DEFAULT NULL,
+  p_target_username text DEFAULT NULL,
+  p_target_display_name text DEFAULT NULL,
+  p_storage_paths text[] DEFAULT ARRAY[]::text[]
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id uuid;
+  v_is_superadmin boolean;
+  v_existing record;
+  v_new_id uuid;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.admin_user_roles aur
+    JOIN public.admin_roles ar ON aur.role_id = ar.id
+    WHERE aur.user_id = v_caller_id
+      AND aur.account_state = 'ACTIVE'
+      AND (ar.name = 'SuperAdmin' OR aur.is_primary_superadmin = true)
+  ) INTO v_is_superadmin;
+
+  IF NOT v_is_superadmin THEN
+    RAISE EXCEPTION 'Access denied: Permanent user deletion requires SuperAdmin role.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM public.admin_user_deletions
+  WHERE target_user_id = p_target_user_id;
+
+  IF v_existing.id IS NOT NULL THEN
+    IF v_existing.state = 'COMPLETED' THEN
+      RETURN jsonb_build_object(
+        'status', 'ALREADY_COMPLETED',
+        'deletion_id', v_existing.id,
+        'state', v_existing.state,
+        'completed_at', v_existing.completed_at
+      );
+    END IF;
+
+    IF v_existing.state IN ('DELETION_REQUESTED', 'DELETING_STORAGE', 'DELETING_APPLICATION_DATA', 'DELETING_AUTH')
+       AND v_existing.updated_at > timezone('utc'::text, now()) - interval '30 seconds' THEN
+      RETURN jsonb_build_object(
+        'status', 'IN_PROGRESS',
+        'deletion_id', v_existing.id,
+        'state', v_existing.state
+      );
+    END IF;
+
+    UPDATE public.admin_user_deletions
+    SET 
+      state = 'DELETION_REQUESTED',
+      last_error = NULL,
+      updated_at = timezone('utc'::text, now())
+    WHERE id = v_existing.id;
+
+    RETURN jsonb_build_object(
+      'status', 'RESUMING',
+      'deletion_id', v_existing.id,
+      'state', 'DELETION_REQUESTED',
+      'storage_paths', v_existing.storage_paths_to_delete
+    );
+  END IF;
+
+  INSERT INTO public.admin_user_deletions (
+    target_user_id,
+    target_email,
+    target_username,
+    target_display_name,
+    actor_user_id,
+    reason,
+    state,
+    storage_paths_to_delete
+  ) VALUES (
+    p_target_user_id,
+    p_target_email,
+    p_target_username,
+    p_target_display_name,
+    v_caller_id,
+    p_reason,
+    'DELETION_REQUESTED',
+    p_storage_paths
+  )
+  RETURNING id INTO v_new_id;
+
+  RETURN jsonb_build_object(
+    'status', 'INITIATED',
+    'deletion_id', v_new_id,
+    'state', 'DELETION_REQUESTED'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.admin_advance_deletion_state(
+  p_deletion_id uuid,
+  p_next_state text,
+  p_last_error text DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.admin_user_deletions
+  SET 
+    state = p_next_state,
+    last_error = p_last_error,
+    updated_at = timezone('utc'::text, now()),
+    completed_at = CASE WHEN p_next_state = 'COMPLETED' THEN timezone('utc'::text, now()) ELSE completed_at END
+  WHERE id = p_deletion_id;
+
+  RETURN FOUND;
+END;
+$$;
+
+-- Extend admin_user_deletions table with operational tracking fields
+ALTER TABLE IF EXISTS public.admin_user_deletions 
+  ADD COLUMN IF NOT EXISTS retry_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_reconciled_at timestamptz,
+  ADD COLUMN IF NOT EXISTS reconciled_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_admin_user_deletions_stuck 
+  ON public.admin_user_deletions(state, updated_at);
+
+-- Configurable Stuck-Deletion Detection RPC
+CREATE OR REPLACE FUNCTION public.admin_get_stuck_deletions(
+  p_timeout_minutes integer DEFAULT 5
+)
+RETURNS TABLE (
+  id uuid,
+  target_user_id uuid,
+  target_email text,
+  target_username text,
+  target_display_name text,
+  actor_user_id uuid,
+  reason text,
+  state text,
+  last_error text,
+  retry_count integer,
+  created_at timestamptz,
+  updated_at timestamptz,
+  is_stuck boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id uuid;
+  v_is_superadmin boolean;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.admin_user_roles aur
+    JOIN public.admin_roles ar ON aur.role_id = ar.id
+    WHERE aur.user_id = v_caller_id
+      AND aur.account_state = 'ACTIVE'
+      AND (ar.name = 'SuperAdmin' OR aur.is_primary_superadmin = true)
+  ) INTO v_is_superadmin;
+
+  IF NOT v_is_superadmin THEN
+    RAISE EXCEPTION 'Access denied: Viewing deletion operations requires SuperAdmin role.' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT 
+    aud.id,
+    aud.target_user_id,
+    aud.target_email,
+    aud.target_username,
+    aud.target_display_name,
+    aud.actor_user_id,
+    aud.reason,
+    aud.state,
+    aud.last_error,
+    aud.retry_count,
+    aud.created_at,
+    aud.updated_at,
+    (
+      aud.state = 'FAILED_REQUIRES_RECONCILIATION' OR
+      (
+        aud.state IN ('DELETION_REQUESTED', 'DELETING_STORAGE', 'DELETING_APPLICATION_DATA', 'DELETING_AUTH')
+        AND aud.updated_at < (timezone('utc'::text, now()) - (p_timeout_minutes || ' minutes')::interval)
+      )
+    ) AS is_stuck
+  FROM public.admin_user_deletions aud
+  ORDER BY aud.created_at DESC;
+END;
+$$;
+
+-- Atomic Lock & Start Reconciliation RPC
+CREATE OR REPLACE FUNCTION public.admin_start_deletion_reconciliation(
+  p_operation_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id uuid;
+  v_is_superadmin boolean;
+  v_rec record;
+BEGIN
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.admin_user_roles aur
+    JOIN public.admin_roles ar ON aur.role_id = ar.id
+    WHERE aur.user_id = v_caller_id
+      AND aur.account_state = 'ACTIVE'
+      AND (ar.name = 'SuperAdmin' OR aur.is_primary_superadmin = true)
+  ) INTO v_is_superadmin;
+
+  IF NOT v_is_superadmin THEN
+    RAISE EXCEPTION 'Access denied: Reconciling deletions requires SuperAdmin role.' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_rec
+  FROM public.admin_user_deletions
+  WHERE id = p_operation_id
+  FOR UPDATE;
+
+  IF v_rec.id IS NULL THEN
+    RETURN jsonb_build_object('status', 'NOT_FOUND');
+  END IF;
+
+  IF v_rec.state = 'COMPLETED' THEN
+    RETURN jsonb_build_object(
+      'status', 'ALREADY_COMPLETED',
+      'deletion_id', v_rec.id,
+      'completed_at', v_rec.completed_at
+    );
+  END IF;
+
+  -- Concurrency check: if another admin actively reconciled within last 30s
+  IF v_rec.last_reconciled_at IS NOT NULL 
+     AND v_rec.last_reconciled_at > timezone('utc'::text, now()) - interval '30 seconds'
+     AND v_rec.reconciled_by IS NOT NULL 
+     AND v_rec.reconciled_by != v_caller_id THEN
+    RETURN jsonb_build_object(
+      'status', 'IN_PROGRESS',
+      'deletion_id', v_rec.id,
+      'reconciled_by', v_rec.reconciled_by
+    );
+  END IF;
+
+  -- Acquire reconciliation lock
+  UPDATE public.admin_user_deletions
+  SET 
+    retry_count = retry_count + 1,
+    last_reconciled_at = timezone('utc'::text, now()),
+    reconciled_by = v_caller_id,
+    updated_at = timezone('utc'::text, now())
+  WHERE id = p_operation_id;
+
+  RETURN jsonb_build_object(
+    'status', 'LOCKED_FOR_RECONCILIATION',
+    'deletion_id', v_rec.id,
+    'target_user_id', v_rec.target_user_id,
+    'target_email', v_rec.target_email,
+    'target_username', v_rec.target_username,
+    'target_display_name', v_rec.target_display_name,
+    'previous_state', v_rec.state,
+    'storage_paths', v_rec.storage_paths_to_delete,
+    'retry_count', v_rec.retry_count + 1
+  );
+END;
+$$;
+
+

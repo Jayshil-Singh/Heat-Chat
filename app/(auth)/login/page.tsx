@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/chat";
+  const isVerified = searchParams.get("verified") === "true";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -83,6 +84,16 @@ function LoginForm() {
           Enter your email and password to access your private chats.
         </p>
       </div>
+
+      {isVerified && (
+        <div
+          className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
+          role="status"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          <span>Your email has been verified successfully. Please sign in to enter Heat Chat.</span>
+        </div>
+      )}
 
       {errors.general && (
         <div

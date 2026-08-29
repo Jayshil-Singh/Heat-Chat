@@ -53,10 +53,14 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user?.email_confirmed_at) {
-    // User is fully verified: proceed to destination
-    const targetUrl = new URL(next.startsWith("/") ? next : "/chat", request.url);
-    targetUrl.search = "";
-    return NextResponse.redirect(targetUrl);
+    // User is fully verified: clear token session and redirect to /login for credential authentication
+    await supabase.auth.signOut();
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("verified", "true");
+    if (next && next !== "/chat") {
+      loginUrl.searchParams.set("redirectTo", next);
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
   // User session exists but email is still unconfirmed

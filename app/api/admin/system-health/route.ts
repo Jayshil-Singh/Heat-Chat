@@ -20,10 +20,26 @@ export async function GET() {
     const { error: storErr } = await supabase.storage.getBucket("chat-attachments");
     const storageLatencyMs = Date.now() - storStart;
 
+    // Check stuck or failed user deletion operations (monitoring alert)
+    const { data: stuckDeletions } = await supabase
+      .from("admin_user_deletions")
+      .select("id, state, updated_at")
+      .or("state.eq.FAILED_REQUIRES_RECONCILIATION,state.in.(DELETION_REQUESTED,DELETING_STORAGE,DELETING_APPLICATION_DATA,DELETING_AUTH)");
+
+    const stuckCount = (stuckDeletions || []).filter(
+      (d) =>
+        d.state === "FAILED_REQUIRES_RECONCILIATION" ||
+        new Date().getTime() - new Date(d.updated_at).getTime() > 5 * 60 * 1000
+    ).length;
+
+    const deletionOpsStatus = stuckCount > 0 ? "warning" : "healthy";
+
     const totalLatencyMs = Date.now() - start;
 
+    const overallStatus = !dbErr && !storErr && stuckCount === 0 ? "healthy" : "warning";
+
     return NextResponse.json({
-      status: !dbErr && !storErr ? "healthy" : "warning",
+      status: overallStatus,
       timestamp: new Date().toISOString(),
       services: {
         database: {
@@ -35,6 +51,11 @@ export async function GET() {
           status: !storErr ? "healthy" : "critical",
           latency_ms: storageLatencyMs,
           error: storErr?.message || null,
+        },
+        user_deletion_pipeline: {
+          status: deletionOpsStatus,
+          stuck_or_failed_count: stuckCount,
+          alert: stuckCount > 0 ? `${stuckCount} deletion operation(s) require reconciliation.` : null,
         },
         auth: {
           status: "healthy",
