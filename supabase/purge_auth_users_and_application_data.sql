@@ -38,28 +38,21 @@ DELETE FROM public.admin_mfa_recovery_codes;
 DELETE FROM public.admin_invitations;
 DELETE FROM public.admin_user_roles;
 DELETE FROM public.admin_audit_logs;
-
 DELETE FROM public.profiles;
 
 -- ------------------------------------------------------------------------------
--- 3. PURGE STORAGE ATTACHMENT OBJECTS (PRESERVE BUCKET AND RLS)
--- ------------------------------------------------------------------------------
-DELETE FROM storage.objects 
-WHERE bucket_id = 'chat-attachments';
-
--- ------------------------------------------------------------------------------
--- 4. PURGE APPLICATION & TEST AUTH USERS (CASCADES IDENTITIES & SESSIONS)
+-- 3. PURGE APPLICATION & TEST AUTH USERS (CASCADES IDENTITIES & SESSIONS)
 -- ------------------------------------------------------------------------------
 DELETE FROM auth.users;
 
 -- ------------------------------------------------------------------------------
--- 5. RE-ENABLE AUDIT IMMUTABILITY TRIGGER
+-- 4. RE-ENABLE AUDIT IMMUTABILITY TRIGGER
 -- ------------------------------------------------------------------------------
 ALTER TABLE IF EXISTS public.admin_audit_logs 
   ENABLE TRIGGER trg_prevent_audit_log_modification;
 
 -- ------------------------------------------------------------------------------
--- 6. PRESERVE & VERIFY REFERENCE CONFIGURATION DATA
+-- 5. PRESERVE & VERIFY REFERENCE CONFIGURATION DATA
 -- ------------------------------------------------------------------------------
 
 -- Seed 6 System Roles
@@ -140,7 +133,6 @@ DECLARE
   v_mfa_codes_count integer;
   v_audit_logs_count integer;
   v_security_events_count integer;
-  v_storage_objects_count integer;
   v_bootstrap_avail boolean;
   v_roles_count integer;
   v_perms_count integer;
@@ -156,14 +148,13 @@ BEGIN
   SELECT count(*) INTO v_mfa_codes_count FROM public.admin_mfa_recovery_codes;
   SELECT count(*) INTO v_audit_logs_count FROM public.admin_audit_logs;
   SELECT count(*) INTO v_security_events_count FROM public.admin_security_events;
-  SELECT count(*) INTO v_storage_objects_count FROM storage.objects WHERE bucket_id = 'chat-attachments';
   SELECT count(*) INTO v_roles_count FROM public.admin_roles;
   SELECT count(*) INTO v_perms_count FROM public.admin_permissions;
   
   v_bootstrap_avail := public.admin_is_bootstrap_available();
 
   RAISE NOTICE '==================================================================';
-  RAISE NOTICE ' HEAT CHAT — POST-PURGE VERIFICATION ASSERTIONS';
+  RAISE NOTICE ' HEAT CHAT — POST-PURGE DATABASE VERIFICATION';
   RAISE NOTICE '==================================================================';
   RAISE NOTICE 'auth.users count:                 %', v_users_count;
   RAISE NOTICE 'public.profiles count:            %', v_profiles_count;
@@ -176,7 +167,6 @@ BEGIN
   RAISE NOTICE 'admin_mfa_recovery_codes count:   %', v_mfa_codes_count;
   RAISE NOTICE 'admin_audit_logs count:           %', v_audit_logs_count;
   RAISE NOTICE 'admin_security_events count:      %', v_security_events_count;
-  RAISE NOTICE 'chat-attachments storage objects: %', v_storage_objects_count;
   RAISE NOTICE 'admin_roles (retained):           %', v_roles_count;
   RAISE NOTICE 'admin_permissions (retained):     %', v_perms_count;
   RAISE NOTICE 'bootstrapAvailable:               %', v_bootstrap_avail;
