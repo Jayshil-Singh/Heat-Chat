@@ -5,14 +5,15 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "./use-auth";
 import type { TypingUser } from "@/types/chat";
 
-const TYPING_TIMEOUT_MS = 3500;
-const THROTTLE_BROADCAST_MS = 2500;
+const TYPING_TIMEOUT_MS = 3000;
+const THROTTLE_BROADCAST_MS = 2000;
 
-export function useTyping(conversationId: string | null) {
+export function useTyping(conversationId?: string) {
   const { user, profile } = useAuth();
   const [typingUsers, setTypingUsers] = React.useState<TypingUser[]>([]);
   const lastBroadcastRef = React.useRef<number>(0);
   const stopTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const channelRef = React.useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -20,12 +21,15 @@ export function useTyping(conversationId: string | null) {
   React.useEffect(() => {
     if (!conversationId || !user?.id) {
       setTypingUsers([]);
+      channelRef.current = null;
       return;
     }
 
     const channelName = `typing:${conversationId}`;
     const channel = supabase.channel(channelName);
+    channelRef.current = channel;
 
+    // Attach broadcast handlers BEFORE calling subscribe()
     channel
       .on("broadcast", { event: "typing_start" }, ({ payload }) => {
         if (!payload || payload.userId === user.id) return;
@@ -61,6 +65,7 @@ export function useTyping(conversationId: string | null) {
     return () => {
       clearInterval(sweepInterval);
       if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
+      channelRef.current = null;
       supabase.removeChannel(channel);
     };
   }, [conversationId, user?.id, supabase]);
@@ -69,10 +74,11 @@ export function useTyping(conversationId: string | null) {
   const sendTyping = React.useCallback(() => {
     if (!conversationId || !user?.id) return;
 
+    const channel = channelRef.current || supabase.channel(`typing:${conversationId}`);
+
     const now = Date.now();
     if (now - lastBroadcastRef.current > THROTTLE_BROADCAST_MS) {
       lastBroadcastRef.current = now;
-      const channel = supabase.channel(`typing:${conversationId}`);
       channel.send({
         type: "broadcast",
         event: "typing_start",
@@ -87,7 +93,6 @@ export function useTyping(conversationId: string | null) {
     // Reset inactivity timer
     if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
     stopTimeoutRef.current = setTimeout(() => {
-      const channel = supabase.channel(`typing:${conversationId}`);
       channel.send({
         type: "broadcast",
         event: "typing_stop",
@@ -105,7 +110,7 @@ export function useTyping(conversationId: string | null) {
     if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
     lastBroadcastRef.current = 0;
 
-    const channel = supabase.channel(`typing:${conversationId}`);
+    const channel = channelRef.current || supabase.channel(`typing:${conversationId}`);
     channel.send({
       type: "broadcast",
       event: "typing_stop",

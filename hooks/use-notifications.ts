@@ -288,7 +288,7 @@ export function useNotifications(currentActiveConversationId?: string | null) {
     channel.subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [user?.id, supabase, handleIncomingNotification]);
 

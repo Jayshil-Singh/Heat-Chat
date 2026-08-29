@@ -26,10 +26,6 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Heat Chat",
   },
-  icons: {
-    icon: "/icons/icon.png",
-    apple: "/icons/icon.png",
-  },
 };
 
 export const viewport: Viewport = {
