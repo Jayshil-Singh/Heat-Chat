@@ -110,9 +110,7 @@ function VerifyEmailContent() {
         router.replace("/chat");
       }, 500);
     } else {
-      setErrorMessage(
-        "We haven't detected your email confirmation yet. Please click the link in the email we sent you, then try again."
-      );
+      setErrorMessage("Your email has not been verified yet.");
     }
     setIsChecking(false);
   };

@@ -5,7 +5,17 @@ import { createClient } from "@/lib/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Profile } from "@/types/database";
 
-export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+export type AuthStatus =
+  | "loading"
+  | "unauthenticated"
+  | "authenticated-unverified"
+  | "authenticated-verified";
+
+function computeAuthStatus(u: User | null): AuthStatus {
+  if (!u) return "unauthenticated";
+  if (!u.email_confirmed_at) return "authenticated-unverified";
+  return "authenticated-verified";
+}
 
 export interface AuthState {
   user: User | null;
@@ -70,10 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } = await supabase.auth.getUser();
 
       if (userError || !freshUser) {
+        setStatus("unauthenticated");
+        setUser(null);
         return null;
       }
 
       setUser(freshUser);
+      setStatus(computeAuthStatus(freshUser));
       if (freshUser.email_confirmed_at && freshUser.id) {
         const p = await fetchProfile(freshUser.id);
         setProfile(p);
@@ -138,10 +151,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (initialSession?.user) {
           setSession(initialSession);
           setUser(initialSession.user);
-          setStatus("authenticated");
+          setStatus(computeAuthStatus(initialSession.user));
 
-          const userProfile = await fetchProfile(initialSession.user.id);
-          if (isMounted) setProfile(userProfile);
+          if (initialSession.user.email_confirmed_at) {
+            const userProfile = await fetchProfile(initialSession.user.id);
+            if (isMounted) setProfile(userProfile);
+          }
         } else {
           setSession(null);
           setUser(null);
@@ -173,10 +188,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setSession(newSession);
       setUser(newSession.user);
-      setStatus("authenticated");
+      setStatus(computeAuthStatus(newSession.user));
 
-      const userProfile = await fetchProfile(newSession.user.id);
-      if (isMounted) setProfile(userProfile);
+      if (newSession.user.email_confirmed_at) {
+        const userProfile = await fetchProfile(newSession.user.id);
+        if (isMounted) setProfile(userProfile);
+      }
     });
 
     return () => {
@@ -200,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const isLoading = status === "loading";
-  const isAuthenticated = status === "authenticated";
+  const isAuthenticated = status === "authenticated-verified";
   const isEmailVerified = Boolean(user?.email_confirmed_at);
 
   const contextValue = React.useMemo<AuthState>(

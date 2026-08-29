@@ -12,17 +12,17 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, isLoading, status, isEmailVerified } = useAuth();
 
   React.useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated || !user) {
+      if (status === "unauthenticated" || !user) {
         router.replace("/login");
-      } else if (!user.email_confirmed_at) {
+      } else if (status === "authenticated-unverified" || !isEmailVerified || !user.email_confirmed_at) {
         router.replace("/verify-email");
       }
     }
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, status, user, isEmailVerified, router]);
 
   // While resolving authentication session, show a neutral loading state (NO sidebar flash)
   if (isLoading) {
@@ -41,7 +41,7 @@ export default function ProtectedLayout({
   }
 
   // If unauthenticated or unverified, do NOT render AppShell or sidebar into the DOM
-  if (!isAuthenticated || !user || !user.email_confirmed_at) {
+  if (status !== "authenticated-verified" || !user || !user.email_confirmed_at) {
     return null;
   }
 
