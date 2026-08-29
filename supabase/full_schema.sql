@@ -1703,5 +1703,402 @@ begin
 end;
 $$ language plpgsql security definer set search_path = public, pg_temp;
 
+-- ==============================================================================
+-- 13. HEAT CHAT ADMIN PLATFORM, RBAC & SECURITY INFRASTRUCTURE
+-- ==============================================================================
 
+-- Account Status Extensions on Profiles
+alter table public.profiles 
+  add column if not exists is_suspended boolean not null default false,
+  add column if not exists suspended_until timestamptz,
+  add column if not exists suspension_reason text,
+  add column if not exists is_disabled boolean not null default false,
+  add column if not exists force_logout_at timestamptz;
 
+create index if not exists idx_profiles_account_status 
+  on public.profiles(is_suspended, is_disabled);
+
+-- Admin Roles
+create table if not exists public.admin_roles (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text not null,
+  hierarchy_level integer not null check (hierarchy_level >= 0 and hierarchy_level <= 100),
+  is_system boolean not null default false,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  updated_at timestamptz not null default timezone('utc'::text, now())
+);
+
+-- Admin Permissions
+create table if not exists public.admin_permissions (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  category text not null,
+  description text not null,
+  created_at timestamptz not null default timezone('utc'::text, now())
+);
+
+create index if not exists idx_admin_permissions_category 
+  on public.admin_permissions(category);
+
+-- Role-Permission Mappings
+create table if not exists public.admin_role_permissions (
+  role_id uuid not null references public.admin_roles(id) on delete cascade,
+  permission_id uuid not null references public.admin_permissions(id) on delete cascade,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  primary key (role_id, permission_id)
+);
+
+-- Admin User Roles
+create table if not exists public.admin_user_roles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role_id uuid not null references public.admin_roles(id) on delete cascade,
+  assigned_by uuid references public.profiles(id) on delete set null,
+  assigned_at timestamptz not null default timezone('utc'::text, now()),
+  scope_type text default 'global',
+  scope_id text default null,
+  constraint unique_user_role unique (user_id, role_id)
+);
+
+create index if not exists idx_admin_user_roles_user 
+  on public.admin_user_roles(user_id);
+create index if not exists idx_admin_user_roles_role 
+  on public.admin_user_roles(role_id);
+
+-- Immutable Append-Only Admin Audit Logs
+create table if not exists public.admin_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  actor_user_id uuid not null references public.profiles(id) on delete set null,
+  actor_role text not null,
+  action text not null,
+  target_type text not null,
+  target_id text not null,
+  reason text not null,
+  old_value jsonb,
+  new_value jsonb,
+  ip_address text,
+  user_agent text,
+  request_id text,
+  result text not null default 'SUCCESS',
+  metadata jsonb
+);
+
+create index if not exists idx_admin_audit_created_at 
+  on public.admin_audit_logs(created_at desc);
+create index if not exists idx_admin_audit_actor 
+  on public.admin_audit_logs(actor_user_id);
+create index if not exists idx_admin_audit_action 
+  on public.admin_audit_logs(action);
+create index if not exists idx_admin_audit_target 
+  on public.admin_audit_logs(target_type, target_id);
+
+-- Prevent Audit Log Modification Trigger
+create or replace function public.prevent_audit_log_modification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'Security violation: admin_audit_logs entries are immutable and cannot be updated, deleted, or truncated';
+end;
+$$;
+
+drop trigger if exists trg_prevent_audit_log_modification on public.admin_audit_logs;
+create trigger trg_prevent_audit_log_modification
+  before update or delete on public.admin_audit_logs
+  for each row
+  execute function public.prevent_audit_log_modification();
+
+-- Admin Security Events
+create table if not exists public.admin_security_events (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  event_type text not null,
+  user_id uuid references public.profiles(id) on delete set null,
+  email text,
+  ip_address text,
+  user_agent text,
+  severity text not null default 'info' check (severity in ('info', 'warning', 'critical')),
+  metadata jsonb
+);
+
+create index if not exists idx_security_events_created 
+  on public.admin_security_events(created_at desc);
+create index if not exists idx_security_events_type 
+  on public.admin_security_events(event_type);
+create index if not exists idx_security_events_user 
+  on public.admin_security_events(user_id);
+
+-- Moderation Reports
+create table if not exists public.moderation_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  target_type text not null check (target_type in ('user', 'message', 'conversation', 'attachment')),
+  target_id text not null,
+  reason text not null,
+  description text,
+  status text not null default 'New' check (status in ('New', 'Assigned', 'Investigating', 'ActionTaken', 'Resolved', 'Closed')),
+  assigned_to uuid references public.profiles(id) on delete set null,
+  resolution_notes text,
+  action_taken text,
+  resolved_at timestamptz,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  updated_at timestamptz not null default timezone('utc'::text, now())
+);
+
+create index if not exists idx_moderation_reports_status 
+  on public.moderation_reports(status, created_at desc);
+create index if not exists idx_moderation_reports_target 
+  on public.moderation_reports(target_type, target_id);
+create index if not exists idx_moderation_reports_assigned 
+  on public.moderation_reports(assigned_to);
+
+-- System Settings
+create table if not exists public.system_settings (
+  key text primary key,
+  value jsonb not null,
+  category text not null,
+  description text not null,
+  is_secret boolean not null default false,
+  updated_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamptz not null default timezone('utc'::text, now())
+);
+
+-- RLS Enablement
+alter table public.admin_roles enable row level security;
+alter table public.admin_permissions enable row level security;
+alter table public.admin_role_permissions enable row level security;
+alter table public.admin_user_roles enable row level security;
+alter table public.admin_audit_logs enable row level security;
+alter table public.admin_security_events enable row level security;
+alter table public.moderation_reports enable row level security;
+alter table public.system_settings enable row level security;
+
+-- Admin Helper Functions & Policies
+create or replace function public.is_any_admin(p_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  if p_user_id is null then
+    return false;
+  end if;
+  return exists (
+    select 1 from public.admin_user_roles aur
+    where aur.user_id = p_user_id
+  );
+end;
+$$;
+
+drop policy if exists "Admin roles viewable by admins" on public.admin_roles;
+create policy "Admin roles viewable by admins"
+  on public.admin_roles for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Admin permissions viewable by admins" on public.admin_permissions;
+create policy "Admin permissions viewable by admins"
+  on public.admin_permissions for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Admin role permissions viewable by admins" on public.admin_role_permissions;
+create policy "Admin role permissions viewable by admins"
+  on public.admin_role_permissions for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Admin user roles viewable by admins" on public.admin_user_roles;
+create policy "Admin user roles viewable by admins"
+  on public.admin_user_roles for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Audit logs viewable by authorized admins" on public.admin_audit_logs;
+create policy "Audit logs viewable by authorized admins"
+  on public.admin_audit_logs for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Security events viewable by authorized admins" on public.admin_security_events;
+create policy "Security events viewable by authorized admins"
+  on public.admin_security_events for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+drop policy if exists "Users view own reports and admins view all" on public.moderation_reports;
+create policy "Users view own reports and admins view all"
+  on public.moderation_reports for select
+  to authenticated
+  using (auth.uid() = reporter_id or public.is_any_admin(auth.uid()));
+
+drop policy if exists "Authenticated users can create reports" on public.moderation_reports;
+create policy "Authenticated users can create reports"
+  on public.moderation_reports for insert
+  to authenticated
+  with check (auth.uid() = reporter_id);
+
+drop policy if exists "System settings viewable by admins" on public.system_settings;
+create policy "System settings viewable by admins"
+  on public.system_settings for select
+  to authenticated
+  using (public.is_any_admin(auth.uid()));
+
+-- Hardened Security Definer Functions
+create or replace function public.has_admin_permission(req_permission text)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_caller_id uuid;
+begin
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    return false;
+  end if;
+
+  if exists (
+    select 1 from public.profiles
+    where id = v_caller_id
+      and (is_disabled = true or is_suspended = true)
+  ) then
+    return false;
+  end if;
+
+  return exists (
+    select 1
+    from public.admin_user_roles aur
+    join public.admin_role_permissions arp on arp.role_id = aur.role_id
+    join public.admin_permissions ap on ap.id = arp.permission_id
+    where aur.user_id = v_caller_id
+      and ap.key = req_permission
+  );
+end;
+$$;
+
+create or replace function public.get_caller_admin_permissions()
+returns table(permission_key text)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_caller_id uuid;
+begin
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    return;
+  end if;
+
+  return query
+  select distinct ap.key
+  from public.admin_user_roles aur
+  join public.admin_role_permissions arp on arp.role_id = aur.role_id
+  join public.admin_permissions ap on ap.id = arp.permission_id
+  where aur.user_id = v_caller_id;
+end;
+$$;
+
+create or replace function public.get_caller_admin_roles()
+returns table(role_name text, hierarchy_level integer)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_caller_id uuid;
+begin
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    return;
+  end if;
+
+  return query
+  select ar.name, ar.hierarchy_level
+  from public.admin_user_roles aur
+  join public.admin_roles ar on ar.id = aur.role_id
+  where aur.user_id = v_caller_id
+  order by ar.hierarchy_level desc;
+end;
+$$;
+
+create or replace function public.admin_log_audit(
+  p_action text,
+  p_target_type text,
+  p_target_id text,
+  p_reason text,
+  p_old_value jsonb default null,
+  p_new_value jsonb default null,
+  p_ip_address text default null,
+  p_user_agent text default null,
+  p_result text default 'SUCCESS',
+  p_metadata jsonb default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller_id uuid;
+  v_top_role text;
+  v_log_id uuid;
+begin
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    raise exception 'Unauthenticated audit attempt';
+  end if;
+
+  select ar.name into v_top_role
+  from public.admin_user_roles aur
+  join public.admin_roles ar on ar.id = aur.role_id
+  where aur.user_id = v_caller_id
+  order by ar.hierarchy_level desc
+  limit 1;
+
+  if v_top_role is null then
+    v_top_role := 'Anonymous';
+  end if;
+
+  insert into public.admin_audit_logs (
+    actor_user_id,
+    actor_role,
+    action,
+    target_type,
+    target_id,
+    reason,
+    old_value,
+    new_value,
+    ip_address,
+    user_agent,
+    result,
+    metadata
+  ) values (
+    v_caller_id,
+    v_top_role,
+    p_action,
+    p_target_type,
+    p_target_id,
+    p_reason,
+    p_old_value,
+    p_new_value,
+    p_ip_address,
+    p_user_agent,
+    p_result,
+    p_metadata
+  ) returning id into v_log_id;
+
+  return v_log_id;
+end;
+$$;

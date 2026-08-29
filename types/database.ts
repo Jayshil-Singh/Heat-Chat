@@ -27,6 +27,11 @@ export interface Database {
           last_seen: string | null;
           created_at: string;
           updated_at: string;
+          is_suspended: boolean;
+          suspended_until: string | null;
+          suspension_reason: string | null;
+          is_disabled: boolean;
+          force_logout_at: string | null;
         };
         Insert: {
           id: string;
@@ -38,6 +43,11 @@ export interface Database {
           last_seen?: string | null;
           created_at?: string;
           updated_at?: string;
+          is_suspended?: boolean;
+          suspended_until?: string | null;
+          suspension_reason?: string | null;
+          is_disabled?: boolean;
+          force_logout_at?: string | null;
         };
         Update: {
           id?: string;
@@ -49,6 +59,11 @@ export interface Database {
           last_seen?: string | null;
           created_at?: string;
           updated_at?: string;
+          is_suspended?: boolean;
+          suspended_until?: string | null;
+          suspension_reason?: string | null;
+          is_disabled?: boolean;
+          force_logout_at?: string | null;
         };
         Relationships: [];
       };
@@ -473,6 +488,316 @@ export interface Database {
           }
         ];
       };
+      admin_roles: {
+        Row: {
+          id: string;
+          name: string;
+          description: string;
+          hierarchy_level: number;
+          is_system: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description: string;
+          hierarchy_level: number;
+          is_system?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string;
+          hierarchy_level?: number;
+          is_system?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      admin_permissions: {
+        Row: {
+          id: string;
+          key: string;
+          category: string;
+          description: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          category: string;
+          description: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          category?: string;
+          description?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      admin_role_permissions: {
+        Row: {
+          role_id: string;
+          permission_id: string;
+          created_at: string;
+        };
+        Insert: {
+          role_id: string;
+          permission_id: string;
+          created_at?: string;
+        };
+        Update: {
+          role_id?: string;
+          permission_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_role_permissions_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "admin_roles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "admin_role_permissions_permission_id_fkey";
+            columns: ["permission_id"];
+            referencedRelation: "admin_permissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      admin_user_roles: {
+        Row: {
+          id: string;
+          user_id: string;
+          role_id: string;
+          assigned_by: string | null;
+          assigned_at: string;
+          scope_type: string | null;
+          scope_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role_id: string;
+          assigned_by?: string | null;
+          assigned_at?: string;
+          scope_type?: string | null;
+          scope_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          role_id?: string;
+          assigned_by?: string | null;
+          assigned_at?: string;
+          scope_type?: string | null;
+          scope_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_user_roles_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "admin_user_roles_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "admin_roles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      admin_audit_logs: {
+        Row: {
+          id: string;
+          created_at: string;
+          actor_user_id: string;
+          actor_role: string;
+          action: string;
+          target_type: string;
+          target_id: string;
+          reason: string;
+          old_value: Json | null;
+          new_value: Json | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          request_id: string | null;
+          result: string;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          actor_user_id: string;
+          actor_role: string;
+          action: string;
+          target_type: string;
+          target_id: string;
+          reason: string;
+          old_value?: Json | null;
+          new_value?: Json | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          request_id?: string | null;
+          result?: string;
+          metadata?: Json | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          actor_user_id?: string;
+          actor_role?: string;
+          action?: string;
+          target_type?: string;
+          target_id?: string;
+          reason?: string;
+          old_value?: Json | null;
+          new_value?: Json | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          request_id?: string | null;
+          result?: string;
+          metadata?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_logs_actor_user_id_fkey";
+            columns: ["actor_user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      admin_security_events: {
+        Row: {
+          id: string;
+          created_at: string;
+          event_type: string;
+          user_id: string | null;
+          email: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          severity: string;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          event_type: string;
+          user_id?: string | null;
+          email?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          severity?: string;
+          metadata?: Json | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          event_type?: string;
+          user_id?: string | null;
+          email?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          severity?: string;
+          metadata?: Json | null;
+        };
+        Relationships: [];
+      };
+      moderation_reports: {
+        Row: {
+          id: string;
+          reporter_id: string;
+          target_type: string;
+          target_id: string;
+          reason: string;
+          description: string | null;
+          status: string;
+          assigned_to: string | null;
+          resolution_notes: string | null;
+          action_taken: string | null;
+          resolved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reporter_id: string;
+          target_type: string;
+          target_id: string;
+          reason: string;
+          description?: string | null;
+          status?: string;
+          assigned_to?: string | null;
+          resolution_notes?: string | null;
+          action_taken?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reporter_id?: string;
+          target_type?: string;
+          target_id?: string;
+          reason?: string;
+          description?: string | null;
+          status?: string;
+          assigned_to?: string | null;
+          resolution_notes?: string | null;
+          action_taken?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moderation_reports_reporter_id_fkey";
+            columns: ["reporter_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      system_settings: {
+        Row: {
+          key: string;
+          value: Json;
+          category: string;
+          description: string;
+          is_secret: boolean;
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          value: Json;
+          category: string;
+          description: string;
+          is_secret?: boolean;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          value?: Json;
+          category?: string;
+          description?: string;
+          is_secret?: boolean;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -631,6 +956,107 @@ export interface Database {
           sender_username: string;
           sender_display_name: string;
           sender_avatar_url: string | null;
+        }[];
+      };
+      admin_get_dashboard_metrics: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      admin_suspend_user: {
+        Args: {
+          p_target_user_id: string;
+          p_reason: string;
+          p_duration_hours?: number | null;
+        };
+        Returns: boolean;
+      };
+      admin_restore_user: {
+        Args: {
+          p_target_user_id: string;
+          p_reason: string;
+        };
+        Returns: boolean;
+      };
+      admin_assign_role: {
+        Args: {
+          p_target_user_id: string;
+          p_role_id: string;
+          p_reason: string;
+        };
+        Returns: boolean;
+      };
+      admin_remove_role: {
+        Args: {
+          p_target_user_id: string;
+          p_role_id: string;
+          p_reason: string;
+        };
+        Returns: boolean;
+      };
+      admin_resolve_report: {
+        Args: {
+          p_report_id: string;
+          p_new_status: string;
+          p_action_taken?: string | null;
+          p_resolution_notes?: string | null;
+        };
+        Returns: boolean;
+      };
+      admin_break_glass_message_content: {
+        Args: {
+          p_message_id: string;
+          p_reason: string;
+        };
+        Returns: {
+          message_id: string;
+          conversation_id: string;
+          sender_id: string;
+          sender_username: string;
+          content: string;
+          message_type: string;
+          created_at: string;
+        }[];
+      };
+      admin_update_system_setting: {
+        Args: {
+          p_key: string;
+          p_value: Json;
+          p_reason: string;
+        };
+        Returns: boolean;
+      };
+      admin_log_audit: {
+        Args: {
+          p_action: string;
+          p_target_type: string;
+          p_target_id: string;
+          p_reason: string;
+          p_old_value?: Json | null;
+          p_new_value?: Json | null;
+          p_ip_address?: string | null;
+          p_user_agent?: string | null;
+          p_result?: string;
+          p_metadata?: Json | null;
+        };
+        Returns: string;
+      };
+      has_admin_permission: {
+        Args: {
+          req_permission: string;
+        };
+        Returns: boolean;
+      };
+      get_caller_admin_permissions: {
+        Args: Record<string, never>;
+        Returns: {
+          permission_key: string;
+        }[];
+      };
+      get_caller_admin_roles: {
+        Args: Record<string, never>;
+        Returns: {
+          role_name: string;
+          hierarchy_level: number;
         }[];
       };
     };

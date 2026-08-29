@@ -44,26 +44,45 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/settings") ||
     pathname.startsWith("/profile");
 
+  const isAdminRoute = pathname.startsWith("/admin");
+
   // Auth routes where authenticated users should be redirected away
   const isAuthRoute =
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/reset-password";
 
-  // Unauthenticated user attempting to access protected route
-  if (!user && isProtectedRoute) {
+  // Unauthenticated user attempting to access protected or admin route
+  if (!user && (isProtectedRoute || isAdminRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Authenticated user with UNVERIFIED email attempting to access protected route
-  if (user && !isEmailVerified && isProtectedRoute) {
+  // Authenticated user with UNVERIFIED email attempting to access protected or admin route
+  if (user && !isEmailVerified && (isProtectedRoute || isAdminRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/verify-email";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  // Admin route gating: check if user has active admin role
+  if (user && isEmailVerified && isAdminRoute) {
+    const { data: adminRole } = await supabase
+      .from("admin_user_roles")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1);
+
+    if (!adminRole || adminRole.length === 0) {
+      // Non-admin trying to access /admin -> redirect to /chat
+      const url = request.nextUrl.clone();
+      url.pathname = "/chat";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   // Fully verified authenticated user visiting auth routes
