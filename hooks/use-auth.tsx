@@ -5,11 +5,15 @@ import { createClient } from "@/lib/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Profile } from "@/types/database";
 
-interface AuthState {
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+export interface AuthState {
   user: User | null;
   profile: Profile | null;
   session: Session | null;
+  status: AuthStatus;
   isLoading: boolean;
+  isAuthenticated: boolean;
   error: string | null;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -21,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [session, setSession] = React.useState<Session | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [status, setStatus] = React.useState<AuthStatus>("loading");
   const [error, setError] = React.useState<string | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
@@ -65,23 +69,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error: sessionError,
         } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          if (isMounted) setError(sessionError.message);
+        if (sessionError && isMounted) {
+          setError(sessionError.message);
         }
 
-        if (isMounted) {
+        if (!isMounted) return;
+
+        if (initialSession?.user) {
           setSession(initialSession);
-          setUser(initialSession?.user ?? null);
-        }
+          setUser(initialSession.user);
+          setStatus("authenticated");
 
-        if (initialSession?.user && isMounted) {
           const userProfile = await fetchProfile(initialSession.user.id);
           if (isMounted) setProfile(userProfile);
+        } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setStatus("unauthenticated");
         }
-      } catch (err) {
-        if (isMounted) setError("Authentication initialization failed");
-      } finally {
-        if (isMounted) setIsLoading(false);
+      } catch {
+        if (isMounted) {
+          setError("Authentication initialization failed");
+          setStatus("unauthenticated");
+        }
       }
     }
 
@@ -92,17 +103,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return;
 
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-
-      if (newSession?.user) {
-        const userProfile = await fetchProfile(newSession.user.id);
-        if (isMounted) setProfile(userProfile);
-      } else {
-        if (isMounted) setProfile(null);
+      if (event === "SIGNED_OUT" || !newSession?.user) {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setStatus("unauthenticated");
+        return;
       }
 
-      setIsLoading(false);
+      setSession(newSession);
+      setUser(newSession.user);
+      setStatus("authenticated");
+
+      const userProfile = await fetchProfile(newSession.user.id);
+      if (isMounted) setProfile(userProfile);
     });
 
     return () => {
@@ -112,31 +126,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, fetchProfile]);
 
   const signOut = React.useCallback(async () => {
-    setIsLoading(true);
+    setStatus("loading");
     try {
       await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      setSession(null);
     } catch (err) {
       console.error("Sign out error:", err);
     } finally {
-      setIsLoading(false);
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      setStatus("unauthenticated");
     }
   }, [supabase]);
 
+  const isLoading = status === "loading";
+  const isAuthenticated = status === "authenticated";
+
+  const contextValue = React.useMemo<AuthState>(
+    () => ({
+      user,
+      profile,
+      session,
+      status,
+      isLoading,
+      isAuthenticated,
+      error,
+      signOut,
+      refreshProfile,
+    }),
+    [user, profile, session, status, isLoading, isAuthenticated, error, signOut, refreshProfile]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        session,
-        isLoading,
-        error,
-        signOut,
-        refreshProfile,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

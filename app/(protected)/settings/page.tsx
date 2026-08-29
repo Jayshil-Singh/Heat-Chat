@@ -16,6 +16,7 @@ import {
   AlertCircle,
   VolumeX,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { useNotificationPermission } from "@/hooks/use-notification-permission";
 import { playTestSound } from "@/lib/audio/sound-cue";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, profile, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const { preferences, updatePreferences } = useNotificationContext();
@@ -269,7 +271,10 @@ export default function SettingsPage() {
                 variant="destructive"
                 size="sm"
                 className="gap-2"
-                onClick={() => signOut()}
+                onClick={async () => {
+                  await signOut();
+                  router.replace("/login");
+                }}
               >
                 <LogOut className="h-3.5 w-3.5" />
                 <span>Log Out</span>

@@ -81,7 +81,7 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (

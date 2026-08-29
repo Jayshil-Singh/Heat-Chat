@@ -1,0 +1,46 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
+import { AppShell } from "@/components/layout/app-shell";
+import { Flame } from "lucide-react";
+
+export default function ProtectedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { user, isLoading, isAuthenticated } = useAuth();
+
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  // While resolving authentication session, show a neutral loading state (NO sidebar flash)
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-white dark:bg-zinc-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex h-14 w-14 animate-pulse items-center justify-center rounded-2xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-xl shadow-heat-500/30">
+            <Flame className="h-8 w-8 fill-current" />
+          </div>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 animate-pulse">
+            Connecting to Heat Chat...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // If unauthenticated, do NOT render AppShell or sidebar into the DOM
+  if (!isAuthenticated || !user) {
+    return null;
+  }
+
+  // User is confirmed authenticated: render full AppShell
+  return <AppShell>{children}</AppShell>;
+}
