@@ -37,42 +37,70 @@ export async function updateSession(request: NextRequest) {
   const isEmailVerified = Boolean(user?.email_confirmed_at);
   const pathname = request.nextUrl.pathname;
 
-  // Protected route paths
-  const isProtectedRoute =
+  // Normal user protected paths
+  const isNormalProtectedRoute =
     pathname.startsWith("/chat") ||
     pathname.startsWith("/friends") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/profile");
 
-  const isAdminRoute = pathname.startsWith("/admin");
-
-  // Auth routes where authenticated users should be redirected away
-  const isAuthRoute =
+  // Normal user auth paths
+  const isNormalAuthRoute =
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/reset-password";
 
-  // Unauthenticated user attempting to access protected or admin route
-  if (!user && (isProtectedRoute || isAdminRoute)) {
+  // Dedicated admin auth paths
+  const isAdminAuthRoute =
+    pathname === "/admin/login" ||
+    pathname === "/admin/setup" ||
+    pathname === "/admin/verify-email" ||
+    pathname === "/admin/mfa/setup" ||
+    pathname === "/admin/mfa/verify" ||
+    pathname.startsWith("/admin/invite") ||
+    pathname === "/admin/forgot-password";
+
+  // Protected Admin Portal paths (excluding auth routes)
+  const isAdminPortalRoute = pathname.startsWith("/admin") && !isAdminAuthRoute;
+
+  // 1. Unauthenticated user accessing normal protected route
+  if (!user && isNormalProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Authenticated user with UNVERIFIED email attempting to access protected or admin route
-  if (user && !isEmailVerified && (isProtectedRoute || isAdminRoute)) {
+  // 2. Unauthenticated user accessing admin portal route
+  if (!user && isAdminPortalRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/verify-email";
-    url.search = "";
+    url.pathname = "/admin/login";
+    url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Admin route gating: check if user has active admin role
-  if (user && isEmailVerified && isAdminRoute) {
+  // 3. Authenticated user with UNVERIFIED email
+  if (user && !isEmailVerified) {
+    if (isNormalProtectedRoute || isNormalAuthRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/verify-email";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if (isAdminPortalRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/verify-email";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // 4. Admin Portal Route Authorization
+  if (user && isEmailVerified && isAdminPortalRoute) {
     const { data: adminRole } = await supabase
       .from("admin_user_roles")
-      .select("id")
+      .select("id, mfa_enrolled_at, mfa_last_verified_at, account_state")
       .eq("user_id", user.id)
       .limit(1);
 
@@ -83,10 +111,26 @@ export async function updateSession(request: NextRequest) {
       url.search = "";
       return NextResponse.redirect(url);
     }
+
+    const role = adminRole[0];
+    if (role.account_state !== "ACTIVE") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      url.searchParams.set("error", "ACCOUNT_INACTIVE");
+      return NextResponse.redirect(url);
+    }
+
+    // Check MFA
+    if (!role.mfa_enrolled_at) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/mfa/setup";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
-  // Fully verified authenticated user visiting auth routes
-  if (user && isEmailVerified && isAuthRoute) {
+  // 5. Verified normal user visiting normal auth routes -> redirect to /chat
+  if (user && isEmailVerified && isNormalAuthRoute) {
     const redirectTo = request.nextUrl.searchParams.get("redirectTo") || "/chat";
     const url = request.nextUrl.clone();
     url.pathname = redirectTo;
@@ -94,18 +138,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Fully verified authenticated user visiting verify-email route
+  // 6. Verified normal user visiting normal verify-email -> redirect to /chat
   if (user && isEmailVerified && pathname === "/verify-email") {
     const url = request.nextUrl.clone();
     url.pathname = "/chat";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  // Unverified user visiting login/register routes
-  if (user && !isEmailVerified && (pathname === "/login" || pathname === "/register")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/verify-email";
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -582,6 +582,14 @@ export interface Database {
           assigned_at: string;
           scope_type: string | null;
           scope_id: string | null;
+          is_primary_superadmin: boolean;
+          mfa_required: boolean;
+          mfa_enrolled_at: string | null;
+          mfa_last_verified_at: string | null;
+          account_state: string;
+          activated_at: string | null;
+          last_admin_login_at: string | null;
+          mfa_reset_at: string | null;
         };
         Insert: {
           id?: string;
@@ -591,6 +599,14 @@ export interface Database {
           assigned_at?: string;
           scope_type?: string | null;
           scope_id?: string | null;
+          is_primary_superadmin?: boolean;
+          mfa_required?: boolean;
+          mfa_enrolled_at?: string | null;
+          mfa_last_verified_at?: string | null;
+          account_state?: string;
+          activated_at?: string | null;
+          last_admin_login_at?: string | null;
+          mfa_reset_at?: string | null;
         };
         Update: {
           id?: string;
@@ -600,6 +616,14 @@ export interface Database {
           assigned_at?: string;
           scope_type?: string | null;
           scope_id?: string | null;
+          is_primary_superadmin?: boolean;
+          mfa_required?: boolean;
+          mfa_enrolled_at?: string | null;
+          mfa_last_verified_at?: string | null;
+          account_state?: string;
+          activated_at?: string | null;
+          last_admin_login_at?: string | null;
+          mfa_reset_at?: string | null;
         };
         Relationships: [
           {
@@ -797,6 +821,86 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      admin_invitations: {
+        Row: {
+          id: string;
+          email: string;
+          role_id: string;
+          token_hash: string;
+          invited_by: string;
+          expires_at: string;
+          accepted_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          role_id: string;
+          token_hash: string;
+          invited_by: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          role_id?: string;
+          token_hash?: string;
+          invited_by?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_invitations_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "admin_roles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "admin_invitations_invited_by_fkey";
+            columns: ["invited_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      admin_mfa_recovery_codes: {
+        Row: {
+          id: string;
+          user_id: string;
+          code_hash: string;
+          used_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          code_hash: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          code_hash?: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_mfa_recovery_codes_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
       };
     };
     Views: {
@@ -1058,6 +1162,56 @@ export interface Database {
           role_name: string;
           hierarchy_level: number;
         }[];
+      };
+      admin_is_bootstrap_available: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      admin_bootstrap_primary_superadmin: {
+        Args: {
+          p_user_id: string;
+          p_display_name?: string | null;
+        };
+        Returns: boolean;
+      };
+      admin_create_invitation: {
+        Args: {
+          p_email: string;
+          p_role_id: string;
+          p_token_hash: string;
+          p_expires_hours?: number;
+        };
+        Returns: string;
+      };
+      admin_validate_invitation: {
+        Args: {
+          p_token_hash: string;
+        };
+        Returns: {
+          invitation_id: string | null;
+          email: string | null;
+          role_id: string | null;
+          role_name: string | null;
+          hierarchy_level: number | null;
+          invited_by_username: string | null;
+          is_valid: boolean;
+          invalid_reason: string | null;
+        }[];
+      };
+      admin_accept_invitation: {
+        Args: {
+          p_user_id: string;
+          p_token_hash: string;
+        };
+        Returns: boolean;
+      };
+      admin_update_mfa_status: {
+        Args: {
+          p_user_id: string;
+          p_enrolled?: boolean;
+          p_verified?: boolean;
+        };
+        Returns: boolean;
       };
     };
     Enums: {

@@ -86,6 +86,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "AUDIT",
     items: [
       { name: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText },
+      { name: "Access Reviews", href: "/admin/access-reviews", icon: UserCheck },
     ],
   },
   {

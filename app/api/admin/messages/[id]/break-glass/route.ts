@@ -7,7 +7,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminPermission("messages.content.view");
+  const auth = await requireAdminPermission("messages.content.view", { requireRecentMfa: true });
   if (auth.errorResponse || !auth.session) return auth.errorResponse!;
 
   const { id: messageId } = await context.params;

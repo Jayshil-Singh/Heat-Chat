@@ -9,7 +9,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminPermission("roles.manage");
+  const auth = await requireAdminPermission("roles.manage", { requireRecentMfa: true });
   if (auth.errorResponse || !auth.session) return auth.errorResponse!;
 
   const { id: userId } = await context.params;
@@ -87,7 +87,7 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminPermission("roles.manage");
+  const auth = await requireAdminPermission("roles.manage", { requireRecentMfa: true });
   if (auth.errorResponse || !auth.session) return auth.errorResponse!;
 
   const { id: userId } = await context.params;

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Flame, AlertCircle } from "lucide-react";
@@ -10,33 +10,66 @@ import Link from "next/link";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isLoading, isAuthenticated, isEmailVerified } = useAuth();
   const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
+  // Check if current page is an admin auth route
+  const isAdminAuthRoute =
+    pathname === "/admin/login" ||
+    pathname === "/admin/setup" ||
+    pathname === "/admin/verify-email" ||
+    pathname === "/admin/mfa/setup" ||
+    pathname === "/admin/mfa/verify" ||
+    pathname?.startsWith("/admin/invite") ||
+    pathname === "/admin/forgot-password";
+
   React.useEffect(() => {
+    if (isAdminAuthRoute) {
+      setIsAdmin(true);
+      return;
+    }
+
     if (isLoading) return;
 
     if (!isAuthenticated || !user) {
-      router.replace("/login?redirectTo=/admin/dashboard");
+      router.replace(`/admin/login?redirectTo=${encodeURIComponent(pathname || "/admin/dashboard")}`);
       return;
     }
 
     if (!isEmailVerified) {
-      router.replace("/verify-email");
+      router.replace("/admin/verify-email");
       return;
     }
 
-    // Verify admin privileges server-side
+    // Verify admin privileges and MFA server-side
     async function verifyAdmin() {
       try {
+        const mfaRes = await fetch("/api/admin/mfa/status");
+        if (mfaRes.ok) {
+          const mfaData = await mfaRes.json();
+          if (!mfaData.enrolled) {
+            router.replace("/admin/mfa/setup");
+            return;
+          }
+          if (!mfaData.verified) {
+            router.replace("/admin/mfa/verify");
+            return;
+          }
+        }
+
         const res = await fetch("/api/admin/metrics");
         if (res.status === 401) {
-          router.replace("/login?redirectTo=/admin/dashboard");
+          router.replace(`/admin/login?redirectTo=${encodeURIComponent(pathname || "/admin/dashboard")}`);
           return;
         }
         if (res.status === 403) {
           const data = await res.json().catch(() => ({}));
+          if (data.error === "MFA_REQUIRED") {
+            router.replace("/admin/mfa/verify");
+            return;
+          }
           setIsAdmin(false);
           setErrorMsg(data.message || "Access denied: Administrative privileges required.");
           return;
@@ -44,14 +77,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (res.ok) {
           setIsAdmin(true);
         } else {
-          // Check permissions directly
-          const permRes = await fetch("/api/admin/permissions");
-          if (permRes.ok) {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-            setErrorMsg("Access denied: You do not have permissions to access the Admin Panel.");
-          }
+          setIsAdmin(false);
+          setErrorMsg("Access denied: You do not possess permissions to access the Admin Panel.");
         }
       } catch (err) {
         console.error("Admin verification check failed:", err);
@@ -61,7 +88,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     verifyAdmin();
-  }, [isLoading, isAuthenticated, isEmailVerified, user, router]);
+  }, [isLoading, isAuthenticated, isEmailVerified, user, router, pathname, isAdminAuthRoute]);
+
+  // If on admin auth page, render children directly without AdminShell
+  if (isAdminAuthRoute) {
+    return <>{children}</>;
+  }
 
   if (isLoading || isAdmin === null) {
     return (
@@ -71,7 +103,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Flame className="h-8 w-8 fill-current" />
           </div>
           <p className="text-xs font-semibold tracking-wider uppercase text-zinc-400 animate-pulse">
-            Verifying Admin Authorization...
+            Verifying Admin Authorization & MFA...
           </p>
         </div>
       </div>
@@ -89,10 +121,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
             {errorMsg || "You do not possess the required administrative roles or permissions to access this platform."}
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col gap-2">
             <Link href="/chat">
               <Button variant="heat" size="lg" className="w-full">
                 Return to Heat Chat
+              </Button>
+            </Link>
+            <Link href="/admin/login">
+              <Button variant="outline" size="lg" className="w-full">
+                Sign in with Admin Account
               </Button>
             </Link>
           </div>

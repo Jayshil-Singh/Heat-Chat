@@ -29,7 +29,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireAdminPermission("settings.manage");
+  const auth = await requireAdminPermission("settings.manage", { requireRecentMfa: true });
   if (auth.errorResponse || !auth.session) return auth.errorResponse!;
 
   try {

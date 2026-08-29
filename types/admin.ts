@@ -16,6 +16,17 @@ export const ROLE_HIERARCHY: Record<string, number> = {
   Analyst: 20,
 };
 
+export type AdminAccountState =
+  | "INVITED"
+  | "EMAIL_PENDING"
+  | "EMAIL_VERIFIED"
+  | "MFA_PENDING"
+  | "MFA_VERIFIED"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "DISABLED"
+  | "REVOKED";
+
 export type AdminPermissionKey =
   | "users.view"
   | "users.create"
@@ -89,6 +100,25 @@ export interface AdminUserSummary {
   email_confirmed_at?: string | null;
   roles: string[];
   top_role_level: number;
+  is_primary_superadmin?: boolean;
+  account_state?: AdminAccountState;
+  mfa_enrolled_at?: string | null;
+  mfa_last_verified_at?: string | null;
+}
+
+export interface AdminInvitation {
+  id: string;
+  email: string;
+  role_id: string;
+  role_name?: string;
+  hierarchy_level?: number;
+  token_hash: string;
+  invited_by: string;
+  invited_by_username?: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
 }
 
 export interface AdminAuditLog {
@@ -178,4 +208,9 @@ export interface AdminSessionContext {
   roles: string[];
   topRoleLevel: number;
   permissions: Set<AdminPermissionKey>;
+  isPrimarySuperAdmin: boolean;
+  accountState: AdminAccountState;
+  mfaEnrolled: boolean;
+  mfaVerified: boolean;
+  mfaLastVerifiedAt: string | null;
 }

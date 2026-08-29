@@ -1,22 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { AdminPermissionKey, AdminRoleName, AdminSessionContext } from "@/types/admin";
+import type { AdminAccountState, AdminPermissionKey, AdminRoleName, AdminSessionContext } from "@/types/admin";
 import { ROLE_HIERARCHY } from "@/types/admin";
 
 export type AdminAuthResult =
   | { success: true; session: AdminSessionContext; error?: never }
   | {
       success: false;
-      error: "UNAUTHENTICATED" | "UNVERIFIED_EMAIL" | "ACCOUNT_SUSPENDED" | "ACCOUNT_DISABLED" | "FORBIDDEN_NOT_ADMIN" | "SERVER_ERROR";
+      error:
+        | "UNAUTHENTICATED"
+        | "UNVERIFIED_EMAIL"
+        | "ACCOUNT_SUSPENDED"
+        | "ACCOUNT_DISABLED"
+        | "ACCOUNT_NOT_ACTIVE"
+        | "MFA_REQUIRED"
+        | "FORBIDDEN_NOT_ADMIN"
+        | "SERVER_ERROR";
       message: string;
       session?: never;
     };
 
 /**
  * Validates the caller's server session, email confirmation state, account status,
- * and loads all assigned administrative roles and granular permissions.
+ * mandatory MFA enrollment & verification, and loads all assigned administrative roles and permissions.
  */
-export async function getAdminSession(): Promise<AdminAuthResult> {
+export async function getAdminSession(options?: { allowPendingMfa?: boolean }): Promise<AdminAuthResult> {
   try {
     const supabase = await createClient();
     const {
@@ -71,10 +79,10 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
       };
     }
 
-    // Query active administrative roles and permissions
+    // Query active administrative roles, PrimarySuperAdmin flag, and MFA status
     const { data: userRoles, error: rolesErr } = await supabase
       .from("admin_user_roles")
-      .select("role_id, admin_roles(id, name, hierarchy_level)")
+      .select("role_id, is_primary_superadmin, mfa_required, mfa_enrolled_at, mfa_last_verified_at, account_state, admin_roles(id, name, hierarchy_level)")
       .eq("user_id", user.id);
 
     if (rolesErr || !userRoles || userRoles.length === 0) {
@@ -85,10 +93,27 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
       };
     }
 
+    let isPrimarySuperAdmin = false;
+    let accountState: AdminAccountState = "ACTIVE";
+    let mfaEnrolledAt: string | null = null;
+    let mfaLastVerifiedAt: string | null = null;
     const roles: AdminRoleName[] = [];
     let topRoleLevel = 0;
 
     userRoles.forEach((ur) => {
+      if (ur.is_primary_superadmin) {
+        isPrimarySuperAdmin = true;
+      }
+      if (ur.account_state) {
+        accountState = ur.account_state as AdminAccountState;
+      }
+      if (ur.mfa_enrolled_at) {
+        mfaEnrolledAt = ur.mfa_enrolled_at;
+      }
+      if (ur.mfa_last_verified_at) {
+        mfaLastVerifiedAt = ur.mfa_last_verified_at;
+      }
+
       const roleData = ur.admin_roles as unknown as { name: AdminRoleName; hierarchy_level: number } | null;
       if (roleData?.name) {
         roles.push(roleData.name);
@@ -104,6 +129,28 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
         success: false,
         error: "FORBIDDEN_NOT_ADMIN",
         message: "No valid active administrative role assigned.",
+      };
+    }
+
+    if (accountState !== "ACTIVE" && !options?.allowPendingMfa) {
+      return {
+        success: false,
+        error: "ACCOUNT_NOT_ACTIVE",
+        message: `Administrative account is not active (status: ${accountState}).`,
+      };
+    }
+
+    // Check MFA state via Supabase AAL & DB metadata
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const hasAal2 = aalData?.currentLevel === "aal2";
+    const mfaEnrolled = Boolean(mfaEnrolledAt || (aalData?.nextLevel === "aal2" && aalData?.currentLevel === "aal1"));
+    const mfaVerified = hasAal2 || Boolean(mfaLastVerifiedAt);
+
+    if (!options?.allowPendingMfa && (!mfaEnrolled || !mfaVerified)) {
+      return {
+        success: false,
+        error: "MFA_REQUIRED",
+        message: "Multi-Factor Authentication (MFA) is mandatory for administrative access.",
       };
     }
 
@@ -136,6 +183,11 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
       roles,
       topRoleLevel,
       permissions,
+      isPrimarySuperAdmin,
+      accountState,
+      mfaEnrolled,
+      mfaVerified,
+      mfaLastVerifiedAt,
     };
 
     return { success: true, session };
@@ -154,7 +206,8 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
  * Returns either an error NextResponse or the verified AdminSessionContext.
  */
 export async function requireAdminPermission(
-  requiredPermission: AdminPermissionKey
+  requiredPermission: AdminPermissionKey,
+  options?: { requireRecentMfa?: boolean; maxMfaAgeMinutes?: number }
 ): Promise<{ errorResponse?: NextResponse; session?: AdminSessionContext }> {
   const authResult = await getAdminSession();
 
@@ -162,7 +215,7 @@ export async function requireAdminPermission(
     const statusCode =
       authResult.error === "UNAUTHENTICATED"
         ? 401
-        : authResult.error === "UNVERIFIED_EMAIL" || authResult.error === "ACCOUNT_SUSPENDED" || authResult.error === "ACCOUNT_DISABLED"
+        : authResult.error === "MFA_REQUIRED"
         ? 403
         : 403;
 
@@ -188,23 +241,68 @@ export async function requireAdminPermission(
     };
   }
 
+  // Check recent MFA requirement for sensitive operations
+  if (options?.requireRecentMfa) {
+    const maxMinutes = options.maxMfaAgeMinutes || 10;
+    const recentCheck = validateRecentMfa(session, maxMinutes);
+    if (!recentCheck.valid) {
+      return {
+        errorResponse: NextResponse.json(
+          {
+            error: "MFA_REAUTH_REQUIRED",
+            message: `This sensitive operation requires recent MFA verification (within ${maxMinutes} minutes). Please re-authenticate.`,
+          },
+          { status: 403 }
+        ),
+      };
+    }
+  }
+
   return { session };
+}
+
+/**
+ * Validates whether the administrator has performed an MFA verification within the allowed age limit.
+ */
+export function validateRecentMfa(session: AdminSessionContext, maxAgeMinutes = 10): { valid: boolean; ageMinutes?: number } {
+  if (!session.mfaLastVerifiedAt) {
+    return { valid: false };
+  }
+
+  const verifiedTime = new Date(session.mfaLastVerifiedAt).getTime();
+  const now = Date.now();
+  const ageMinutes = (now - verifiedTime) / (1000 * 60);
+
+  if (ageMinutes > maxAgeMinutes) {
+    return { valid: false, ageMinutes };
+  }
+
+  return { valid: true, ageMinutes };
 }
 
 /**
  * Validates anti-privilege escalation constraints:
  * 1. Administrator cannot modify their own administrative roles.
  * 2. Administrator cannot assign, revoke, or mutate a role equal to or higher than their own hierarchy level.
+ * 3. Primary SuperAdmin cannot be modified or suspended.
  */
 export function validateHierarchyConstraint(
   actorSession: AdminSessionContext,
   targetUserId: string,
-  targetRoleLevel: number
+  targetRoleLevel: number,
+  targetIsPrimarySuperAdmin?: boolean
 ): { allowed: boolean; reason?: string } {
   if (actorSession.userId === targetUserId) {
     return {
       allowed: false,
       reason: "Security violation: administrators cannot modify or self-assign roles to their own account.",
+    };
+  }
+
+  if (targetIsPrimarySuperAdmin) {
+    return {
+      allowed: false,
+      reason: "Security violation: Primary SuperAdmin role cannot be modified or revoked.",
     };
   }
 

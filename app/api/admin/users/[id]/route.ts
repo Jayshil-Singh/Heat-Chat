@@ -154,7 +154,7 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminPermission("users.delete");
+  const auth = await requireAdminPermission("users.delete", { requireRecentMfa: true });
   if (auth.errorResponse || !auth.session) return auth.errorResponse!;
 
   const { id: userId } = await context.params;
