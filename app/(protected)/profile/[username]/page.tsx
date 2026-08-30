@@ -1,62 +1,86 @@
 "use client";
 
 import * as React from "react";
-import { use } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   MessageCircle,
-  UserPlus,
   UserCheck,
   ShieldAlert,
-  AlertCircle,
-  Globe,
   ArrowLeft,
+  Globe,
+  Clock,
+  AlertCircle,
   UserX,
+  Languages,
+  Users,
+  Flag,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockDialog } from "@/components/profile/block-dialog";
-import type { PublicProfileDto } from "@/types/database";
+import { ReportDialog } from "@/components/reports/report-dialog";
+import { RelationshipActionButton } from "@/components/friends/relationship-action-button";
+import type { PublicProfileDto, RelationshipStateDto, MutualFriendsDto } from "@/types/database";
 
 const PRESENCE_LABELS: Record<string, { label: string; dotColor: string }> = {
   ONLINE: { label: "Online", dotColor: "bg-emerald-500" },
   AWAY: { label: "Away", dotColor: "bg-amber-500" },
-  BUSY: { label: "Do Not Disturb", dotColor: "bg-red-500" },
+  BUSY: { label: "Do Not Disturb", dotColor: "bg-rose-500" },
   OFFLINE: { label: "Offline", dotColor: "bg-zinc-400" },
   INVISIBLE: { label: "Offline", dotColor: "bg-zinc-400" },
 };
 
-export default function PublicProfilePage({
-  params,
-}: {
-  params: Promise<{ username: string }>;
-}) {
-  const { username } = use(params);
-  const { user } = useAuth();
+export default function PublicProfilePage() {
+  const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const username = params?.username as string;
+
   const [profileData, setProfileData] = React.useState<PublicProfileDto | null>(null);
+  const [relationship, setRelationship] = React.useState<RelationshipStateDto | null>(null);
+  const [mutualFriends, setMutualFriends] = React.useState<MutualFriendsDto | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
   const [showBlockDialog, setShowBlockDialog] = React.useState(false);
+  const [showReportDialog, setShowReportDialog] = React.useState(false);
 
   const loadProfile = React.useCallback(() => {
     if (!username) return;
     setIsLoading(true);
     setNotFound(false);
-    fetch(`/api/users/${username}`)
-      .then((r) => {
+
+    Promise.all([
+      fetch(`/api/users/${username}`).then((r) => {
         if (r.status === 404) {
           setNotFound(true);
           return null;
         }
         return r.json();
+      }),
+      fetch(`/api/users/${username}/relationship`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([profData, relData]) => {
+        if (profData?.profile) {
+          setProfileData(profData.profile);
+          if (relData) {
+            setRelationship(relData);
+          }
+          // Fetch mutual friends if not self
+          if (!profData.profile.isSelf) {
+            fetch(`/api/friends/mutual/${profData.profile.id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((m) => {
+                if (m) setMutualFriends(m);
+              })
+              .catch(() => {});
+          }
+        } else {
+          setNotFound(true);
+        }
       })
-      .then((data) => {
-        if (data?.profile) setProfileData(data.profile as PublicProfileDto);
-      })
-      .catch(console.error)
+      .catch(() => setNotFound(true))
       .finally(() => setIsLoading(false));
   }, [username]);
 
@@ -94,13 +118,13 @@ export default function PublicProfilePage({
           This profile doesn&rsquo;t exist or may have been removed.
         </p>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => router.back()}
           className="mt-6 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Go Back
+          <span>Go Back</span>
         </Button>
       </div>
     );
@@ -113,13 +137,13 @@ export default function PublicProfilePage({
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Profile unavailable</h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">This profile is not available.</p>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => router.back()}
           className="mt-6 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Go Back
+          <span>Go Back</span>
         </Button>
       </div>
     );
@@ -179,6 +203,10 @@ export default function PublicProfilePage({
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border self-center sm:self-auto ${
                   profileData.presenceStatus === "ONLINE"
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-900/60"
+                    : profileData.presenceStatus === "AWAY"
+                    ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-900/60"
+                    : profileData.presenceStatus === "BUSY"
+                    ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900/60"
                     : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                 }`}
               >
@@ -218,14 +246,41 @@ export default function PublicProfilePage({
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Mutual Friends Banner if any */}
+        {mutualFriends && mutualFriends.count > 0 && !profileData.isSelf && (
+          <div className="flex items-center gap-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 p-3.5 border border-zinc-100 dark:border-zinc-800">
+            <div className="flex -space-x-2 overflow-hidden">
+              {mutualFriends.profiles.slice(0, 3).map((mp) => (
+                <Avatar
+                  key={mp.id}
+                  src={mp.avatarUrl}
+                  name={mp.displayName || mp.username}
+                  size="sm"
+                  className="ring-2 ring-white dark:ring-zinc-900"
+                />
+              ))}
+            </div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-400">
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {mutualFriends.count} mutual {mutualFriends.count === 1 ? "friend" : "friends"}
+              </span>
+              {mutualFriends.profiles.length > 0 && (
+                <span className="ml-1 text-zinc-500">
+                  including {mutualFriends.profiles.map((p) => p.displayName).join(", ")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Actions Row */}
         {!profileData.isSelf && user && (
           <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
             {profileData.canMessage && (
               <Button
                 variant="heat"
                 size="sm"
-                className="gap-2"
+                className="gap-2 font-semibold shadow-sm"
                 id={`profile-message-${profileData.id}`}
                 onClick={() => router.push(`/chat?userId=${profileData.id}`)}
               >
@@ -234,43 +289,54 @@ export default function PublicProfilePage({
               </Button>
             )}
 
-            {profileData.canFriendRequest && !profileData.isFriend && (
-              <Button
-                variant="outline"
+            {relationship && (
+              <RelationshipActionButton
+                userId={profileData.id}
+                relationship={relationship}
+                onStateChanged={loadProfile}
                 size="sm"
-                className="gap-2"
-                id={`profile-add-friend-${profileData.id}`}
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Add Friend</span>
-              </Button>
+              />
             )}
 
-            {!profileData.isBlocked && (
+            <div className="flex items-center gap-1.5 ml-auto">
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 ml-auto"
-                onClick={() => setShowBlockDialog(true)}
-                id={`profile-block-${profileData.id}`}
+                className="gap-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-xs"
+                onClick={() => setShowReportDialog(true)}
+                title="Report this user"
               >
-                <ShieldAlert className="h-4 w-4" />
-                <span>Block</span>
+                <Flag className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Report</span>
               </Button>
-            )}
 
-            {profileData.isBlocked && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 text-zinc-500 hover:text-zinc-700 ml-auto"
-                onClick={() => setShowBlockDialog(true)}
-                id={`profile-unblock-${profileData.id}`}
-              >
-                <ShieldAlert className="h-4 w-4" />
-                <span>Unblock</span>
-              </Button>
-            )}
+              {!profileData.isBlocked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 text-xs"
+                  onClick={() => setShowBlockDialog(true)}
+                  id={`profile-block-${profileData.id}`}
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>Block</span>
+                </Button>
+              )}
+
+              {profileData.isBlocked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-zinc-500 hover:text-zinc-700 text-xs"
+                  onClick={() => setShowBlockDialog(true)}
+                  id={`profile-unblock-${profileData.id}`}
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>Unblock</span>
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -302,17 +368,19 @@ export default function PublicProfilePage({
           isCurrentlyBlocked={profileData.isBlocked}
           onSuccess={(isNowBlocked) => {
             setShowBlockDialog(false);
-            setProfileData((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    isBlocked: isNowBlocked,
-                    canMessage: !isNowBlocked,
-                    canFriendRequest: !isNowBlocked,
-                  }
-                : null
-            );
+            loadProfile();
           }}
+        />
+      )}
+
+      {/* Report User Dialog */}
+      {showReportDialog && (
+        <ReportDialog
+          isOpen={showReportDialog}
+          onClose={() => setShowReportDialog(false)}
+          targetType="user"
+          targetId={profileData.id}
+          targetName={profileData.username}
         />
       )}
     </div>

@@ -99,9 +99,16 @@ export function RequestsTab({
                     <p className="truncate text-xs text-heat-600 dark:text-heat-400 font-medium">
                       @{req.profile.username}
                     </p>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      Requested {new Date(req.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[11px] text-zinc-400">
+                        {new Date(req.createdAt).toLocaleDateString()}
+                      </p>
+                      {req.mutualCount !== undefined && req.mutualCount > 0 && (
+                        <span className="rounded-full bg-heat-50 dark:bg-heat-950/40 px-2 py-0.5 text-[10px] font-semibold text-heat-600 dark:text-heat-400">
+                          {req.mutualCount} mutual {req.mutualCount === 1 ? "friend" : "friends"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -171,10 +178,17 @@ export function RequestsTab({
                     <p className="truncate text-xs text-heat-600 dark:text-heat-400 font-medium">
                       @{req.profile.username}
                     </p>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 mt-0.5">
-                      <Clock className="h-3 w-3" />
-                      Pending acceptance
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
+                        <Clock className="h-3 w-3" />
+                        Pending acceptance
+                      </span>
+                      {req.mutualCount !== undefined && req.mutualCount > 0 && (
+                        <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          {req.mutualCount} mutual {req.mutualCount === 1 ? "friend" : "friends"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

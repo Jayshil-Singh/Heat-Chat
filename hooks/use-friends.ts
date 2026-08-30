@@ -29,125 +29,102 @@ export function useFriends() {
     setError(null);
 
     try {
-      // 1. Fetch all friendships where current user is user_id OR friend_id
-      const { data: friendshipsData, error: friendshipsError } = await supabase
-        .from("friendships")
-        .select("*")
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+      const [friendsRes, incomingRes, sentRes] = await Promise.all([
+        fetch("/api/friends"),
+        fetch("/api/friends/requests/incoming"),
+        fetch("/api/friends/requests/sent"),
+      ]);
 
-      if (friendshipsError) {
-        console.warn("Error fetching friendships:", friendshipsError.message);
-        setError(friendshipsError.message);
-        setIsLoading(false);
-        return;
-      }
+      const [friendsData, incomingData, sentData] = await Promise.all([
+        friendsRes.ok ? friendsRes.json() : { friends: [] },
+        incomingRes.ok ? incomingRes.json() : { requests: [] },
+        sentRes.ok ? sentRes.json() : { requests: [] },
+      ]);
 
-      if (!friendshipsData || friendshipsData.length === 0) {
-        setFriends([]);
-        setIncomingRequests([]);
-        setOutgoingRequests([]);
-        setIsLoading(false);
-        return;
-      }
+      // Formatted friends
+      const formattedFriends: FriendItem[] = (friendsData.friends || []).map((f: any) => ({
+        friendshipId: f.friendshipId,
+        userId: user.id,
+        friendId: f.profile.id,
+        status: "accepted",
+        createdAt: f.friendSince,
+        profile: f.profile,
+      }));
 
-      // Collect all other user IDs to fetch their profiles
-      const otherUserIds = Array.from(
-        new Set(
-          friendshipsData.map((f) =>
-            f.user_id === user.id ? f.friend_id : f.user_id
-          )
-        )
-      );
+      // Incoming requests
+      const formattedIncoming: FriendshipRequest[] = (incomingData.requests || []).map((r: any) => ({
+        friendshipId: r.requestId,
+        senderId: r.sender.id,
+        receiverId: user.id,
+        createdAt: r.createdAt,
+        profile: r.sender,
+        mutualCount: r.mutualCount,
+        mutualProfiles: r.mutualProfiles,
+      }));
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("id", otherUserIds);
+      // Outgoing requests
+      const formattedOutgoing: FriendshipRequest[] = (sentData.requests || []).map((r: any) => ({
+        friendshipId: r.requestId,
+        senderId: user.id,
+        receiverId: r.recipient.id,
+        createdAt: r.createdAt,
+        profile: r.recipient,
+        mutualCount: r.mutualCount,
+      }));
 
-      if (profilesError) {
-        console.warn("Error fetching friend profiles:", profilesError.message);
-        setError(profilesError.message);
-        setIsLoading(false);
-        return;
-      }
-
-      const profilesMap = new Map<string, Profile>();
-      (profilesData || []).forEach((p) => profilesMap.set(p.id, p as Profile));
-
-      const acceptedList: FriendItem[] = [];
-      const incomingList: FriendshipRequest[] = [];
-      const outgoingList: FriendshipRequest[] = [];
-
-      friendshipsData.forEach((f) => {
-        const isSender = f.user_id === user.id;
-        const otherUserId = isSender ? f.friend_id : f.user_id;
-        const profile = profilesMap.get(otherUserId);
-
-        if (!profile) return;
-
-        if (f.status === "accepted") {
-          acceptedList.push({
-            friendshipId: f.id,
-            userId: user.id,
-            friendId: otherUserId,
-            status: "accepted",
-            createdAt: f.created_at,
-            profile,
-          });
-        } else if (f.status === "pending") {
-          if (isSender) {
-            outgoingList.push({
-              friendshipId: f.id,
-              senderId: user.id,
-              receiverId: otherUserId,
-              createdAt: f.created_at,
-              profile,
-            });
-          } else {
-            incomingList.push({
-              friendshipId: f.id,
-              senderId: otherUserId,
-              receiverId: user.id,
-              createdAt: f.created_at,
-              profile,
-            });
-          }
-        }
-      });
-
-      setFriends(acceptedList);
-      setIncomingRequests(incomingList);
-      setOutgoingRequests(outgoingList);
-    } catch (err) {
-      console.error("Failed to load friends:", err);
+      setFriends(formattedFriends);
+      setIncomingRequests(formattedIncoming);
+      setOutgoingRequests(formattedOutgoing);
+    } catch (err: any) {
+      console.error("[Heat Chat] Failed to load friends:", err);
       setError("Failed to load friends.");
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id]);
 
   React.useEffect(() => {
     fetchFriends();
   }, [fetchFriends]);
+
+  // Realtime subscription for friendships
+  React.useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`friends-realtime-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friendships",
+        },
+        () => {
+          fetchFriends();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase, fetchFriends]);
 
   const sendFriendRequest = async (targetUserId: string): Promise<{ success: boolean; error?: string }> => {
     if (!user?.id) return { success: false, error: "Not authenticated" };
     if (user.id === targetUserId) return { success: false, error: "Cannot add yourself as a friend" };
 
     try {
-      const { error: insertError } = await supabase
-        .from("friendships")
-        .insert({
-          user_id: user.id,
-          friend_id: targetUserId,
-          status: "pending",
-        });
+      const res = await fetch("/api/friends/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientId: targetUserId }),
+      });
 
-      if (insertError) {
-        if (insertError.code === "23505" || insertError.message.includes("unique")) {
-          return { success: false, error: "A friendship request already exists between you." };
-        }
-        return { success: false, error: insertError.message || "Failed to send friend request." };
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to send request." };
       }
 
       await fetchFriends();
@@ -161,13 +138,13 @@ export function useFriends() {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
     try {
-      const { error: updateError } = await supabase
-        .from("friendships")
-        .update({ status: "accepted" })
-        .eq("id", friendshipId);
+      const res = await fetch(`/api/friends/requests/${friendshipId}/accept`, {
+        method: "POST",
+      });
 
-      if (updateError) {
-        return { success: false, error: updateError.message || "Failed to accept request." };
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to accept request." };
       }
 
       await fetchFriends();
@@ -181,13 +158,13 @@ export function useFriends() {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
     try {
-      const { error: deleteError } = await supabase
-        .from("friendships")
-        .delete()
-        .eq("id", friendshipId);
+      const res = await fetch(`/api/friends/requests/${friendshipId}/decline`, {
+        method: "POST",
+      });
 
-      if (deleteError) {
-        return { success: false, error: deleteError.message || "Failed to decline request." };
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to decline request." };
       }
 
       await fetchFriends();
@@ -201,13 +178,13 @@ export function useFriends() {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
     try {
-      const { error: deleteError } = await supabase
-        .from("friendships")
-        .delete()
-        .eq("id", friendshipId);
+      const res = await fetch(`/api/friends/requests/${friendshipId}/cancel`, {
+        method: "POST",
+      });
 
-      if (deleteError) {
-        return { success: false, error: deleteError.message || "Failed to cancel request." };
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to cancel request." };
       }
 
       await fetchFriends();
@@ -217,17 +194,17 @@ export function useFriends() {
     }
   };
 
-  const removeFriend = async (friendshipId: string): Promise<{ success: boolean; error?: string }> => {
+  const removeFriend = async (friendIdOrShipId: string): Promise<{ success: boolean; error?: string }> => {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
     try {
-      const { error: deleteError } = await supabase
-        .from("friendships")
-        .delete()
-        .eq("id", friendshipId);
+      const res = await fetch(`/api/friends/${friendIdOrShipId}`, {
+        method: "DELETE",
+      });
 
-      if (deleteError) {
-        return { success: false, error: deleteError.message || "Failed to remove friend." };
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to remove friend." };
       }
 
       await fetchFriends();

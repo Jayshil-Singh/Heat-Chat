@@ -10,10 +10,24 @@ export type ConversationType = "direct" | "group";
 export type MemberRole = "owner" | "admin" | "member";
 export type MessageType = "text" | "image" | "file";
 export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥";
-export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked";
+export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked" | "cancelled" | "expired";
+export type FriendshipState = "NONE" | "PENDING_OUTGOING" | "PENDING_INCOMING" | "FRIENDS" | "SELF";
 export type UserStatus = "online" | "offline" | "away" | "busy";
 export type PresenceStatus = "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" | "INVISIBLE";
 export type PrivacyAudience = "everyone" | "friends" | "friends_of_friends" | "nobody";
+export type ReportCategory =
+  | "SPAM"
+  | "HARASSMENT"
+  | "BULLYING"
+  | "IMPERSONATION"
+  | "THREATS"
+  | "INAPPROPRIATE_CONTENT"
+  | "SCAM"
+  | "FRAUD"
+  | "ILLEGAL_CONTENT"
+  | "SELF_HARM"
+  | "OTHER";
+export type ReportStatus = "New" | "Assigned" | "Investigating" | "ActionTaken" | "Resolved" | "Closed";
 
 export interface Database {
   public: {
@@ -1437,6 +1451,66 @@ export interface Database {
         };
         Returns: Json;
       };
+      send_friend_request: {
+        Args: {
+          p_recipient_id: string;
+        };
+        Returns: Json;
+      };
+      accept_friend_request: {
+        Args: {
+          p_friendship_id: string;
+        };
+        Returns: Json;
+      };
+      decline_friend_request: {
+        Args: {
+          p_friendship_id: string;
+        };
+        Returns: Json;
+      };
+      cancel_friend_request: {
+        Args: {
+          p_friendship_id: string;
+        };
+        Returns: Json;
+      };
+      remove_friend: {
+        Args: {
+          p_target_user_id: string;
+        };
+        Returns: Json;
+      };
+      get_mutual_friends: {
+        Args: {
+          p_viewer_id: string;
+          p_target_id: string;
+        };
+        Returns: Json;
+      };
+      get_user_relationship_state: {
+        Args: {
+          p_viewer_id: string;
+          p_target_id: string;
+        };
+        Returns: Json;
+      };
+      submit_moderation_report: {
+        Args: {
+          p_target_type: string;
+          p_target_id: string;
+          p_category: string;
+          p_description?: string | null;
+        };
+        Returns: Json;
+      };
+      block_user: {
+        Args: {
+          target_id: string;
+          block_reason?: string | null;
+        };
+        Returns: boolean;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -1485,5 +1559,48 @@ export interface PublicProfileDto {
 
 export interface OwnProfileDto extends Profile {
   privacy_settings?: UserPrivacySettings;
+}
+
+export interface RelationshipStateDto {
+  friendship: FriendshipState;
+  requestId: string | null;
+  createdAt: string | null;
+  isBlocked: boolean;
+  hasBlockedViewer: boolean;
+  canMessage: boolean;
+  canFriendRequest: boolean;
+}
+
+export interface MutualFriendProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface MutualFriendsDto {
+  count: number;
+  profiles: MutualFriendProfile[];
+}
+
+export interface ModerationReport {
+  id: string;
+  reporter_id: string;
+  target_type: "user" | "message" | "conversation" | "attachment";
+  target_id: string;
+  category: ReportCategory | string;
+  reason: string;
+  description: string | null;
+  status: ReportStatus;
+  assigned_to: string | null;
+  resolution_notes: string | null;
+  action_taken: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  reporter?: {
+    username: string;
+    display_name?: string;
+  };
 }
 

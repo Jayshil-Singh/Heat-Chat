@@ -90,6 +90,13 @@ export interface FriendshipRequest {
   receiverId: string;
   createdAt: string;
   profile: Profile;
+  mutualCount?: number;
+  mutualProfiles?: Array<{
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  }>;
 }
 
 export interface TypingUser {

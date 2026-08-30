@@ -132,10 +132,7 @@ export default function FriendsPage() {
         {activeTab === "find" && (
           <FindFriendsTab
             currentUserId={user?.id}
-            getRelationshipStatus={getRelationshipStatus}
-            onSendRequest={sendFriendRequest}
             onStartChat={handleStartChat}
-            onAcceptRequest={acceptFriendRequest}
           />
         )}
       </div>
