@@ -43,46 +43,59 @@ export function NotificationCenter({
     setMounted(true);
   }, []);
 
-  // Close when pathname changes (route navigation)
+  // Close on route navigation
   React.useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
 
-  // Compute deterministic positioning relative to trigger and viewport
+  // Compute deterministic positioning clamped to sidebar or mobile viewport
   const updatePosition = React.useCallback(() => {
     if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
+    const triggerRect = triggerRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    // Responsive width with safe margin
-    const popoverWidth = Math.min(384, viewportWidth - 24);
-    const top = rect.bottom + 8;
-    const maxHeight = Math.max(200, Math.min(420, viewportHeight - top - 16));
+    // Check if trigger is housed inside a desktop sidebar <aside>
+    const sidebar = triggerRef.current.closest("aside");
 
-    let left: number | undefined;
-    let right: number | undefined;
+    if (sidebar) {
+      const sidebarRect = sidebar.getBoundingClientRect();
+      const safePadding = 8;
+      const left = sidebarRect.left + safePadding;
+      const width = Math.max(200, sidebarRect.width - safePadding * 2);
+      const top = triggerRect.bottom + 8;
+      const maxHeight = Math.max(180, Math.min(420, viewportHeight - top - 16));
 
-    // Prefer right-aligning to the trigger button
-    const idealRight = viewportWidth - rect.right;
-    const calculatedLeft = rect.right - popoverWidth;
-
-    if (calculatedLeft < 12) {
-      // If right-alignment causes left edge to go offscreen, align to left with safe margin
-      left = Math.max(12, Math.min(rect.left, viewportWidth - popoverWidth - 12));
-      right = undefined;
+      setCoords({
+        top,
+        left,
+        right: undefined,
+        width,
+        maxHeight,
+      });
     } else {
-      right = Math.max(12, idealRight);
-      left = undefined;
-    }
+      // Mobile / Header positioning
+      const popoverWidth = Math.min(380, viewportWidth - 24);
+      const top = triggerRect.bottom + 8;
+      const maxHeight = Math.max(180, Math.min(420, viewportHeight - top - 16));
 
-    setCoords({
-      top,
-      left,
-      right,
-      width: popoverWidth,
-      maxHeight,
-    });
+      const idealRight = Math.max(12, viewportWidth - triggerRect.right);
+      let left: number | undefined;
+      let right: number | undefined = idealRight;
+
+      if (viewportWidth - idealRight - popoverWidth < 12) {
+        left = 12;
+        right = undefined;
+      }
+
+      setCoords({
+        top,
+        left,
+        right,
+        width: popoverWidth,
+        maxHeight,
+      });
+    }
   }, []);
 
   // Recalculate on open, scroll, or resize
@@ -161,17 +174,17 @@ export function NotificationCenter({
         width: `${coords.width}px`,
         maxHeight: `${coords.maxHeight}px`,
       }}
-      className="z-50 flex flex-col rounded-2xl border border-zinc-200 bg-white/95 shadow-2xl shadow-zinc-900/15 backdrop-blur-2xl dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/60 animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
+      className="z-50 flex flex-col rounded-2xl border border-zinc-200 bg-white/95 shadow-2xl shadow-zinc-900/15 backdrop-blur-2xl dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/60 animate-in fade-in zoom-in-95 duration-150 overflow-hidden box-border"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800/80">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800/80 box-border">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h2 className="text-xs font-bold text-zinc-900 dark:text-white truncate">
             Notifications
           </h2>
           {unreadCount > 0 && (
-            <span className="rounded-full bg-heat-100 px-2 py-0.5 text-[11px] font-semibold text-heat-700 dark:bg-heat-950/80 dark:text-heat-400 border border-heat-200 dark:border-heat-900/60">
-              {unreadCount} new
+            <span className="rounded-full bg-heat-100 px-1.5 py-0.5 text-[10px] font-semibold text-heat-700 dark:bg-heat-950/80 dark:text-heat-400 border border-heat-200 dark:border-heat-900/60 shrink-0">
+              {unreadCount}
             </span>
           )}
         </div>
@@ -180,37 +193,37 @@ export function NotificationCenter({
           <button
             type="button"
             onClick={onMarkAllAsRead}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+            className="flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
           >
-            <CheckCheck className="h-3.5 w-3.5 text-heat-500" />
-            <span>Mark all read</span>
+            <CheckCheck className="h-3 w-3 text-heat-500" />
+            <span>Mark all</span>
           </button>
         )}
       </div>
 
       {/* List / Empty State Content */}
-      <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900">
+      <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900 box-border">
         {isLoading ? (
-          <div className="space-y-3 p-4">
+          <div className="space-y-2.5 p-3.5 box-border">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-3 animate-pulse">
-                <div className="h-10 w-10 rounded-full bg-zinc-200 dark:bg-zinc-800" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-28 rounded bg-zinc-200 dark:bg-zinc-800" />
-                  <div className="h-2.5 w-40 rounded bg-zinc-100 dark:bg-zinc-850" />
+              <div key={i} className="flex items-center gap-2.5 animate-pulse">
+                <div className="h-8 w-8 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+                <div className="flex-1 space-y-1 min-w-0">
+                  <div className="h-3 w-20 rounded bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-2.5 w-32 rounded bg-zinc-100 dark:bg-zinc-850" />
                 </div>
               </div>
             ))}
           </div>
         ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-500 mb-3">
-              <Flame className="h-6 w-6" />
+          <div className="flex flex-col items-center justify-center p-6 text-center w-full box-border">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-500 mb-2 shrink-0">
+              <Flame className="h-4 w-4" />
             </div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+            <p className="text-xs font-bold text-zinc-900 dark:text-white">
               No notifications yet
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[220px] leading-relaxed">
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-normal break-words text-center max-w-full">
               When friends message you or add you to groups, you&apos;ll see updates here.
             </p>
           </div>
@@ -235,7 +248,7 @@ export function NotificationCenter({
                     handleNotificationClick(notif);
                   }
                 }}
-                className={`flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:bg-zinc-100 dark:focus-visible:bg-zinc-800 ${
+                className={`flex items-start gap-2.5 p-3 transition-colors cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:bg-zinc-100 dark:focus-visible:bg-zinc-800 box-border ${
                   isUnread
                     ? "bg-heat-50/40 dark:bg-heat-950/20"
                     : "bg-transparent"
@@ -244,11 +257,12 @@ export function NotificationCenter({
                 <Avatar
                   src={notif.sender?.avatar_url}
                   name={senderName}
-                  size="default"
+                  size="sm"
                   status={notif.sender?.status}
+                  className="shrink-0"
                 />
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 overflow-hidden">
                   <div className="flex items-center justify-between gap-1">
                     <p className="truncate text-xs font-semibold text-zinc-900 dark:text-white">
                       {title}
@@ -259,7 +273,7 @@ export function NotificationCenter({
                   </div>
 
                   <p
-                    className={`truncate text-xs mt-0.5 ${
+                    className={`truncate text-[11px] mt-0.5 ${
                       notif.isDeleted
                         ? "italic text-zinc-400 dark:text-zinc-500"
                         : "text-zinc-600 dark:text-zinc-300"
@@ -270,7 +284,7 @@ export function NotificationCenter({
                 </div>
 
                 {isUnread && (
-                  <div className="mt-1.5 h-2 w-2 rounded-full bg-heat-500 shrink-0 shadow-sm shadow-heat-500/50" />
+                  <div className="mt-1 h-2 w-2 rounded-full bg-heat-500 shrink-0 shadow-sm shadow-heat-500/50" />
                 )}
               </div>
             );
@@ -281,13 +295,13 @@ export function NotificationCenter({
   );
 
   return (
-    <div className="relative inline-block text-left">
+    <div className="relative inline-block text-left shrink-0">
       {/* Notification Bell Trigger */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+        className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white shrink-0"
         aria-label={
           unreadCount > 0
             ? `Notifications (${unreadCount} unread)`
