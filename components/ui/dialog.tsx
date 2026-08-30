@@ -11,6 +11,7 @@ export interface DialogProps {
   description?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  headerAction?: React.ReactNode;
   className?: string;
   bodyClassName?: string;
 }
@@ -22,6 +23,7 @@ export function Dialog({
   description,
   children,
   footer,
+  headerAction,
   className,
   bodyClassName,
 }: DialogProps) {
@@ -110,14 +112,17 @@ export function Dialog({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors shrink-0"
-              aria-label="Close dialog"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {headerAction}
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors shrink-0"
+                aria-label="Close dialog"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </header>
         )}
 
