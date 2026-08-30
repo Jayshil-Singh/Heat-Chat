@@ -10,8 +10,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ReportDialog } from "@/components/reports/report-dialog";
 import type { AttachmentWithUrl } from "@/types/chat";
 
 interface ImageViewerProps {
@@ -29,6 +31,7 @@ export function ImageViewer({
 }: ImageViewerProps) {
   const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
   const [scale, setScale] = React.useState(1);
+  const [showReportDialog, setShowReportDialog] = React.useState(false);
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const modalRef = React.useRef<HTMLDivElement>(null);
 
@@ -198,6 +201,17 @@ export function ImageViewer({
           <Button
             size="icon-sm"
             variant="ghost"
+            onClick={() => setShowReportDialog(true)}
+            className="text-zinc-300 hover:text-red-400 hover:bg-white/10 h-8 w-8"
+            title="Report attachment"
+            aria-label="Report attachment"
+          >
+            <Flag className="h-4 w-4" />
+          </Button>
+
+          <Button
+            size="icon-sm"
+            variant="ghost"
             onClick={onClose}
             className="text-zinc-300 hover:text-white hover:bg-white/10 h-8 w-8 ml-1"
             title="Close viewer (Esc)"
@@ -260,6 +274,17 @@ export function ImageViewer({
             </button>
           )}
         </>
+      )}
+
+      {/* Report Attachment Dialog */}
+      {showReportDialog && (
+        <ReportDialog
+          isOpen={showReportDialog}
+          onClose={() => setShowReportDialog(false)}
+          targetType="attachment"
+          targetId={currentAttachment.id}
+          targetName={currentAttachment.fileName}
+        />
       )}
     </div>
   );

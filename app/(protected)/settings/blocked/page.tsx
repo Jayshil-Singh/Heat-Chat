@@ -62,8 +62,9 @@ export default function BlockedUsersPage() {
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <Link
-          href="/profile"
+          href="/settings/privacy"
           className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors"
+          title="Back to Privacy Settings"
         >
           <ChevronLeft className="h-4 w-4" />
         </Link>

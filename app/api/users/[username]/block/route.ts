@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ username: string }> }
 ) {
   try {
-    const { username: targetId } = await params;
+    const { username: targetIdentifier } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -17,22 +17,34 @@ export async function POST(
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    if (user.id === targetId) {
+    // Resolve target user exists by ID or username
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdentifier);
+    let targetProfile = null;
+    if (isUuid) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .eq("id", targetIdentifier)
+        .maybeSingle();
+      targetProfile = data;
+    } else {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .ilike("username", targetIdentifier)
+        .maybeSingle();
+      targetProfile = data;
+    }
+
+    if (!targetProfile) {
+      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
+    }
+
+    if (user.id === targetProfile.id) {
       return NextResponse.json(
         { error: "BLOCK_SELF_FORBIDDEN", message: "You cannot block yourself." },
         { status: 400 }
       );
-    }
-
-    // Verify target user exists
-    const { data: targetProfile, error: targetError } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .eq("id", targetId)
-      .single();
-
-    if (targetError || !targetProfile) {
-      return NextResponse.json({ error: "USER_NOT_FOUND" }, { status: 404 });
     }
 
     let reason: string | null = null;
@@ -50,7 +62,7 @@ export async function POST(
       .from("blocked_users")
       .upsert({
         user_id: user.id,
-        blocked_user_id: targetId,
+        blocked_user_id: targetProfile.id,
         reason,
       });
 
@@ -63,12 +75,12 @@ export async function POST(
     await supabase
       .from("friendships")
       .delete()
-      .or(`and(user_id.eq.${user.id},friend_id.eq.${targetId}),and(user_id.eq.${targetId},friend_id.eq.${user.id})`);
+      .or(`and(user_id.eq.${user.id},friend_id.eq.${targetProfile.id}),and(user_id.eq.${targetProfile.id},friend_id.eq.${user.id})`);
 
     return NextResponse.json({
       success: true,
       blocked: true,
-      targetId,
+      targetId: targetProfile.id,
     });
   } catch (err: any) {
     console.error("[Heat Chat] POST /api/users/[username]/block error:", err);
@@ -81,7 +93,7 @@ export async function DELETE(
   { params }: { params: Promise<{ username: string }> }
 ) {
   try {
-    const { username: targetId } = await params;
+    const { username: targetIdentifier } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -92,11 +104,22 @@ export async function DELETE(
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdentifier);
+    let targetProfileId: string = targetIdentifier;
+    if (!isUuid) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("username", targetIdentifier)
+        .maybeSingle();
+      if (prof) targetProfileId = prof.id;
+    }
+
     const { error: unblockError } = await supabase
       .from("blocked_users")
       .delete()
       .eq("user_id", user.id)
-      .eq("blocked_user_id", targetId);
+      .eq("blocked_user_id", targetProfileId);
 
     if (unblockError) {
       console.error("[Heat Chat] Unblock error:", unblockError.message);
@@ -106,7 +129,7 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       blocked: false,
-      targetId,
+      targetId: targetProfileId,
     });
   } catch (err: any) {
     console.error("[Heat Chat] DELETE /api/users/[username]/block error:", err);

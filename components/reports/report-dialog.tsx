@@ -25,10 +25,13 @@ const REPORT_CATEGORIES: { value: ReportCategory; label: string; description: st
   { value: "HARASSMENT", label: "Harassment", description: "Targeted insults, persistent harassment, or hate speech" },
   { value: "BULLYING", label: "Bullying", description: "Intimidation, shaming, or abusive behavior" },
   { value: "IMPERSONATION", label: "Impersonation", description: "Pretending to be someone else or deceptive profile" },
-  { value: "THREATS", label: "Threats / Violence", description: "Threats of harm, violence, or dangerous behavior" },
-  { value: "INAPPROPRIATE_CONTENT", label: "Inappropriate Content", description: "Sexually explicit or offensive material" },
-  { value: "SCAM", label: "Scam / Fraud", description: "Phishing, financial scams, or deceptive links" },
-  { value: "OTHER", label: "Other", description: "Other violations of community guidelines" },
+  { value: "THREATS", label: "Threats", description: "Threats of harm, violence, or dangerous behavior" },
+  { value: "INAPPROPRIATE_CONTENT", label: "Inappropriate Content", description: "Sexually explicit, graphic, or offensive material" },
+  { value: "SCAM", label: "Scam", description: "Phishing, deceptive links, or malicious requests" },
+  { value: "FRAUD", label: "Fraud", description: "Financial fraud, identity theft, or deceptive impersonation" },
+  { value: "ILLEGAL_CONTENT", label: "Illegal Content", description: "Content promoting or depicting unlawful activities" },
+  { value: "SELF_HARM", label: "Self-Harm", description: "Content encouraging or depicting self-harm or suicide" },
+  { value: "OTHER", label: "Other", description: "Other violations of community guidelines and safety rules" },
 ];
 
 export function ReportDialog({
@@ -225,7 +228,7 @@ export function ReportDialog({
               Additional details (optional)
             </label>
             <span className="text-[10px] text-zinc-400">
-              {description.length}/1000
+              {description.length}/500
             </span>
           </div>
           <textarea
@@ -233,7 +236,7 @@ export function ReportDialog({
             rows={3}
             placeholder="Provide any relevant context to assist moderators..."
             value={description}
-            maxLength={1000}
+            maxLength={500}
             onChange={(e) => setDescription(e.target.value)}
             disabled={isSubmitting}
             className="flex w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 transition-colors"

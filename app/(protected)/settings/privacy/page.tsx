@@ -16,6 +16,9 @@ import {
   ToggleLeft,
   ToggleRight,
   ChevronLeft,
+  ChevronRight,
+  Shield,
+  Flag,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -205,6 +208,41 @@ export default function PrivacySettingsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Quick Access Links */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Link
+          href="/settings/blocked"
+          className="flex items-center justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-red-50 dark:bg-red-950/30 p-2">
+              <Shield className="h-4 w-4 text-red-500" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-900 dark:text-white">Blocked Users</p>
+              <p className="text-[11px] text-zinc-400">Manage who you have blocked</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+        </Link>
+
+        <Link
+          href="/settings/reports"
+          className="flex items-center justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-2">
+              <Flag className="h-4 w-4 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-900 dark:text-white">My Reports</p>
+              <p className="text-[11px] text-zinc-400">View your submitted reports</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+        </Link>
       </div>
 
       {error && (

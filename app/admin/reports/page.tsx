@@ -217,19 +217,29 @@ export default function AdminReportsPage() {
                     </td>
 
                     <td className="px-5 py-3.5 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setActiveReport(r);
-                          setNewStatus(r.status === "New" ? "Investigating" : "Resolved");
-                          setResolutionNotes(r.resolution_notes || "");
-                          setResolveError(null);
-                        }}
-                        className="h-8 px-2 text-xs font-semibold text-heat-600 hover:text-heat-700"
-                      >
-                        Review
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/reports/${r.id}`}
+                          className="inline-flex h-8 items-center rounded-xl px-2.5 text-xs font-semibold text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors gap-1"
+                          title="View full report detail"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Detail
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setActiveReport(r);
+                            setNewStatus(r.status === "New" ? "Investigating" : "Resolved");
+                            setResolutionNotes(r.resolution_notes || "");
+                            setResolveError(null);
+                          }}
+                          className="h-8 px-2 text-xs font-semibold text-heat-600 hover:text-heat-700"
+                        >
+                          Review
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

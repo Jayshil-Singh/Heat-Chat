@@ -998,6 +998,7 @@ export interface Database {
           reporter_id: string;
           target_type: string;
           target_id: string;
+          category: string;
           reason: string;
           description: string | null;
           status: string;
@@ -1007,12 +1008,17 @@ export interface Database {
           resolved_at: string | null;
           created_at: string;
           updated_at: string;
+          target_user_id: string | null;
+          target_message_id: string | null;
+          target_attachment_id: string | null;
+          target_conversation_id: string | null;
         };
         Insert: {
           id?: string;
           reporter_id: string;
           target_type: string;
           target_id: string;
+          category?: string;
           reason: string;
           description?: string | null;
           status?: string;
@@ -1022,12 +1028,17 @@ export interface Database {
           resolved_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          target_user_id?: string | null;
+          target_message_id?: string | null;
+          target_attachment_id?: string | null;
+          target_conversation_id?: string | null;
         };
         Update: {
           id?: string;
           reporter_id?: string;
           target_type?: string;
           target_id?: string;
+          category?: string;
           reason?: string;
           description?: string | null;
           status?: string;
@@ -1037,11 +1048,58 @@ export interface Database {
           resolved_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          target_user_id?: string | null;
+          target_message_id?: string | null;
+          target_attachment_id?: string | null;
+          target_conversation_id?: string | null;
         };
         Relationships: [
           {
             foreignKeyName: "moderation_reports_reporter_id_fkey";
             columns: ["reporter_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moderation_reports_target_user_id_fkey";
+            columns: ["target_user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      moderation_notes: {
+        Row: {
+          id: string;
+          report_id: string;
+          author_id: string;
+          note: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          author_id: string;
+          note: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          author_id?: string;
+          note?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moderation_notes_report_id_fkey";
+            columns: ["report_id"];
+            referencedRelation: "moderation_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moderation_notes_author_id_fkey";
+            columns: ["author_id"];
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           }
