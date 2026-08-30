@@ -12,6 +12,8 @@ export type MessageType = "text" | "image" | "file";
 export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥";
 export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked";
 export type UserStatus = "online" | "offline" | "away" | "busy";
+export type PresenceStatus = "ONLINE" | "AWAY" | "BUSY" | "OFFLINE" | "INVISIBLE";
+export type PrivacyAudience = "everyone" | "friends" | "friends_of_friends" | "nobody";
 
 export interface Database {
   public: {
@@ -22,9 +24,16 @@ export interface Database {
           username: string;
           display_name: string;
           avatar_url: string | null;
+          cover_url: string | null;
           bio: string | null;
           status: UserStatus;
+          status_message: string | null;
+          status_emoji: string | null;
+          presence_status: PresenceStatus;
           last_seen: string | null;
+          last_seen_at: string | null;
+          timezone: string;
+          language: string;
           created_at: string;
           updated_at: string;
           is_suspended: boolean;
@@ -38,9 +47,16 @@ export interface Database {
           username: string;
           display_name: string;
           avatar_url?: string | null;
+          cover_url?: string | null;
           bio?: string | null;
           status?: UserStatus;
+          status_message?: string | null;
+          status_emoji?: string | null;
+          presence_status?: PresenceStatus;
           last_seen?: string | null;
+          last_seen_at?: string | null;
+          timezone?: string;
+          language?: string;
           created_at?: string;
           updated_at?: string;
           is_suspended?: boolean;
@@ -54,9 +70,16 @@ export interface Database {
           username?: string;
           display_name?: string;
           avatar_url?: string | null;
+          cover_url?: string | null;
           bio?: string | null;
           status?: UserStatus;
+          status_message?: string | null;
+          status_emoji?: string | null;
+          presence_status?: PresenceStatus;
           last_seen?: string | null;
+          last_seen_at?: string | null;
+          timezone?: string;
+          language?: string;
           created_at?: string;
           updated_at?: string;
           is_suspended?: boolean;
@@ -484,6 +507,98 @@ export interface Database {
             foreignKeyName: "starred_messages_message_id_fkey";
             columns: ["message_id"];
             referencedRelation: "messages";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_privacy_settings: {
+        Row: {
+          user_id: string;
+          who_can_message: PrivacyAudience;
+          who_can_friend_request: PrivacyAudience;
+          who_can_see_profile: PrivacyAudience;
+          who_can_see_avatar: PrivacyAudience;
+          who_can_see_status: PrivacyAudience;
+          who_can_see_online: PrivacyAudience;
+          who_can_see_last_seen: PrivacyAudience;
+          who_can_add_to_groups: PrivacyAudience;
+          who_can_call: PrivacyAudience;
+          read_receipts_enabled: boolean;
+          typing_indicators_enabled: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          who_can_message?: PrivacyAudience;
+          who_can_friend_request?: PrivacyAudience;
+          who_can_see_profile?: PrivacyAudience;
+          who_can_see_avatar?: PrivacyAudience;
+          who_can_see_status?: PrivacyAudience;
+          who_can_see_online?: PrivacyAudience;
+          who_can_see_last_seen?: PrivacyAudience;
+          who_can_add_to_groups?: PrivacyAudience;
+          who_can_call?: PrivacyAudience;
+          read_receipts_enabled?: boolean;
+          typing_indicators_enabled?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          who_can_message?: PrivacyAudience;
+          who_can_friend_request?: PrivacyAudience;
+          who_can_see_profile?: PrivacyAudience;
+          who_can_see_avatar?: PrivacyAudience;
+          who_can_see_status?: PrivacyAudience;
+          who_can_see_online?: PrivacyAudience;
+          who_can_see_last_seen?: PrivacyAudience;
+          who_can_add_to_groups?: PrivacyAudience;
+          who_can_call?: PrivacyAudience;
+          read_receipts_enabled?: boolean;
+          typing_indicators_enabled?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_privacy_settings_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      blocked_users: {
+        Row: {
+          id: string;
+          user_id: string;
+          blocked_user_id: string;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          blocked_user_id: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          blocked_user_id?: string;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "blocked_users_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "blocked_users_blocked_user_id_fkey";
+            columns: ["blocked_user_id"];
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           }
         ];
@@ -1344,3 +1459,31 @@ export type NotificationPreference = Database["public"]["Tables"]["notification_
 export type ConversationNotificationPreference = Database["public"]["Tables"]["conversation_notification_preferences"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type StarredMessage = Database["public"]["Tables"]["starred_messages"]["Row"];
+export type UserPrivacySettings = Database["public"]["Tables"]["user_privacy_settings"]["Row"];
+export type BlockedUser = Database["public"]["Tables"]["blocked_users"]["Row"];
+
+export interface PublicProfileDto {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  bio: string | null;
+  statusMessage: string | null;
+  statusEmoji: string | null;
+  presenceStatus: PresenceStatus;
+  lastSeenAt: string | null;
+  timezone: string | null;
+  language: string | null;
+  isSelf: boolean;
+  isFriend: boolean;
+  isBlocked: boolean;
+  hasBlockedViewer: boolean;
+  canMessage: boolean;
+  canFriendRequest: boolean;
+}
+
+export interface OwnProfileDto extends Profile {
+  privacy_settings?: UserPrivacySettings;
+}
+

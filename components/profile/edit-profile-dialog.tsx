@@ -114,12 +114,12 @@ export function EditProfileDialog({
 
     const nameErr = validateDisplayName(displayName);
     const userErr = validateUsername(username);
-    const bioErr = validateBio(bio);
+    const bioValidation = validateBio(bio);
 
     const validationErrors: Record<string, string> = {};
     if (nameErr) validationErrors.displayName = nameErr;
     if (userErr) validationErrors.username = userErr;
-    if (bioErr) validationErrors.bio = bioErr;
+    if (!bioValidation.isValid && bioValidation.error) validationErrors.bio = bioValidation.error;
     if (usernameStatus === "taken") {
       validationErrors.username = "That username is already taken.";
     }
