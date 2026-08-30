@@ -3,10 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ username: string }> }
 ) {
   try {
-    const { id: targetId } = await params;
+    const { username: targetId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -71,17 +71,17 @@ export async function POST(
       targetId,
     });
   } catch (err: any) {
-    console.error("[Heat Chat] POST /api/users/[id]/block error:", err);
+    console.error("[Heat Chat] POST /api/users/[username]/block error:", err);
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ username: string }> }
 ) {
   try {
-    const { id: targetId } = await params;
+    const { username: targetId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -109,7 +109,7 @@ export async function DELETE(
       targetId,
     });
   } catch (err: any) {
-    console.error("[Heat Chat] DELETE /api/users/[id]/block error:", err);
+    console.error("[Heat Chat] DELETE /api/users/[username]/block error:", err);
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
   }
 }
