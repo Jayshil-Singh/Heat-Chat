@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/use-auth";
-import { useFriends } from "@/hooks/use-friends";
+import { useFriendsContext } from "@/hooks/use-friends-context";
 import { usePresence } from "@/hooks/use-presence";
 import { useGroupManagement } from "@/hooks/use-group-management";
 import type { ConversationWithDetails, ConversationMemberWithProfile } from "@/types/chat";
@@ -43,7 +43,7 @@ export function GroupDetailsDialog({
   const router = useRouter();
   const { user } = useAuth();
   const { isUserOnline } = usePresence();
-  const { friends } = useFriends();
+  const { friends } = useFriendsContext();
   const {
     isLoading: isActionLoading,
     error: actionError,

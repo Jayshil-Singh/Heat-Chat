@@ -15,7 +15,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { useSearch } from "@/hooks/use-search";
 import { useConversations } from "@/hooks/use-conversations";
-import { useFriends } from "@/hooks/use-friends";
+import { useFriendsContext } from "@/hooks/use-friends-context";
 import type { GlobalSearchResult, ConversationWithDetails, FriendItem } from "@/types/chat";
 
 interface CommandPaletteProps {
@@ -31,7 +31,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const { globalQuery, globalResults, isGlobalSearching, searchGlobal, clearGlobalSearch } =
     useSearch();
   const { conversations } = useConversations();
-  const { friends } = useFriends();
+  const { friends } = useFriendsContext();
 
   const [selectedIndex, setSelectedIndex] = React.useState(0);
 

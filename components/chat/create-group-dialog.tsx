@@ -6,7 +6,7 @@ import { X, Users, Search, Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
-import { useFriends } from "@/hooks/use-friends";
+import { useFriendsContext } from "@/hooks/use-friends-context";
 import { useConversations } from "@/hooks/use-conversations";
 
 interface CreateGroupDialogProps {
@@ -21,7 +21,7 @@ export function CreateGroupDialog({
   onGroupCreated,
 }: CreateGroupDialogProps) {
   const router = useRouter();
-  const { friends, isLoading: isFriendsLoading } = useFriends();
+  const { friends, isLoading: isFriendsLoading } = useFriendsContext();
   const { createGroup } = useConversations();
 
   const [groupName, setGroupName] = React.useState("");

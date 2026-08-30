@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, UserCheck, Sparkles, Clock, Check, X, Loader2 } from "lucide-react";
-import { useFriends } from "@/hooks/use-friends";
+import { useFriendsContext } from "@/hooks/use-friends-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,7 @@ export default function FriendRequestsPage() {
     acceptFriendRequest,
     declineFriendRequest,
     cancelFriendRequest,
-  } = useFriends();
+  } = useFriendsContext();
 
   const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
 

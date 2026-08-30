@@ -246,46 +246,46 @@ export function useNotifications(currentActiveConversationId?: string | null) {
   React.useEffect(() => {
     if (!user?.id) return;
 
+    // IMPORTANT: All .on() handlers MUST be chained BEFORE .subscribe().
+    // Never call .on() on a channel that has already been subscribed.
     const channelName = `user-notifs-${user.id}`;
-    const channel = supabase.channel(channelName);
-
-    channel.on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${user.id}`,
-      },
-      (payload) => {
-        if (payload.new) {
-          handleIncomingNotification(payload.new as Notification);
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            handleIncomingNotification(payload.new as Notification);
+          }
         }
-      }
-    );
-
-    channel.on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${user.id}`,
-      },
-      (payload) => {
-        if (payload.new) {
-          const updated = payload.new as Notification;
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === updated.id ? { ...n, readAt: updated.read_at } : n))
-          );
-          setUnreadCount((prev) =>
-            Math.max(0, prev - (updated.read_at ? 1 : 0))
-          );
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            const updated = payload.new as Notification;
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === updated.id ? { ...n, readAt: updated.read_at } : n))
+            );
+            setUnreadCount((prev) =>
+              Math.max(0, prev - (updated.read_at ? 1 : 0))
+            );
+          }
         }
-      }
-    );
-
-    channel.subscribe();
+      )
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);

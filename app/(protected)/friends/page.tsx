@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Users, UserPlus, UserCheck, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useFriends } from "@/hooks/use-friends";
+import { useFriendsContext } from "@/hooks/use-friends-context";
 import { useConversations } from "@/hooks/use-conversations";
 import { FriendsTab } from "@/components/friends/friends-tab";
 import { RequestsTab } from "@/components/friends/requests-tab";
@@ -28,7 +28,7 @@ export default function FriendsPage() {
     cancelFriendRequest,
     removeFriend,
     getRelationshipStatus,
-  } = useFriends();
+  } = useFriendsContext();
 
   const { getOrCreateDirectChat } = useConversations();
 
