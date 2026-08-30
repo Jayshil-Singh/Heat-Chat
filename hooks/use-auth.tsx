@@ -176,6 +176,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted) return;
 
+      if (event === "PASSWORD_RECOVERY") {
+        setSession(newSession);
+        setUser(newSession?.user || null);
+        setStatus("authenticated-verified");
+        if (
+          typeof window !== "undefined" &&
+          !window.location.pathname.startsWith("/update-password")
+        ) {
+          window.location.href = `/update-password${window.location.hash}`;
+          return;
+        }
+      }
+
       if (event === "SIGNED_OUT" || !newSession?.user) {
         setSession(null);
         setUser(null);

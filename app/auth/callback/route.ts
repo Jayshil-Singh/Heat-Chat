@@ -10,10 +10,14 @@ export async function GET(request: NextRequest) {
   const error = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
 
+  // Validate next path to prevent open redirect vulnerabilities
+  const safeNext =
+    next && next.startsWith("/") && !next.startsWith("//") ? next : "";
+
   const isPasswordRecovery =
-    next === "/update-password" ||
-    type === "recovery" ||
-    next.includes("/update-password");
+    safeNext === "/update-password" ||
+    safeNext.startsWith("/update-password") ||
+    type === "recovery";
 
   // If Supabase redirected back with an error (e.g. token expired)
   if (error || errorDescription) {
@@ -85,8 +89,8 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut();
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("verified", "true");
-    if (next && next !== "/chat") {
-      loginUrl.searchParams.set("redirectTo", next);
+    if (safeNext && safeNext !== "/chat" && safeNext !== "/") {
+      loginUrl.searchParams.set("redirectTo", safeNext);
     }
     return NextResponse.redirect(loginUrl);
   }

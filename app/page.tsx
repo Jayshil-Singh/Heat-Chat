@@ -26,6 +26,17 @@ import { useAuth } from "@/hooks/use-auth";
 export default function HomePage() {
   const { user, profile, isLoading, isEmailVerified } = useAuth();
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (
+        window.location.hash.includes("type=recovery") ||
+        window.location.search.includes("type=recovery")
+      ) {
+        window.location.href = `/update-password${window.location.hash || window.location.search}`;
+      }
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 selection:bg-heat-500 selection:text-white dark:bg-zinc-950 dark:text-zinc-50 flex flex-col justify-between">
       {/* Background Ambient Glows */}
