@@ -74,7 +74,7 @@ export function useMessages(conversationId: string | null) {
       const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
 
       // Batch-fetch all enrichment data in parallel
-      const [profilesRes, readsRes, reactionsRes, attachmentsRes, pinsRes, hiddenRes] = await Promise.all([
+      const [profilesRes, readsRes, reactionsRes, attachmentsRes, pinsRes, hiddenRes, deliveriesRes] = await Promise.all([
         supabase.from("profiles").select("*").in("id", senderIds),
         supabase
           .from("message_reads")
@@ -98,6 +98,10 @@ export function useMessages(conversationId: string | null) {
               .eq("user_id", user.id)
               .in("message_id", messageIds)
           : Promise.resolve({ data: [] }),
+        supabase
+          .from("message_delivery_states")
+          .select("message_id, user_id")
+          .in("message_id", messageIds),
       ]);
 
       const hiddenIds = new Set((hiddenRes.data || []).map((h) => h.message_id));
@@ -113,6 +117,13 @@ export function useMessages(conversationId: string | null) {
         const list = readsMap.get(r.message_id) || [];
         list.push(r.user_id);
         readsMap.set(r.message_id, list);
+      });
+
+      const deliveriesMap = new Map<string, string[]>();
+      (deliveriesRes.data || []).forEach((d) => {
+        const list = deliveriesMap.get(d.message_id) || [];
+        list.push(d.user_id);
+        deliveriesMap.set(d.message_id, list);
       });
 
       const reactionsMap = buildReactionsMap(
@@ -220,11 +231,19 @@ export function useMessages(conversationId: string | null) {
                 };
           }
 
+          const reads = readsMap.get(m.id) || [];
+          const deliveries = deliveriesMap.get(m.id) || [];
+          let status: import("@/types/chat").MessageStatus | undefined = undefined;
+          if (m.sender_id === user?.id) {
+            status = reads.length > 0 ? "read" : deliveries.length > 0 ? "delivered" : "sent";
+          }
+
           return {
             ...m,
             sender: profilesMap.get(m.sender_id) || null,
-            status: m.sender_id === user?.id ? "sent" : undefined,
-            readBy: readsMap.get(m.id) || [],
+            status,
+            readBy: reads,
+            deliveredTo: deliveries,
             reactions: reactionsMap.get(m.id) || [],
             replyPreview,
             attachments: m.deleted_at ? [] : attachmentsMap.get(m.id) || [],
@@ -397,16 +416,28 @@ export function useMessages(conversationId: string | null) {
         ];
       });
 
-      // Mark incoming message as read
+      // Record delivered & read for recipient
       if (newMsg.sender_id !== user?.id && user?.id) {
-        await supabase.from("message_reads").upsert(
-          {
-            message_id: newMsg.id,
-            user_id: user.id,
-            read_at: new Date().toISOString(),
-          },
-          { onConflict: "message_id,user_id", ignoreDuplicates: true }
-        );
+        // Trigger mark_message_delivered RPC
+        try {
+          await supabase.rpc("mark_message_delivered", {
+            p_message_id: newMsg.id,
+          });
+        } catch (err) {
+          console.warn("[Heat Chat] mark_message_delivered error:", err);
+        }
+
+        // Mark incoming message as read since conversation is actively mounted
+        try {
+          await supabase.from("message_reads").upsert(
+            {
+              message_id: newMsg.id,
+              user_id: user.id,
+              read_at: new Date().toISOString(),
+            },
+            { onConflict: "message_id,user_id", ignoreDuplicates: true }
+          );
+        } catch {}
       }
     },
     [conversationId, user?.id, enrichMessages, supabase]
@@ -1156,6 +1187,66 @@ export function useMessages(conversationId: string | null) {
     }
   };
 
+  // ─── Draft Management ───────────────────────────────────────────────────────
+
+  const [initialDraft, setInitialDraft] = React.useState<{
+    content: string;
+    reply_to_message_id?: string | null;
+  } | null>(null);
+
+  const fetchDraft = React.useCallback(async () => {
+    if (!conversationId) {
+      setInitialDraft(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/draft`);
+      const data = await res.json();
+      if (res.ok && data?.draft) {
+        setInitialDraft(data.draft);
+      } else {
+        setInitialDraft(null);
+      }
+    } catch {
+      setInitialDraft(null);
+    }
+  }, [conversationId]);
+
+  React.useEffect(() => {
+    fetchDraft();
+  }, [fetchDraft]);
+
+  const saveDraft = React.useCallback(
+    async (content: string, replyToMessageId?: string | null) => {
+      if (!conversationId) return;
+      try {
+        await fetch(`/api/conversations/${conversationId}/draft`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content,
+            replyToMessageId: replyToMessageId || null,
+          }),
+        });
+      } catch (err) {
+        console.warn("[Heat Chat] saveDraft error:", err);
+      }
+    },
+    [conversationId]
+  );
+
+  const deleteDraft = React.useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      await fetch(`/api/conversations/${conversationId}/draft`, {
+        method: "DELETE",
+      });
+      setInitialDraft(null);
+    } catch (err) {
+      console.warn("[Heat Chat] deleteDraft error:", err);
+    }
+  }, [conversationId]);
+
   return {
     messages,
     isLoading,
@@ -1165,6 +1256,9 @@ export function useMessages(conversationId: string | null) {
     connectionStatus,
     pins,
     pinnedCount: pins.length,
+    initialDraft,
+    saveDraft,
+    deleteDraft,
     sendMessage,
     sendReply,
     retryMessage,

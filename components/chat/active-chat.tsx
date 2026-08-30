@@ -13,6 +13,7 @@ import { MessageComposer } from "./message-composer";
 import { InChatSearch } from "./in-chat-search";
 import { StarredMessagesDialog } from "./starred-messages-dialog";
 import { PinnedMessagesPanel } from "@/components/messages/pinned-messages-panel";
+import { MessageForwardDialog } from "@/components/messages/message-forward-dialog";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails, ChatMessage, ReplyPreviewData } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
@@ -42,6 +43,9 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     connectionStatus,
     pins,
     pinnedCount,
+    initialDraft,
+    saveDraft,
+    deleteDraft,
     sendMessage,
     sendReply,
     retryMessage,
@@ -82,6 +86,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
 
   const [showStarredDialog, setShowStarredDialog] = React.useState(false);
   const [showPinnedPanel, setShowPinnedPanel] = React.useState(false);
+  const [forwardingMessage, setForwardingMessage] = React.useState<ChatMessage | null>(null);
 
   // ── In-Chat Search ────────────────────────────────────────────────────────
   const [showInChatSearch, setShowInChatSearch] = React.useState(false);
@@ -100,7 +105,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
   // ── Reply state ───────────────────────────────────────────────────────────
   const [replyTo, setReplyTo] = React.useState<ReplyPreviewData | null>(null);
 
-  // ── Edit state ────────────────────────────────────────────────────────────
+  // ── Edit state ────────────────────────────────────────────────────
   const [editingMessage, setEditingMessage] =
     React.useState<ChatMessage | null>(null);
 
@@ -143,10 +148,17 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     stopTyping();
     if (replyTo) {
       const res = await sendReply(content, replyTo.messageId, stagedAttachments);
-      if (res.success) setReplyTo(null);
+      if (res.success) {
+        setReplyTo(null);
+        deleteDraft();
+      }
       return res;
     }
-    return sendMessage(content, null, stagedAttachments);
+    const res = await sendMessage(content, null, stagedAttachments);
+    if (res.success) {
+      deleteDraft();
+    }
+    return res;
   };
 
   /** Save an edit — called by MessageComposer in edit mode */
@@ -270,11 +282,11 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         onDeleteForMe={deleteMessageForMe}
         onDeleteForEveryone={deleteMessageForEveryone}
         onTogglePin={togglePin}
-        onForwardMessage={(msg) => {}}
+        onForwardMessage={(msg) => setForwardingMessage(msg)}
         onToggleStar={toggleStar}
       />
 
-      {/* Message Composer (handles reply banner + edit mode) */}
+      {/* Message Composer (handles reply banner + edit mode + draft autosave) */}
       <MessageComposer
         onSendMessage={handleSendMessage}
         onTyping={sendTyping}
@@ -283,6 +295,9 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         editingMessage={editingMessage}
         onSaveEdit={handleSaveEdit}
         onCancelEdit={handleCancelEdit}
+        initialDraft={initialDraft}
+        onSaveDraft={saveDraft}
+        onDeleteDraft={deleteDraft}
       />
 
       {/* Starred Messages Modal Dialog */}
@@ -294,6 +309,14 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         activeConversationId={conversation.id}
         onUnstar={toggleStar}
         onJumpToMessage={handleJumpToMessage}
+      />
+
+      {/* Forward Message Modal Dialog */}
+      <MessageForwardDialog
+        isOpen={!!forwardingMessage}
+        onClose={() => setForwardingMessage(null)}
+        messageId={forwardingMessage?.id || ""}
+        messageContent={forwardingMessage?.content}
       />
     </div>
   );

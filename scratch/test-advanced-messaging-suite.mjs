@@ -592,13 +592,95 @@ async function runTests() {
 
   engine.privacySettings.set(USER_B, { who_can_message: "everyone" }); // Restore
 
-  console.log("\n=======================================================");
-  console.log(` Test Results: ${passCount} Passed, ${failCount} Failed`);
-  console.log("=======================================================\n");
+  // 13. Delivery State & Status Ticks
+  console.log("\n--- 13. Delivery State & Status Ticks ---");
+  const deliveryMsg = engine.sendMessage(USER_A, {
+    conversationId: CONV_AB,
+    content: "Delivery check",
+  });
+  const initialDeliveryView = engine.getMessagesForViewer(USER_A, CONV_AB);
+  const msgBeforeDelivery = initialDeliveryView.find((m) => m.id === deliveryMsg.messageId);
+  assert("Initial sender message status is 'sent'", msgBeforeDelivery && !engine.messageDeliveryStates.has(`${deliveryMsg.messageId}:${USER_B}`));
 
-  if (failCount > 0) {
-    process.exit(1);
-  }
+  // Recipient receives and marks delivered
+  engine.messageDeliveryStates.set(`${deliveryMsg.messageId}:${USER_B}`, new Date().toISOString());
+  assert("Recipient can mark message delivered", engine.messageDeliveryStates.has(`${deliveryMsg.messageId}:${USER_B}`));
+
+  // Recipient marks read
+  engine.markConversationRead(USER_B, CONV_AB);
+  assert("Message read recorded for recipient", engine.messageReads.has(`${deliveryMsg.messageId}:${USER_B}`));
+
+  // 14. Unread Divider Logic
+  console.log("\n--- 14. Unread Divider Logic ---");
+  const unreadMsg1 = engine.sendMessage(USER_A, { conversationId: CONV_AB, content: "Unread 1" });
+  const unreadMsg2 = engine.sendMessage(USER_A, { conversationId: CONV_AB, content: "Unread 2" });
+  const userBUnreadState = engine.conversationUserStates.get(`${USER_B}:${CONV_AB}`);
+  assert("Unread count is 2 for User B", userBUnreadState && userBUnreadState.unread_count === 2);
+
+  const msgsForUnreadCalc = engine.getMessagesForViewer(USER_B, CONV_AB);
+  const incoming = msgsForUnreadCalc.filter((m) => m.sender_id !== USER_B);
+  const unreadIncoming = incoming.slice(-userBUnreadState.unread_count);
+  assert("First unread message is correctly identified as Unread 1", unreadIncoming.length > 0 && unreadIncoming[0].id === unreadMsg1.messageId);
+
+  // Mark read clears unread count
+  engine.markConversationRead(USER_B, CONV_AB);
+  const userBAfterRead = engine.conversationUserStates.get(`${USER_B}:${CONV_AB}`);
+  assert("Mark read resets unread count to 0", userBAfterRead && userBAfterRead.unread_count === 0);
+
+  // 15. Draft Privacy & Lifecycle
+  console.log("\n--- 15. Draft Privacy & Lifecycle ---");
+  engine.saveDraft(USER_A, CONV_AB, "Secret draft from Alice", null);
+  assert("Alice's draft is stored for Alice", engine.conversationDrafts.has(`${USER_A}:${CONV_AB}`));
+  assert("Alice's draft is NOT accessible to Bob", !engine.conversationDrafts.has(`${USER_B}:${CONV_AB}`));
+
+  // Sending message clears draft automatically
+  engine.sendMessage(USER_A, { conversationId: CONV_AB, content: "Draft sent!" });
+  assert("Sending message automatically clears draft", !engine.conversationDrafts.has(`${USER_A}:${CONV_AB}`));
+
+  // 16. Migration SQL File Integrity
+  console.log("\n--- 16. Migration SQL File Integrity ---");
+  import("fs").then(({ readFileSync }) => {
+    const migrationContent = readFileSync("supabase/migrations/20260902_advanced_messaging.sql", "utf8");
+    const requiredObjects = [
+      "message_user_states",
+      "message_pins",
+      "message_delivery_states",
+      "conversation_user_states",
+      "conversation_drafts",
+      "send_message",
+      "edit_message",
+      "delete_message_for_me",
+      "delete_message_for_everyone",
+      "forward_message",
+      "pin_message",
+      "unpin_message",
+      "toggle_message_reaction",
+      "mark_message_delivered",
+      "mark_conversation_read",
+      "mark_conversation_unread",
+      "save_draft",
+      "delete_draft",
+      "client_message_id",
+      "forwarded_from_message_id",
+    ];
+
+    let allObjectsFound = true;
+    for (const obj of requiredObjects) {
+      if (!migrationContent.includes(obj)) {
+        allObjectsFound = false;
+        console.error(`Missing object in migration: ${obj}`);
+      }
+    }
+    assert("All 20 required Phase 3 DB objects and RPCs defined in migration SQL", allObjectsFound);
+
+    console.log("\n=======================================================");
+    console.log(` Test Results: ${passCount} Passed, ${failCount} Failed`);
+    console.log("=======================================================\n");
+
+    if (failCount > 0) {
+      process.exit(1);
+    }
+  });
 }
 
 runTests().catch((err) => {

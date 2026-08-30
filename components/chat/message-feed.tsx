@@ -103,6 +103,21 @@ export const MessageFeed = React.forwardRef<
   const isInitialLoadRef = React.useRef<boolean>(true);
   const highlightTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Freeze the first unread message ID on initial load so realtime messages don't jump the divider
+  const [initialFirstUnreadId, setInitialFirstUnreadId] = React.useState<string | null>(null);
+  const calculatedUnreadRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!calculatedUnreadRef.current && messages.length > 0 && unreadCount > 0) {
+      calculatedUnreadRef.current = true;
+      const incoming = messages.filter((m) => m.sender_id !== currentUserId);
+      const unreadIncoming = incoming.slice(-unreadCount);
+      if (unreadIncoming.length > 0) {
+        setInitialFirstUnreadId(unreadIncoming[0].id);
+      }
+    }
+  }, [messages, unreadCount, currentUserId]);
+
   // ── Helper: highlight a message element ──────────────────────────────────
 
   const highlightElement = React.useCallback((messageId: string) => {
@@ -318,6 +333,9 @@ export const MessageFeed = React.forwardRef<
 
               return (
                 <React.Fragment key={msg.id || msg.tempId}>
+                  {msg.id === initialFirstUnreadId && (
+                    <UnreadDivider count={unreadCount} />
+                  )}
                   <MessageItem
                     message={msg}
                     isCurrentUser={msg.sender_id === currentUserId}

@@ -48,6 +48,7 @@ export interface ChatMessage extends Message {
   status?: MessageStatus;
   tempId?: string;
   readBy?: string[];
+  deliveredTo?: string[];
   reactions?: ReactionSummary[];
   replyPreview?: ReplyPreviewData | null;
   attachments?: AttachmentWithUrl[];

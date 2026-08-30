@@ -81,14 +81,13 @@ export function MessageItem({
   onToggleStar,
   onScrollToMessage,
 }: MessageItemProps) {
-  const [showForwardDialog, setShowForwardDialog] = React.useState(false);
   const [showReportDialog, setShowReportDialog] = React.useState(false);
-
   const timeFormatted = formatMessageTime(message.created_at);
   const isFailed = message.status === "failed";
   const isSending = message.status === "sending";
   const isDeleted = !!message.deleted_at;
   const isRead = (message.readBy || []).length > 0;
+  const isDelivered = (message.deliveredTo || []).length > 0 || message.status === "delivered";
   const edited = isMessageEdited(message);
   const isTemp = !!message.tempId;
   const isForwarded = !!message.forwarded_from_message_id;
@@ -267,7 +266,12 @@ export function MessageItem({
                     <CheckCheck className="h-3.5 w-3.5 text-white" />
                   </span>
                 )}
-                {!isSending && !isFailed && !isRead && (
+                {!isSending && !isFailed && !isRead && isDelivered && (
+                  <span title="Delivered">
+                    <CheckCheck className="h-3.5 w-3.5 text-white/70" />
+                  </span>
+                )}
+                {!isSending && !isFailed && !isRead && !isDelivered && (
                   <span title="Sent">
                     <Check className="h-3 w-3 text-white/90" />
                   </span>
@@ -302,10 +306,7 @@ export function MessageItem({
                   ? () => onDeleteForEveryone(message.id)
                   : undefined
               }
-              onForward={() => {
-                if (onForward) onForward(message);
-                setShowForwardDialog(true);
-              }}
+              onForward={() => onForward && onForward(message)}
               onTogglePin={() => onTogglePin && onTogglePin(message.id)}
               onToggleStar={() => onToggleStar && onToggleStar(message.id)}
               onReport={() => setShowReportDialog(true)}
@@ -338,14 +339,6 @@ export function MessageItem({
           <span>Failed to send. Tap to retry.</span>
         </button>
       )}
-
-      {/* Forward Dialog Modal */}
-      <MessageForwardDialog
-        isOpen={showForwardDialog}
-        onClose={() => setShowForwardDialog(false)}
-        messageId={message.id}
-        messageContent={message.content}
-      />
 
       {/* Report Message Modal */}
       <ReportDialog

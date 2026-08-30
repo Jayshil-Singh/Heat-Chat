@@ -30,6 +30,10 @@ interface MessageComposerProps {
     content: string
   ) => Promise<{ success: boolean; error?: string }>;
   onCancelEdit?: () => void;
+  /** Draft autosave & restore */
+  initialDraft?: { content: string; reply_to_message_id?: string | null } | null;
+  onSaveDraft?: (content: string, replyToMessageId?: string | null) => void;
+  onDeleteDraft?: () => void;
 }
 
 export function MessageComposer({
@@ -41,6 +45,9 @@ export function MessageComposer({
   editingMessage,
   onSaveEdit,
   onCancelEdit,
+  initialDraft,
+  onSaveDraft,
+  onDeleteDraft,
 }: MessageComposerProps) {
   const [content, setContent] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -63,9 +70,44 @@ export function MessageComposer({
   // Draft storage — preserves the in-progress text when edit mode is entered/left
   const draftRef = React.useRef<string>("");
   const contentRef = React.useRef<string>("");
+  const draftTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRestoredRef = React.useRef(false);
+
   React.useEffect(() => {
     contentRef.current = content;
   }, [content]);
+
+  // Restore initial draft when conversation loads
+  React.useEffect(() => {
+    if (initialDraft?.content && !content && !editingMessage && !draftRestoredRef.current) {
+      setContent(initialDraft.content);
+      draftRestoredRef.current = true;
+    }
+  }, [initialDraft?.content, content, editingMessage]);
+
+  // Debounced server draft autosave (~750ms of inactivity)
+  React.useEffect(() => {
+    if (editingMessage) return; // Never overwrite drafts with message edit content
+
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+    }
+
+    draftTimerRef.current = setTimeout(() => {
+      const trimmed = content.trim();
+      if (trimmed) {
+        onSaveDraft?.(trimmed, replyTo?.messageId || null);
+      } else if (onDeleteDraft) {
+        onDeleteDraft();
+      }
+    }, 750);
+
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+      }
+    };
+  }, [content, replyTo?.messageId, editingMessage, onSaveDraft, onDeleteDraft]);
 
   // Enter / leave edit mode
   React.useEffect(() => {
@@ -218,6 +260,10 @@ export function MessageComposer({
         // Normal send or reply (with optional attachments)
         const res = await onSendMessage(trimmed, readyAttachments);
         if (res.success) {
+          if (draftTimerRef.current) {
+            clearTimeout(draftTimerRef.current);
+          }
+          onDeleteDraft?.();
           setContent("");
           clearAttachments();
           if (textareaRef.current) {
