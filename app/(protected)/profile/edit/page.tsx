@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   AtSign,
@@ -10,13 +11,16 @@ import {
   Globe,
   Languages,
   MessageSquare,
+  ArrowLeft,
   AlertTriangle,
 } from "lucide-react";
-import { Dialog } from "@/components/ui/dialog";
+import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AvatarUpload } from "./avatar-upload";
-import { CoverUpload } from "./cover-upload";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AvatarUpload } from "@/components/profile/avatar-upload";
+import { CoverUpload } from "@/components/profile/cover-upload";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { sanitizeUsername } from "@/lib/validation/auth";
@@ -27,15 +31,7 @@ import {
   validateStatusMessage,
   validateStatusEmoji,
 } from "@/lib/validation/profile";
-import type { Profile, PresenceStatus } from "@/types/database";
-
-interface EditProfileDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  profile: Profile | null;
-  userId: string;
-  onProfileUpdated: () => Promise<void>;
-}
+import type { PresenceStatus } from "@/types/database";
 
 const PRESENCE_OPTIONS: { value: PresenceStatus; label: string; color: string }[] = [
   { value: "ONLINE", label: "Online", color: "bg-emerald-500" },
@@ -52,28 +48,22 @@ const LANGUAGE_OPTIONS = [
   { value: "ja", label: "日本語 (ja)" },
 ];
 
-export function EditProfileDialog({
-  isOpen,
-  onClose,
-  profile,
-  userId,
-  onProfileUpdated,
-}: EditProfileDialogProps) {
-  // Form Fields
-  const [displayName, setDisplayName] = React.useState(profile?.display_name || "");
-  const [username, setUsername] = React.useState(profile?.username || "");
-  const [bio, setBio] = React.useState(profile?.bio || "");
-  const [statusEmoji, setStatusEmoji] = React.useState<string | null>(profile?.status_emoji || null);
-  const [statusMessage, setStatusMessage] = React.useState(profile?.status_message || "");
-  const [presenceStatus, setPresenceStatus] = React.useState<PresenceStatus>(
-    (profile?.presence_status as PresenceStatus) || "ONLINE"
-  );
-  const [timezone, setTimezone] = React.useState(profile?.timezone || "UTC");
-  const [language, setLanguage] = React.useState(profile?.language || "en");
-  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(profile?.avatar_url || null);
-  const [coverUrl, setCoverUrl] = React.useState<string | null>(profile?.cover_url || null);
+export default function EditProfilePage() {
+  const { user, profile, refreshProfile, isLoading } = useAuth();
+  const router = useRouter();
 
-  // Initial state reference for dirty checking
+  // Form Fields
+  const [displayName, setDisplayName] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [bio, setBio] = React.useState("");
+  const [statusEmoji, setStatusEmoji] = React.useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = React.useState("");
+  const [presenceStatus, setPresenceStatus] = React.useState<PresenceStatus>("ONLINE");
+  const [timezone, setTimezone] = React.useState("UTC");
+  const [language, setLanguage] = React.useState("en");
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
+
   const initialStateRef = React.useRef({
     displayName: "",
     username: "",
@@ -92,21 +82,22 @@ export function EditProfileDialog({
   const [isSaving, setIsSaving] = React.useState(false);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
+  const [isLoaded, setIsLoaded] = React.useState(false);
 
-  // Sync state when dialog opens or profile changes
+  // Sync state from profile
   React.useEffect(() => {
-    if (isOpen) {
+    if (profile && !isLoaded) {
       const initial = {
-        displayName: profile?.display_name || "",
-        username: profile?.username || "",
-        bio: profile?.bio || "",
-        statusEmoji: profile?.status_emoji || null,
-        statusMessage: profile?.status_message || "",
-        presenceStatus: ((profile?.presence_status as PresenceStatus) || "ONLINE"),
-        timezone: profile?.timezone || "UTC",
-        language: profile?.language || "en",
-        avatarUrl: profile?.avatar_url || null,
-        coverUrl: profile?.cover_url || null,
+        displayName: profile.display_name || "",
+        username: profile.username || "",
+        bio: profile.bio || "",
+        statusEmoji: profile.status_emoji || null,
+        statusMessage: profile.status_message || "",
+        presenceStatus: (profile.presence_status as PresenceStatus) || "ONLINE",
+        timezone: profile.timezone || "UTC",
+        language: profile.language || "en",
+        avatarUrl: profile.avatar_url || null,
+        coverUrl: profile.cover_url || null,
       };
 
       initialStateRef.current = initial;
@@ -121,12 +112,9 @@ export function EditProfileDialog({
       setLanguage(initial.language);
       setAvatarUrl(initial.avatarUrl);
       setCoverUrl(initial.coverUrl);
-      setErrors({});
-      setUsernameStatus("idle");
-      setSuccessMessage(null);
-      setShowDiscardConfirm(false);
+      setIsLoaded(true);
     }
-  }, [profile, isOpen]);
+  }, [profile, isLoaded]);
 
   // Compute dirty state
   const isDirty = React.useMemo(() => {
@@ -156,17 +144,12 @@ export function EditProfileDialog({
     coverUrl,
   ]);
 
-  const handleCloseRequest = () => {
+  const handleBack = () => {
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
-      onClose();
+      router.push("/profile");
     }
-  };
-
-  const handleConfirmDiscard = () => {
-    setShowDiscardConfirm(false);
-    onClose();
   };
 
   // Debounced username availability check
@@ -191,7 +174,7 @@ export function EditProfileDialog({
           setUsernameStatus("available");
         } else if (res.ok) {
           const data = await res.json();
-          if (data.profile && data.profile.id !== userId) {
+          if (data.profile && data.profile.id !== user?.id) {
             setUsernameStatus("taken");
           } else {
             setUsernameStatus("available");
@@ -205,7 +188,7 @@ export function EditProfileDialog({
     }, 400);
 
     return () => clearTimeout(timeoutId);
-  }, [username, profile?.username, userId]);
+  }, [username, profile?.username, user?.id]);
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const clean = sanitizeUsername(e.target.value);
@@ -217,7 +200,6 @@ export function EditProfileDialog({
     setErrors({});
     setSuccessMessage(null);
 
-    // Validate fields
     const nameValidation = validateDisplayName(displayName);
     const userValidation = validateUsername(username);
     const bioValidation = validateBio(bio);
@@ -274,11 +256,11 @@ export function EditProfileDialog({
       }
 
       setSuccessMessage("Profile updated successfully.");
-      await onProfileUpdated();
+      await refreshProfile();
 
       setTimeout(() => {
-        onClose();
-      }, 800);
+        router.push("/profile");
+      }, 1000);
     } catch {
       setErrors({ general: "A network error occurred. Please try again." });
     } finally {
@@ -286,51 +268,79 @@ export function EditProfileDialog({
     }
   };
 
+  if (isLoading || !user) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+        <Skeleton className="h-8 w-48 rounded-lg" />
+        <Skeleton className="h-44 w-full rounded-3xl" />
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <Dialog
-        isOpen={isOpen}
-        onClose={handleCloseRequest}
-        title="Edit Profile"
-        description="Update your profile photo, cover, display name, presence, and public details."
-        className="max-w-lg"
-        footer={
-          <div className="flex w-full flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
-            <Button
-              type="button"
-              variant="secondary"
-              size="default"
-              onClick={handleCloseRequest}
-              disabled={isSaving}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="edit-profile-form"
-              variant="heat"
-              size="default"
-              className="w-full sm:w-auto gap-2 shadow-sm font-semibold"
-              disabled={isSaving || usernameStatus === "checking" || usernameStatus === "taken"}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>Save Changes</span>
-              )}
-            </Button>
+    <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
+              Edit Profile
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Update your public identity, presence, avatar, and account preferences
+            </p>
           </div>
-        }
-      >
-        <form id="edit-profile-form" onSubmit={handleSubmit} className="space-y-6" noValidate>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="edit-profile-page-form"
+            variant="heat"
+            size="sm"
+            className="gap-1.5 shadow-sm font-semibold"
+            disabled={isSaving || usernameStatus === "checking" || usernameStatus === "taken"}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save Changes</span>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Card */}
+      <div className="rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+        <form id="edit-profile-page-form" onSubmit={handleSubmit} className="space-y-6" noValidate>
           {/* Alerts */}
           {successMessage && (
             <div
-              className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
+              className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
               role="status"
             >
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -340,7 +350,7 @@ export function EditProfileDialog({
 
           {errors.general && (
             <div
-              className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/50"
+              className="flex items-center gap-2 rounded-xl bg-red-50 p-3.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/50"
               role="alert"
             >
               <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
@@ -354,7 +364,7 @@ export function EditProfileDialog({
               Profile Picture
             </label>
             <AvatarUpload
-              userId={userId}
+              userId={user.id}
               currentAvatarUrl={avatarUrl}
               name={displayName || username || "User"}
               onAvatarUpdated={(newUrl) => {
@@ -383,13 +393,13 @@ export function EditProfileDialog({
           {/* 3. Display Name */}
           <div className="space-y-1.5">
             <label
-              htmlFor="edit-display-name"
+              htmlFor="page-edit-display-name"
               className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
             >
               Display Name
             </label>
             <Input
-              id="edit-display-name"
+              id="page-edit-display-name"
               name="displayName"
               placeholder="e.g. Alex Rivera"
               value={displayName}
@@ -406,7 +416,7 @@ export function EditProfileDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label
-                htmlFor="edit-username"
+                htmlFor="page-edit-username"
                 className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
               >
                 Username
@@ -428,7 +438,7 @@ export function EditProfileDialog({
               )}
             </div>
             <Input
-              id="edit-username"
+              id="page-edit-username"
               name="username"
               placeholder="e.g. alex_rivera"
               value={username}
@@ -442,7 +452,7 @@ export function EditProfileDialog({
           </div>
 
           {/* 5. Status Section (Emoji + Message + Presence) */}
-          <div className="space-y-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+          <div className="space-y-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-5 dark:border-zinc-800 dark:bg-zinc-900/30">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-heat-500" />
               <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
@@ -450,7 +460,6 @@ export function EditProfileDialog({
               </h3>
             </div>
 
-            {/* Status Emoji & Message in row */}
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div>
@@ -470,7 +479,7 @@ export function EditProfileDialog({
                 <div className="flex-1 w-full min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <label
-                      htmlFor="edit-status-message"
+                      htmlFor="page-edit-status-message"
                       className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400"
                     >
                       Status Message
@@ -480,7 +489,7 @@ export function EditProfileDialog({
                     </span>
                   </div>
                   <Input
-                    id="edit-status-message"
+                    id="page-edit-status-message"
                     name="statusMessage"
                     placeholder="e.g. Available for chats today..."
                     value={statusMessage}
@@ -522,7 +531,7 @@ export function EditProfileDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label
-                htmlFor="edit-bio"
+                htmlFor="page-edit-bio"
                 className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
               >
                 Bio
@@ -533,7 +542,7 @@ export function EditProfileDialog({
             </div>
             <div className="relative">
               <textarea
-                id="edit-bio"
+                id="page-edit-bio"
                 rows={3}
                 placeholder="Tell your friends something about yourself..."
                 value={bio}
@@ -563,7 +572,7 @@ export function EditProfileDialog({
           {/* 8. Language */}
           <div className="space-y-1.5">
             <label
-              htmlFor="edit-language"
+              htmlFor="page-edit-language"
               className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
             >
               Language
@@ -571,7 +580,7 @@ export function EditProfileDialog({
             <div className="relative">
               <Languages className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <select
-                id="edit-language"
+                id="page-edit-language"
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 disabled={isSaving}
@@ -585,28 +594,57 @@ export function EditProfileDialog({
               </select>
             </div>
           </div>
-        </form>
-      </Dialog>
 
-      {/* Discard Changes Confirmation Modal */}
+          {/* Bottom Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="default"
+              onClick={handleBack}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="heat"
+              size="default"
+              className="gap-2 shadow-sm font-semibold"
+              disabled={isSaving || usernameStatus === "checking" || usernameStatus === "taken"}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      {/* Discard Changes Modal */}
       {showDiscardConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
             className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 space-y-4"
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="discard-dialog-title"
+            aria-labelledby="page-discard-dialog-title"
           >
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div>
-                <h3 id="discard-dialog-title" className="text-sm font-bold text-zinc-900 dark:text-white">
+                <h3 id="page-discard-dialog-title" className="text-sm font-bold text-zinc-900 dark:text-white">
                   Discard unsaved changes?
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  You have unsaved changes that will be lost if you leave.
+                  You have unsaved changes that will be lost if you navigate away.
                 </p>
               </div>
             </div>
@@ -624,7 +662,7 @@ export function EditProfileDialog({
                 type="button"
                 variant="destructive"
                 size="sm"
-                onClick={handleConfirmDiscard}
+                onClick={() => router.push("/profile")}
               >
                 Discard
               </Button>
@@ -632,6 +670,6 @@ export function EditProfileDialog({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

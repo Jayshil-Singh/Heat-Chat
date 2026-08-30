@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Lock,
   ChevronRight,
+  Languages,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
@@ -223,6 +224,26 @@ export default function ProfilePage() {
             </div>
             <p className="font-semibold text-zinc-900 dark:text-zinc-100">
               {ownProfile?.timezone || "UTC"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40 space-y-1">
+            <div className="flex items-center gap-1.5 text-zinc-400 font-medium">
+              <Languages className="h-3.5 w-3.5" />
+              <span>Language</span>
+            </div>
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100 capitalize">
+              {ownProfile?.language === "en"
+                ? "English (en)"
+                : ownProfile?.language === "es"
+                ? "Español (es)"
+                : ownProfile?.language === "fr"
+                ? "Français (fr)"
+                : ownProfile?.language === "de"
+                ? "Deutsch (de)"
+                : ownProfile?.language === "ja"
+                ? "日本語 (ja)"
+                : ownProfile?.language || "English (en)"}
             </p>
           </div>
 

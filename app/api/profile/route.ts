@@ -87,9 +87,21 @@ export async function PATCH(request: NextRequest) {
       presence_status,
       timezone,
       language,
+      avatar_url,
+      cover_url,
     } = body;
 
     const updates: ProfileUpdate = {};
+
+    // Avatar URL
+    if (avatar_url !== undefined) {
+      updates.avatar_url = avatar_url;
+    }
+
+    // Cover URL
+    if (cover_url !== undefined) {
+      updates.cover_url = cover_url;
+    }
 
     // Validate Display Name
     if (display_name !== undefined) {
