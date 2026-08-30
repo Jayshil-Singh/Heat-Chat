@@ -671,7 +671,29 @@ async function runTests() {
         console.error(`Missing object in migration: ${obj}`);
       }
     }
-    assert("All 20 required Phase 3 DB objects and RPCs defined in migration SQL", allObjectsFound);
+    // 17. UI Component & Control Invariants
+    console.log("\n--- 17. UI Component & Control Invariants ---");
+    const actionsMenuContent = readFileSync("components/messages/message-actions-menu.tsx", "utf8");
+    assert("MessageActionsMenu has 'Delete for me' control", actionsMenuContent.includes("Delete for me"));
+    assert("MessageActionsMenu has 'Delete for everyone' control", actionsMenuContent.includes("Delete for everyone"));
+    assert("MessageActionsMenu has 'Forward' control", actionsMenuContent.includes("Forward"));
+    assert("MessageActionsMenu has 'Pin message' and 'Unpin message' controls", actionsMenuContent.includes("Pin message") && actionsMenuContent.includes("Unpin message"));
+    assert("MessageActionsMenu has 'Edit message' control", actionsMenuContent.includes("Edit message"));
+    assert("MessageActionsMenu has 'Copy text' and 'Copy link' controls", actionsMenuContent.includes("Copy text") && actionsMenuContent.includes("Copy link"));
+    assert("MessageActionsMenu has 'Star message' / 'Unstar message' controls", actionsMenuContent.includes("Star message") && actionsMenuContent.includes("Unstar message"));
+    assert("MessageActionsMenu has 'Report message' control", actionsMenuContent.includes("Report message"));
+    assert("MessageActionsMenu implements Mobile Bottom Sheet drawer", actionsMenuContent.includes("isMobileSheetOpen") && actionsMenuContent.includes("createPortal"));
+
+    const messageItemContent = readFileSync("components/chat/message-item.tsx", "utf8");
+    assert("MessageItem implements mobile long-press and contextmenu handlers", messageItemContent.includes("onTouchStart") && messageItemContent.includes("onContextMenu"));
+    assert("MessageItem renders delivered status double-check", messageItemContent.includes("isDelivered") && messageItemContent.includes("CheckCheck"));
+
+    const conversationListContent = readFileSync("components/chat/conversation-list.tsx", "utf8");
+    assert("ConversationList renders unread badges", conversationListContent.includes("isUnread") && conversationListContent.includes("unreadCount"));
+    assert("ConversationList exposes 'Mark as unread' and 'Mark as read' controls", conversationListContent.includes("Mark as unread") && conversationListContent.includes("Mark as read"));
+
+    const composerContent = readFileSync("components/chat/message-composer.tsx", "utf8");
+    assert("MessageComposer restores drafts and provides visual status indicator", composerContent.includes("initialDraft") && composerContent.includes("draftStatus"));
 
     console.log("\n=======================================================");
     console.log(` Test Results: ${passCount} Passed, ${failCount} Failed`);

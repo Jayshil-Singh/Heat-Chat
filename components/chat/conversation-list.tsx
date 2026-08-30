@@ -2,8 +2,19 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Search, MessageSquare, Plus, Users, UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  MessageSquare,
+  Plus,
+  Users,
+  UserPlus,
+  MoreVertical,
+  Mail,
+  MailOpen,
+  Link as LinkIcon,
+  Check,
+} from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +28,8 @@ interface ConversationListProps {
   isLoading: boolean;
   activeConversationId?: string | null;
   onSelectConversation?: (id: string) => void;
+  onMarkUnread?: (id: string) => void;
+  onMarkRead?: (id: string) => void;
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -48,10 +61,22 @@ export function ConversationList({
   isLoading,
   activeConversationId,
   onSelectConversation,
+  onMarkUnread,
+  onMarkRead,
 }: ConversationListProps) {
   const router = useRouter();
   const [searchFilter, setSearchFilter] = React.useState("");
   const [isCreateGroupOpen, setIsCreateGroupOpen] = React.useState(false);
+  const [activeMenuConvId, setActiveMenuConvId] = React.useState<string | null>(null);
+  const [copiedConvId, setCopiedConvId] = React.useState<string | null>(null);
+
+  // Close context menu on outside click
+  React.useEffect(() => {
+    if (!activeMenuConvId) return;
+    const handleOutside = () => setActiveMenuConvId(null);
+    document.addEventListener("click", handleOutside);
+    return () => document.removeEventListener("click", handleOutside);
+  }, [activeMenuConvId]);
 
   const filteredConversations = React.useMemo(() => {
     const query = searchFilter.toLowerCase().trim();
@@ -66,6 +91,15 @@ export function ConversationList({
       return name.includes(query) || username.includes(query);
     });
   }, [conversations, searchFilter]);
+
+  const handleCopyLink = (e: React.MouseEvent, convId: string) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/chat/${convId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedConvId(convId);
+    setActiveMenuConvId(null);
+    setTimeout(() => setCopiedConvId(null), 2000);
+  };
 
   if (isLoading) {
     return (
@@ -177,6 +211,7 @@ export function ConversationList({
               const status = isGroup ? undefined : conv.otherMember?.status || "offline";
               const timeFormatted = formatRelativeTime(conv.updated_at);
               const memberCount = conv.memberCount || (conv.members || []).length || 2;
+              const isUnread = (conv.unreadCount || 0) > 0 || Boolean(conv.isMarkedUnread);
 
               return (
                 <div
@@ -188,9 +223,15 @@ export function ConversationList({
                       router.push(`/chat/${conv.id}`);
                     }
                   }}
-                  className={`flex items-center gap-3 rounded-2xl p-3 cursor-pointer transition-all ${
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setActiveMenuConvId(conv.id);
+                  }}
+                  className={`group relative flex items-center gap-3 rounded-2xl p-3 cursor-pointer transition-all ${
                     isSelected
                       ? "bg-heat-500 text-white shadow-sm shadow-heat-500/20 dark:bg-heat-500"
+                      : isUnread
+                      ? "bg-heat-50/60 dark:bg-heat-950/20 hover:bg-heat-100/60 dark:hover:bg-heat-950/30 text-zinc-900 dark:text-zinc-100 font-medium"
                       : "hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
                   }`}
                   role="button"
@@ -215,7 +256,11 @@ export function ConversationList({
                       <div className="flex items-center gap-1.5 min-w-0">
                         <h4
                           className={`truncate text-xs font-semibold ${
-                            isSelected ? "text-white" : "text-zinc-900 dark:text-zinc-100"
+                            isSelected
+                              ? "text-white"
+                              : isUnread
+                              ? "text-zinc-950 dark:text-white font-bold"
+                              : "text-zinc-900 dark:text-zinc-100"
                           }`}
                         >
                           {displayName}
@@ -234,26 +279,132 @@ export function ConversationList({
                       </div>
                       <span
                         className={`text-[10px] shrink-0 ${
-                          isSelected ? "text-white/80" : "text-zinc-400"
+                          isSelected
+                            ? "text-white/80"
+                            : isUnread
+                            ? "text-heat-600 dark:text-heat-400 font-semibold"
+                            : "text-zinc-400"
                         }`}
                       >
                         {timeFormatted}
                       </span>
                     </div>
 
-                    <p
-                      className={`truncate text-[11px] mt-0.5 ${
-                        isSelected ? "text-white/80" : "text-zinc-500 dark:text-zinc-400"
-                      }`}
-                    >
-                      {conv.lastMessage
-                        ? conv.lastMessage.content
-                        : isGroup
-                        ? `${memberCount} members`
-                        : conv.otherMember
-                        ? `@${conv.otherMember.username}`
-                        : "Conversation"}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <p
+                        className={`truncate text-[11px] flex-1 ${
+                          isSelected
+                            ? "text-white/80"
+                            : isUnread
+                            ? "text-zinc-800 dark:text-zinc-200 font-medium"
+                            : "text-zinc-500 dark:text-zinc-400"
+                        }`}
+                      >
+                        {conv.lastMessage
+                          ? conv.lastMessage.content
+                          : isGroup
+                          ? `${memberCount} members`
+                          : conv.otherMember
+                          ? `@${conv.otherMember.username}`
+                          : "Conversation"}
+                      </p>
+
+                      {/* Unread badge indicator */}
+                      {isUnread && (
+                        <span
+                          className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold shrink-0 ${
+                            isSelected
+                              ? "bg-white text-heat-600"
+                              : "bg-heat-500 text-white"
+                          }`}
+                        >
+                          {conv.unreadCount && conv.unreadCount > 0
+                            ? conv.unreadCount > 99
+                              ? "99+"
+                              : conv.unreadCount
+                            : "1"}
+                        </span>
+                      )}
+
+                      {/* 3-dots conversation menu button */}
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          aria-label="Conversation options"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuConvId(
+                              activeMenuConvId === conv.id ? null : conv.id
+                            );
+                          }}
+                          className={`h-6 w-6 rounded-full flex items-center justify-center transition-opacity ${
+                            activeMenuConvId === conv.id
+                              ? "opacity-100 bg-zinc-200 dark:bg-zinc-700"
+                              : "opacity-0 group-hover:opacity-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800"
+                          } ${isSelected ? "text-white hover:bg-white/20" : "text-zinc-400"}`}
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {activeMenuConvId === conv.id && (
+                          <div
+                            role="menu"
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 top-7 z-50 w-44 rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-850 dark:shadow-black/50"
+                          >
+                            {isUnread ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuConvId(null);
+                                  if (onMarkRead) onMarkRead(conv.id);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                              >
+                                <MailOpen className="h-3.5 w-3.5 text-zinc-400" />
+                                <span>Mark as read</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuConvId(null);
+                                  if (onMarkUnread) onMarkUnread(conv.id);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                              >
+                                <Mail className="h-3.5 w-3.5 text-heat-500" />
+                                <span>Mark as unread</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={(e) => handleCopyLink(e, conv.id)}
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                            >
+                              {copiedConvId === conv.id ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-emerald-600 font-medium">Link copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <LinkIcon className="h-3.5 w-3.5 text-zinc-400" />
+                                  <span>Copy link</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );

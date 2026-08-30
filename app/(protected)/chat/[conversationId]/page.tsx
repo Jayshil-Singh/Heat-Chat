@@ -13,7 +13,12 @@ interface ChatConversationPageProps {
 export default function ChatConversationPage({ params }: ChatConversationPageProps) {
   const unwrappedParams = React.use(params);
   const conversationId = unwrappedParams.conversationId;
-  const { conversations, isLoading } = useConversations();
+  const {
+    conversations,
+    isLoading,
+    markConversationUnread,
+    markConversationRead,
+  } = useConversations();
 
   return (
     <div className="h-[calc(100vh-4rem)] md:h-screen w-full">
@@ -21,6 +26,8 @@ export default function ChatConversationPage({ params }: ChatConversationPagePro
         conversations={conversations}
         isLoading={isLoading}
         activeConversationId={conversationId}
+        onMarkUnread={markConversationUnread}
+        onMarkRead={markConversationRead}
       />
     </div>
   );

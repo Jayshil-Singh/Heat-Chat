@@ -71,7 +71,9 @@ export function MessageComposer({
   const draftRef = React.useRef<string>("");
   const contentRef = React.useRef<string>("");
   const draftTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSavedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRestoredRef = React.useRef(false);
+  const [draftStatus, setDraftStatus] = React.useState<"idle" | "saving" | "saved">("idle");
 
   React.useEffect(() => {
     contentRef.current = content;
@@ -93,12 +95,28 @@ export function MessageComposer({
       clearTimeout(draftTimerRef.current);
     }
 
-    draftTimerRef.current = setTimeout(() => {
+    if (content.trim()) {
+      setDraftStatus("saving");
+    } else {
+      setDraftStatus("idle");
+    }
+
+    draftTimerRef.current = setTimeout(async () => {
       const trimmed = content.trim();
       if (trimmed) {
-        onSaveDraft?.(trimmed, replyTo?.messageId || null);
+        try {
+          await onSaveDraft?.(trimmed, replyTo?.messageId || null);
+          setDraftStatus("saved");
+          if (draftSavedTimeoutRef.current) clearTimeout(draftSavedTimeoutRef.current);
+          draftSavedTimeoutRef.current = setTimeout(() => {
+            setDraftStatus("idle");
+          }, 2000);
+        } catch {
+          setDraftStatus("idle");
+        }
       } else if (onDeleteDraft) {
         onDeleteDraft();
+        setDraftStatus("idle");
       }
     }, 750);
 
@@ -263,7 +281,11 @@ export function MessageComposer({
           if (draftTimerRef.current) {
             clearTimeout(draftTimerRef.current);
           }
+          if (draftSavedTimeoutRef.current) {
+            clearTimeout(draftSavedTimeoutRef.current);
+          }
           onDeleteDraft?.();
+          setDraftStatus("idle");
           setContent("");
           clearAttachments();
           if (textareaRef.current) {
@@ -293,6 +315,22 @@ export function MessageComposer({
         isEditing ? "border-t-2 border-heat-400 dark:border-heat-600" : ""
       } ${isDraggingOver ? "bg-heat-50/60 dark:bg-heat-950/40 ring-2 ring-inset ring-heat-500" : ""}`}
     >
+      {/* Draft status indicator */}
+      {!isEditing && draftStatus !== "idle" && (
+        <div className="flex items-center justify-end px-4 pt-1">
+          {draftStatus === "saving" && (
+            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 animate-pulse">
+              Saving draft…
+            </span>
+          )}
+          {draftStatus === "saved" && (
+            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+              Draft saved
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Hidden File Input */}
       <input
         type="file"

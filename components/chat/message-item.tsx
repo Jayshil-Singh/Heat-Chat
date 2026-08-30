@@ -92,6 +92,49 @@ export function MessageItem({
   const isTemp = !!message.tempId;
   const isForwarded = !!message.forwarded_from_message_id;
 
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = React.useState(false);
+  const touchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPosRef = React.useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isTemp) return;
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+
+    touchTimerRef.current = setTimeout(() => {
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        try {
+          navigator.vibrate(40);
+        } catch {}
+      }
+      setIsMobileSheetOpen(true);
+    }, 450);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current || !touchTimerRef.current) return;
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (isTemp) return;
+    e.preventDefault();
+    setIsMobileSheetOpen(true);
+  };
+
   const currentUserReactions = React.useMemo(
     () =>
       (message.reactions || [])
@@ -145,7 +188,12 @@ export function MessageItem({
 
         {/* Message Bubble */}
         <div
-          className={`relative flex max-w-[78%] sm:max-w-[68%] md:max-w-[62%] flex-col rounded-2xl px-4 py-2.5 shadow-sm text-sm ${
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          onContextMenu={handleContextMenu}
+          className={`relative flex max-w-[78%] sm:max-w-[68%] md:max-w-[62%] flex-col rounded-2xl px-4 py-2.5 shadow-sm text-sm select-none sm:select-text cursor-pointer sm:cursor-default ${
             isCurrentUser
               ? "bg-heat-500 text-white rounded-br-sm"
               : "bg-white text-zinc-900 border border-zinc-200/80 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-100 rounded-bl-sm"
@@ -295,6 +343,8 @@ export function MessageItem({
               isStarred={isStarred}
               content={message.content}
               currentUserReactions={currentUserReactions}
+              isMobileSheetOpen={isMobileSheetOpen}
+              onMobileSheetClose={() => setIsMobileSheetOpen(false)}
               onReply={() => onReply && onReply(message)}
               onReact={(reaction) =>
                 onToggleReaction && onToggleReaction(message.id, reaction)

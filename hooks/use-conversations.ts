@@ -93,6 +93,21 @@ export function useConversations() {
         }
       }
 
+      // 5. Batch-fetch conversation_user_states for unread indicators
+      const userStatesMap = new Map<string, { unreadCount: number; isMarkedUnread: boolean }>();
+      const { data: userStates } = await supabase
+        .from("conversation_user_states")
+        .select("conversation_id, unread_count, is_marked_unread")
+        .eq("user_id", user.id)
+        .in("conversation_id", convIds);
+
+      (userStates || []).forEach((s: any) => {
+        userStatesMap.set(s.conversation_id, {
+          unreadCount: s.unread_count || 0,
+          isMarkedUnread: Boolean(s.is_marked_unread),
+        });
+      });
+
       // Construct conversation list
       const detailedConversations: ConversationWithDetails[] = (convData || []).map((conv) => {
         const convMembers = (allMembers || []).filter((m: any) => m.conversation_id === conv.id);
@@ -115,6 +130,9 @@ export function useConversations() {
 
         const memberProfiles = memberDetails.map((md) => md.profile);
         const latestMsg = lastMessagesMap.get(conv.id);
+        const uState = userStatesMap.get(conv.id);
+        const unreadCount = uState?.unreadCount ?? 0;
+        const isMarkedUnread = uState?.isMarkedUnread ?? false;
 
         return {
           ...conv,
@@ -131,7 +149,8 @@ export function useConversations() {
                 message_type: latestMsg.message_type,
               }
             : null,
-          unreadCount: 0,
+          unreadCount: isMarkedUnread ? Math.max(unreadCount, 1) : unreadCount,
+          isMarkedUnread,
         };
       });
 
@@ -148,7 +167,7 @@ export function useConversations() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Realtime subscriptions for conversations & members updates
+  // Realtime subscriptions for conversations, members, and user_states updates
   React.useEffect(() => {
     if (!user?.id) return;
 
@@ -177,12 +196,72 @@ export function useConversations() {
           fetchConversations();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversation_user_states",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchConversations();
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user?.id, supabase, fetchConversations]);
+
+  const markConversationUnread = React.useCallback(
+    async (conversationId: string) => {
+      if (!user?.id) return;
+
+      // Optimistic update
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, isMarkedUnread: true, unreadCount: Math.max(c.unreadCount || 0, 1) }
+            : c
+        )
+      );
+
+      try {
+        await fetch(`/api/conversations/${conversationId}/unread`, {
+          method: "POST",
+        });
+      } catch (err) {
+        console.error("Error marking conversation unread:", err);
+      }
+    },
+    [user?.id]
+  );
+
+  const markConversationRead = React.useCallback(
+    async (conversationId: string) => {
+      if (!user?.id) return;
+
+      // Optimistic update
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, isMarkedUnread: false, unreadCount: 0 }
+            : c
+        )
+      );
+
+      try {
+        await fetch(`/api/conversations/${conversationId}/read`, {
+          method: "POST",
+        });
+      } catch (err) {
+        console.error("Error marking conversation read:", err);
+      }
+    },
+    [user?.id]
+  );
 
   const getOrCreateDirectChat = async (targetUserId: string): Promise<{ conversationId?: string; error?: string }> => {
     if (!user?.id) return { error: "Not authenticated" };
@@ -263,6 +342,8 @@ export function useConversations() {
     isLoading,
     error,
     refreshConversations: fetchConversations,
+    markConversationUnread,
+    markConversationRead,
     getOrCreateDirectChat,
     createGroup,
     leaveGroup,

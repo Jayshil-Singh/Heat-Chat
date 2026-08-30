@@ -5,7 +5,12 @@ import { useConversations } from "@/hooks/use-conversations";
 import { ChatShell } from "@/components/chat/chat-shell";
 
 export default function ChatIndexPage() {
-  const { conversations, isLoading } = useConversations();
+  const {
+    conversations,
+    isLoading,
+    markConversationUnread,
+    markConversationRead,
+  } = useConversations();
 
   return (
     <div className="h-[calc(100vh-4rem)] md:h-screen w-full">
@@ -13,6 +18,8 @@ export default function ChatIndexPage() {
         conversations={conversations}
         isLoading={isLoading}
         activeConversationId={null}
+        onMarkUnread={markConversationUnread}
+        onMarkRead={markConversationRead}
       />
     </div>
   );

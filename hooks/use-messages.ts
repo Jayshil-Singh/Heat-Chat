@@ -564,6 +564,47 @@ export function useMessages(conversationId: string | null) {
     []
   );
 
+  const handleRealtimePinInsert = React.useCallback(
+    (pin: { id: string; message_id: string; conversation_id: string; pinned_by: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === pin.message_id ? { ...m, isPinned: true } : m))
+      );
+    },
+    []
+  );
+
+  const handleRealtimePinDelete = React.useCallback(
+    (pin: { message_id: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === pin.message_id ? { ...m, isPinned: false } : m))
+      );
+    },
+    []
+  );
+
+  const handleRealtimeDeliveryInsert = React.useCallback(
+    (delivery: { message_id: string; user_id: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== delivery.message_id) return m;
+          const currentDeliveries = m.deliveredTo || [];
+          if (currentDeliveries.includes(delivery.user_id)) return m;
+          const updatedDeliveries = [...currentDeliveries, delivery.user_id];
+          const newStatus =
+            m.sender_id === user?.id && m.status !== "read"
+              ? ("delivered" as const)
+              : m.status;
+          return {
+            ...m,
+            deliveredTo: updatedDeliveries,
+            status: newStatus,
+          };
+        })
+      );
+    },
+    [user?.id]
+  );
+
   const { connectionStatus } = useRealtimeChat({
     conversationId,
     onNewMessage: handleRealtimeNewMessage,
@@ -572,6 +613,9 @@ export function useMessages(conversationId: string | null) {
     onReadReceipt: handleRealtimeReadReceipt,
     onReactionInsert: handleRealtimeReactionInsert,
     onReactionDelete: handleRealtimeReactionDelete,
+    onPinInsert: handleRealtimePinInsert,
+    onPinDelete: handleRealtimePinDelete,
+    onDeliveryInsert: handleRealtimeDeliveryInsert,
     onReconnectSync: fetchMessages,
   });
 

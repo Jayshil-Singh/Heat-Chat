@@ -18,18 +18,28 @@ interface UseRealtimeChatOptions {
   onReadReceipt?: (receipt: MessageRead) => void;
   /** Called when a reaction is added (INSERT on message_reactions) */
   onReactionInsert?: (reaction: MessageReaction) => void;
-  /**
-   * Called when a reaction is removed (DELETE on message_reactions).
-   * Note: message_reactions has no conversation_id column; RLS restricts
-   * events to rows the subscriber can SELECT. We filter by loaded messages
-   * in the handler to scope to the current conversation.
-   */
+  /** Called when a reaction is removed (DELETE on message_reactions) */
   onReactionDelete?: (
     reaction: Pick<
       MessageReaction,
       "id" | "message_id" | "user_id" | "reaction"
     >
   ) => void;
+  /** Called when a pin is added (INSERT on message_pins) */
+  onPinInsert?: (pin: {
+    id: string;
+    message_id: string;
+    conversation_id: string;
+    pinned_by: string;
+  }) => void;
+  /** Called when a pin is removed (DELETE on message_pins) */
+  onPinDelete?: (pin: { message_id: string; conversation_id?: string }) => void;
+  /** Called when a delivery receipt is recorded (INSERT on message_delivery_states) */
+  onDeliveryInsert?: (delivery: {
+    message_id: string;
+    user_id: string;
+    delivered_at: string;
+  }) => void;
   onReconnectSync?: () => void;
 }
 
@@ -41,6 +51,9 @@ export function useRealtimeChat({
   onReadReceipt,
   onReactionInsert,
   onReactionDelete,
+  onPinInsert,
+  onPinDelete,
+  onDeliveryInsert,
   onReconnectSync,
 }: UseRealtimeChatOptions) {
   const [connectionStatus, setConnectionStatus] =
@@ -116,10 +129,6 @@ export function useRealtimeChat({
         }
       )
       // ── Reactions ────────────────────────────────────────────────────────
-      // message_reactions has no conversation_id column so we cannot filter
-      // by conversation here. RLS ensures the user only receives events for
-      // reactions on messages they can access. The handler in use-messages.ts
-      // further filters to only apply updates for currently-loaded messages.
       .on(
         "postgres_changes",
         {
@@ -151,6 +160,48 @@ export function useRealtimeChat({
           }
         }
       )
+      // ── Message Pins ─────────────────────────────────────────────────────
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_pins",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          if (payload.new && onPinInsert) {
+            onPinInsert(payload.new as any);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "message_pins",
+        },
+        (payload) => {
+          if (payload.old && onPinDelete) {
+            onPinDelete(payload.old as any);
+          }
+        }
+      )
+      // ── Delivery States ──────────────────────────────────────────────────
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_delivery_states",
+        },
+        (payload) => {
+          if (payload.new && onDeliveryInsert) {
+            onDeliveryInsert(payload.new as any);
+          }
+        }
+      )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           setConnectionStatus("connected");
@@ -177,6 +228,9 @@ export function useRealtimeChat({
     onReadReceipt,
     onReactionInsert,
     onReactionDelete,
+    onPinInsert,
+    onPinDelete,
+    onDeliveryInsert,
     onReconnectSync,
   ]);
 

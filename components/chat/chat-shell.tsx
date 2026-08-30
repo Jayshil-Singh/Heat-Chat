@@ -13,12 +13,16 @@ interface ChatShellProps {
   conversations: ConversationWithDetails[];
   activeConversationId?: string | null;
   isLoading: boolean;
+  onMarkUnread?: (id: string) => void;
+  onMarkRead?: (id: string) => void;
 }
 
 export function ChatShell({
   conversations,
   activeConversationId,
   isLoading,
+  onMarkUnread,
+  onMarkRead,
 }: ChatShellProps) {
   const router = useRouter();
 
@@ -42,6 +46,8 @@ export function ChatShell({
           onSelectConversation={(id) => {
             router.push(`/chat/${id}`);
           }}
+          onMarkUnread={onMarkUnread}
+          onMarkRead={onMarkRead}
         />
       </div>
 
@@ -59,18 +65,18 @@ export function ChatShell({
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 bg-zinc-50/50 dark:bg-zinc-900/20">
             <EmptyState
-              icon={<MessageSquare className="h-8 w-8 text-heat-500" />}
-              title="Select a conversation"
-              description="Choose a conversation from the list on the left or find a friend to start chatting."
+              icon={<MessageSquare className="h-12 w-12 text-zinc-300 dark:text-zinc-600" />}
+              title="No active chat"
+              description="Select a conversation from the sidebar or start a new conversation."
               action={
                 <Button
                   variant="heat"
-                  size="default"
+                  size="sm"
                   onClick={() => router.push("/friends")}
                   className="gap-2 text-xs"
                 >
                   <Users className="h-4 w-4" />
-                  <span>Find Friends</span>
+                  <span>Browse Friends</span>
                 </Button>
               }
             />

@@ -77,6 +77,7 @@ export interface ConversationWithDetails extends Conversation {
     message_type: string;
   } | null;
   unreadCount?: number;
+  isMarkedUnread?: boolean;
 }
 
 export interface FriendItem {
