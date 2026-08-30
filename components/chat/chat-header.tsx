@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Pin } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
@@ -17,20 +17,24 @@ interface ChatHeaderProps {
   conversation: ConversationWithDetails | null;
   connectionStatus?: ConnectionStatus;
   isOnline?: boolean;
+  pinnedCount?: number;
   onBack?: () => void;
   onRefreshConversation?: () => void;
   onToggleSearch?: () => void;
   onOpenStarred?: () => void;
+  onTogglePinned?: () => void;
 }
 
 export function ChatHeader({
   conversation,
   connectionStatus = "connected",
   isOnline = false,
+  pinnedCount = 0,
   onBack,
   onRefreshConversation,
   onToggleSearch,
   onOpenStarred,
+  onTogglePinned,
 }: ChatHeaderProps) {
   const router = useRouter();
   const { isUserOnline } = usePresence();
@@ -156,6 +160,24 @@ export function ChatHeader({
               aria-label="Search messages in conversation"
             >
               <Search className="h-4 w-4 text-zinc-500 hover:text-heat-500" />
+            </Button>
+          )}
+
+          {onTogglePinned && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onTogglePinned}
+              title={pinnedCount > 0 ? `Pinned messages (${pinnedCount})` : "Pinned messages"}
+              aria-label="View pinned messages"
+              className="relative"
+            >
+              <Pin className={`h-4 w-4 ${pinnedCount > 0 ? "text-amber-500 fill-amber-500" : "text-zinc-500 hover:text-amber-500"}`} />
+              {pinnedCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white shadow-2xs">
+                  {pinnedCount}
+                </span>
+              )}
             </Button>
           )}
 

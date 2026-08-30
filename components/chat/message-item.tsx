@@ -9,9 +9,13 @@ import {
   RotateCcw,
   Pencil,
   Star,
+  Share2,
+  Pin,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { MessageActions } from "./message-actions";
+import { MessageActionsMenu } from "@/components/messages/message-actions-menu";
+import { MessageForwardDialog } from "@/components/messages/message-forward-dialog";
+import { ReportDialog } from "@/components/reports/report-dialog";
 import { MessageReactions } from "./message-reactions";
 import { ReplyPreview } from "./reply-preview";
 import { MessageAttachment } from "./message-attachment";
@@ -26,11 +30,15 @@ interface MessageItemProps {
   showSenderInfo?: boolean;
   isHighlighted?: boolean;
   isStarred?: boolean;
+  isPinned?: boolean;
   onRetry?: (message: ChatMessage) => void;
   onReply?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, reaction: ReactionType) => void;
   onEdit?: (message: ChatMessage) => void;
-  onDelete?: (messageId: string) => void;
+  onDeleteForMe?: (messageId: string) => void;
+  onDeleteForEveryone?: (messageId: string) => void;
+  onForward?: (message: ChatMessage) => void;
+  onTogglePin?: (messageId: string) => void;
   onToggleStar?: (messageId: string) => void;
   onScrollToMessage?: (messageId: string) => boolean | void;
 }
@@ -46,31 +54,11 @@ function formatMessageTime(dateStr: string): string {
 
 function isMessageEdited(message: ChatMessage): boolean {
   if (message.deleted_at) return false;
+  if (message.edited_at) return true;
   if (!message.updated_at || !message.created_at) return false;
   const updatedMs = new Date(message.updated_at).getTime();
   const createdMs = new Date(message.created_at).getTime();
   return updatedMs - createdMs > 1000;
-}
-
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    const success = document.execCommand("copy");
-    document.body.removeChild(textarea);
-    return success;
-  } catch {
-    return false;
-  }
 }
 
 export function MessageItem({
@@ -81,14 +69,21 @@ export function MessageItem({
   showSenderInfo = false,
   isHighlighted = false,
   isStarred = false,
+  isPinned = false,
   onRetry,
   onReply,
   onToggleReaction,
   onEdit,
-  onDelete,
+  onDeleteForMe,
+  onDeleteForEveryone,
+  onForward,
+  onTogglePin,
   onToggleStar,
   onScrollToMessage,
 }: MessageItemProps) {
+  const [showForwardDialog, setShowForwardDialog] = React.useState(false);
+  const [showReportDialog, setShowReportDialog] = React.useState(false);
+
   const timeFormatted = formatMessageTime(message.created_at);
   const isFailed = message.status === "failed";
   const isSending = message.status === "sending";
@@ -96,6 +91,7 @@ export function MessageItem({
   const isRead = (message.readBy || []).length > 0;
   const edited = isMessageEdited(message);
   const isTemp = !!message.tempId;
+  const isForwarded = !!message.forwarded_from_message_id;
 
   const currentUserReactions = React.useMemo(
     () =>
@@ -104,11 +100,6 @@ export function MessageItem({
         .map((r) => r.reaction),
     [message.reactions, currentUserId]
   );
-
-  const handleCopy = async () => {
-    if (isDeleted) return;
-    await copyToClipboard(message.content);
-  };
 
   const senderDisplayName = message.sender?.display_name || "Unknown User";
 
@@ -165,6 +156,18 @@ export function MessageItem({
               : ""
           }`}
         >
+          {/* Forwarded Header */}
+          {isForwarded && !isDeleted && (
+            <div
+              className={`mb-1 flex items-center gap-1 text-[11px] font-medium italic ${
+                isCurrentUser ? "text-white/80" : "text-zinc-500 dark:text-zinc-400"
+              }`}
+            >
+              <Share2 className="h-3 w-3" />
+              <span>Forwarded</span>
+            </div>
+          )}
+
           {/* Deleted message placeholder */}
           {isDeleted ? (
             <p
@@ -212,12 +215,20 @@ export function MessageItem({
             </>
           )}
 
-          {/* Footer: timestamp + edit indicator + receipts */}
+          {/* Footer: timestamp + edit indicator + pin indicator + receipts */}
           <div
             className={`mt-1 flex items-center justify-end gap-1 text-[10px] select-none ${
               isCurrentUser ? "text-white/70" : "text-zinc-400 dark:text-zinc-500"
             }`}
           >
+            {isPinned && !isDeleted && (
+              <span
+                title="Pinned message"
+                className="flex items-center text-amber-400 dark:text-amber-400 mr-0.5"
+              >
+                <Pin className="h-2.5 w-2.5 fill-current" />
+              </span>
+            )}
             {isStarred && !isDeleted && (
               <span
                 title="Starred message"
@@ -272,19 +283,32 @@ export function MessageItem({
             className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-60 max-sm:group-focus-within:opacity-100"
             aria-label="Message actions"
           >
-            <MessageActions
+            <MessageActionsMenu
+              messageId={message.id}
               isCurrentUser={isCurrentUser}
               isDeleted={isDeleted}
+              isPinned={isPinned}
               isStarred={isStarred}
+              content={message.content}
               currentUserReactions={currentUserReactions}
               onReply={() => onReply && onReply(message)}
               onReact={(reaction) =>
                 onToggleReaction && onToggleReaction(message.id, reaction)
               }
-              onCopy={handleCopy}
               onEdit={() => onEdit && onEdit(message)}
-              onDelete={() => onDelete && onDelete(message.id)}
+              onDeleteForMe={() => onDeleteForMe && onDeleteForMe(message.id)}
+              onDeleteForEveryone={
+                isCurrentUser && onDeleteForEveryone
+                  ? () => onDeleteForEveryone(message.id)
+                  : undefined
+              }
+              onForward={() => {
+                if (onForward) onForward(message);
+                setShowForwardDialog(true);
+              }}
+              onTogglePin={() => onTogglePin && onTogglePin(message.id)}
               onToggleStar={() => onToggleStar && onToggleStar(message.id)}
+              onReport={() => setShowReportDialog(true)}
             />
           </div>
         )}
@@ -314,6 +338,23 @@ export function MessageItem({
           <span>Failed to send. Tap to retry.</span>
         </button>
       )}
+
+      {/* Forward Dialog Modal */}
+      <MessageForwardDialog
+        isOpen={showForwardDialog}
+        onClose={() => setShowForwardDialog(false)}
+        messageId={message.id}
+        messageContent={message.content}
+      />
+
+      {/* Report Message Modal */}
+      <ReportDialog
+        isOpen={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        targetType="message"
+        targetId={message.id}
+        targetName={`Message from ${senderDisplayName}`}
+      />
     </div>
   );
 }

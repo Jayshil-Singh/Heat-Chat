@@ -7,6 +7,8 @@ import { TypingIndicator } from "./typing-indicator";
 import type { ChatMessage, TypingUser } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
+import { UnreadDivider } from "@/components/messages/unread-divider";
+
 export interface MessageFeedHandle {
   /**
    * Scroll to the message with the given ID and briefly highlight it.
@@ -26,12 +28,16 @@ interface MessageFeedProps {
   hasMore: boolean;
   typingUsers: TypingUser[];
   starredMessageIds?: Set<string>;
+  unreadCount?: number;
   onLoadOlder: () => Promise<void>;
   onRetryMessage?: (message: ChatMessage) => void;
   onReplyToMessage?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, reaction: ReactionType) => void;
   onEditMessage?: (message: ChatMessage) => void;
-  onDeleteMessage?: (messageId: string) => void;
+  onDeleteForMe?: (messageId: string) => void;
+  onDeleteForEveryone?: (messageId: string) => void;
+  onTogglePin?: (messageId: string) => void;
+  onForwardMessage?: (message: ChatMessage) => void;
   onToggleStar?: (messageId: string) => void;
 }
 
@@ -72,12 +78,16 @@ export const MessageFeed = React.forwardRef<
     hasMore,
     typingUsers,
     starredMessageIds,
+    unreadCount = 0,
     onLoadOlder,
     onRetryMessage,
     onReplyToMessage,
     onToggleReaction,
     onEditMessage,
-    onDeleteMessage,
+    onDeleteForMe,
+    onDeleteForEveryone,
+    onTogglePin,
+    onForwardMessage,
     onToggleStar,
   },
   ref
@@ -307,23 +317,28 @@ export const MessageFeed = React.forwardRef<
                 !prevMsg || prevMsg.sender_id !== msg.sender_id;
 
               return (
-                <MessageItem
-                  key={msg.id || msg.tempId}
-                  message={msg}
-                  isCurrentUser={msg.sender_id === currentUserId}
-                  currentUserId={currentUserId}
-                  isGroupChat={isGroupChat}
-                  showSenderInfo={showSenderInfo}
-                  isHighlighted={highlightedMessageId === msg.id}
-                  isStarred={starredMessageIds?.has(msg.id)}
-                  onRetry={onRetryMessage}
-                  onReply={onReplyToMessage}
-                  onToggleReaction={onToggleReaction}
-                  onEdit={onEditMessage}
-                  onDelete={onDeleteMessage}
-                  onToggleStar={onToggleStar}
-                  onScrollToMessage={scrollAndHighlight}
-                />
+                <React.Fragment key={msg.id || msg.tempId}>
+                  <MessageItem
+                    message={msg}
+                    isCurrentUser={msg.sender_id === currentUserId}
+                    currentUserId={currentUserId}
+                    isGroupChat={isGroupChat}
+                    showSenderInfo={showSenderInfo}
+                    isHighlighted={highlightedMessageId === msg.id}
+                    isStarred={starredMessageIds?.has(msg.id)}
+                    isPinned={msg.isPinned}
+                    onRetry={onRetryMessage}
+                    onReply={onReplyToMessage}
+                    onToggleReaction={onToggleReaction}
+                    onEdit={onEditMessage}
+                    onDeleteForMe={onDeleteForMe}
+                    onDeleteForEveryone={onDeleteForEveryone}
+                    onTogglePin={onTogglePin}
+                    onForward={onForwardMessage}
+                    onToggleStar={onToggleStar}
+                    onScrollToMessage={scrollAndHighlight}
+                  />
+                </React.Fragment>
               );
             })}
           </div>

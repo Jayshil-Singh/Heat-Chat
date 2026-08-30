@@ -74,7 +74,7 @@ export function useMessages(conversationId: string | null) {
       const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
 
       // Batch-fetch all enrichment data in parallel
-      const [profilesRes, readsRes, reactionsRes, attachmentsRes] = await Promise.all([
+      const [profilesRes, readsRes, reactionsRes, attachmentsRes, pinsRes, hiddenRes] = await Promise.all([
         supabase.from("profiles").select("*").in("id", senderIds),
         supabase
           .from("message_reads")
@@ -87,7 +87,21 @@ export function useMessages(conversationId: string | null) {
         nonDeletedIds.length > 0
           ? supabase.from("attachments").select("*").in("message_id", nonDeletedIds)
           : Promise.resolve({ data: [] }),
+        supabase
+          .from("message_pins")
+          .select("message_id")
+          .in("message_id", messageIds),
+        user?.id
+          ? supabase
+              .from("message_user_states")
+              .select("message_id")
+              .eq("user_id", user.id)
+              .in("message_id", messageIds)
+          : Promise.resolve({ data: [] }),
       ]);
+
+      const hiddenIds = new Set((hiddenRes.data || []).map((h) => h.message_id));
+      const pinnedIds = new Set((pinsRes.data || []).map((p) => p.message_id));
 
       const profilesMap = new Map<string, Profile>();
       (profilesRes.data || []).forEach((p) =>
@@ -182,38 +196,41 @@ export function useMessages(conversationId: string | null) {
         }
       }
 
-      return rawMessages.map((m): ChatMessage => {
-        let replyPreview: ReplyPreviewData | null = null;
-        if (m.reply_to_message_id) {
-          const parent = parentMap.get(m.reply_to_message_id);
-          replyPreview = parent
-            ? {
-                messageId: parent.id,
-                senderName: parent.senderName,
-                content: parent.deleted_at
-                  ? ""
-                  : parent.content.slice(0, REPLY_CONTENT_TRUNCATE),
-                isDeleted: parent.deleted_at !== null,
-              }
-            : {
-                // Parent message not found (outside user's access) — show as deleted
-                messageId: m.reply_to_message_id,
-                senderName: "Unknown",
-                content: "",
-                isDeleted: true,
-              };
-        }
+      return rawMessages
+        .filter((m) => !hiddenIds.has(m.id))
+        .map((m): ChatMessage => {
+          let replyPreview: ReplyPreviewData | null = null;
+          if (m.reply_to_message_id) {
+            const parent = parentMap.get(m.reply_to_message_id);
+            replyPreview = parent
+              ? {
+                  messageId: parent.id,
+                  senderName: parent.senderName,
+                  content: parent.deleted_at
+                    ? ""
+                    : parent.content.slice(0, REPLY_CONTENT_TRUNCATE),
+                  isDeleted: parent.deleted_at !== null,
+                }
+              : {
+                  // Parent message not found (outside user's access) — show as deleted
+                  messageId: m.reply_to_message_id,
+                  senderName: "Unknown",
+                  content: "",
+                  isDeleted: true,
+                };
+          }
 
-        return {
-          ...m,
-          sender: profilesMap.get(m.sender_id) || null,
-          status: m.sender_id === user?.id ? "sent" : undefined,
-          readBy: readsMap.get(m.id) || [],
-          reactions: reactionsMap.get(m.id) || [],
-          replyPreview,
-          attachments: m.deleted_at ? [] : attachmentsMap.get(m.id) || [],
-        };
-      });
+          return {
+            ...m,
+            sender: profilesMap.get(m.sender_id) || null,
+            status: m.sender_id === user?.id ? "sent" : undefined,
+            readBy: readsMap.get(m.id) || [],
+            reactions: reactionsMap.get(m.id) || [],
+            replyPreview,
+            attachments: m.deleted_at ? [] : attachmentsMap.get(m.id) || [],
+            isPinned: pinnedIds.has(m.id),
+          };
+        });
     },
     [supabase, user?.id]
   );
@@ -573,14 +590,20 @@ export function useMessages(conversationId: string | null) {
       content: trimmedContent,
       message_type: hasAttachments ? "image" : "text",
       reply_to_message_id: replyToMessageId || null,
+      forwarded_from_message_id: null,
+      client_message_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      edited_at: null,
       deleted_at: null,
+      deleted_by: null,
+      delete_scope: null,
       status: "sending",
       readBy: [],
       reactions: [],
       replyPreview: null,
       attachments: optimisticAttachments,
+      isPinned: false,
     };
 
     pendingTempIdsRef.current.set(trimmedContent || tempId, tempId);
@@ -902,20 +925,20 @@ export function useMessages(conversationId: string | null) {
     setMessages((prev) =>
       prev.map((m) =>
         m.id === messageId
-          ? { ...m, content: trimmedContent, updated_at: new Date().toISOString() }
+          ? { ...m, content: trimmedContent, edited_at: new Date().toISOString() }
           : m
       )
     );
 
     try {
-      const { error } = await supabase
-        .from("messages")
-        .update({ content: trimmedContent })
-        .eq("id", messageId)
-        .eq("sender_id", user.id)
-        .is("deleted_at", null);
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: trimmedContent }),
+      });
+      const data = await res.json();
 
-      if (error) {
+      if (!res.ok) {
         // Rollback
         setMessages((prev) =>
           prev.map((m) =>
@@ -924,7 +947,7 @@ export function useMessages(conversationId: string | null) {
               : m
           )
         );
-        return { success: false, error: error.message || "Failed to edit message." };
+        return { success: false, error: data.message || data.error || "Failed to edit message." };
       }
 
       return { success: true };
@@ -940,58 +963,196 @@ export function useMessages(conversationId: string | null) {
     }
   };
 
-  // ─── Soft-delete message (optimistic + rollback) ──────────────────────────────
+  // ─── Delete message for me ──────────────────────────────────────────────────
 
-  const deleteMessage = async (
+  const deleteMessageForMe = async (
     messageId: string
   ): Promise<{ success: boolean; error?: string }> => {
     if (!user?.id) return { success: false, error: "Not authenticated" };
 
-    const msg = messagesRef.current.find((m) => m.id === messageId);
-    if (!msg) return { success: false, error: "Message not found." };
-    if (msg.sender_id !== user.id)
-      return { success: false, error: "You can only delete your own messages." };
-    if (msg.deleted_at)
-      return { success: false, error: "Message is already deleted." };
+    const originalMsg = messagesRef.current.find((m) => m.id === messageId);
+    if (!originalMsg) return { success: false, error: "Message not found." };
+
+    // Optimistic hide
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}/me`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Rollback
+        setMessages((prev) => [...prev, originalMsg]);
+        return { success: false, error: data.message || data.error || "Failed to delete message." };
+      }
+
+      return { success: true };
+    } catch {
+      setMessages((prev) => [...prev, originalMsg]);
+      return { success: false, error: "Failed to delete message." };
+    }
+  };
+
+  // ─── Delete message for everyone ────────────────────────────────────────────
+
+  const deleteMessageForEveryone = async (
+    messageId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!user?.id) return { success: false, error: "Not authenticated" };
+
+    const originalMsg = messagesRef.current.find((m) => m.id === messageId);
+    if (!originalMsg) return { success: false, error: "Message not found." };
+    if (originalMsg.sender_id !== user.id)
+      return { success: false, error: "You can only delete your own messages for everyone." };
 
     const deletedAt = new Date().toISOString();
 
-    // Optimistic soft-delete: immediately wipe attachments from rendered state
+    // Optimistic soft-delete
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === messageId ? { ...m, deleted_at: deletedAt, attachments: [] } : m
+        m.id === messageId
+          ? {
+              ...m,
+              deleted_at: deletedAt,
+              content: "This message was deleted",
+              attachments: [],
+            }
+          : m
       )
     );
 
     try {
-      const { error } = await supabase
-        .from("messages")
-        .update({ deleted_at: deletedAt })
-        .eq("id", messageId)
-        .eq("sender_id", user.id)
-        .is("deleted_at", null);
+      const res = await fetch(`/api/messages/${messageId}/everyone`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
 
-      if (error) {
+      if (!res.ok) {
         // Rollback
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId ? { ...m, deleted_at: null, attachments: msg.attachments } : m
-          )
+          prev.map((m) => (m.id === messageId ? originalMsg : m))
         );
-        return {
-          success: false,
-          error: error.message || "Failed to delete message.",
-        };
+        return { success: false, error: data.message || data.error || "Failed to delete message." };
       }
 
       return { success: true };
     } catch {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId ? { ...m, deleted_at: null, attachments: msg.attachments } : m
-        )
+        prev.map((m) => (m.id === messageId ? originalMsg : m))
       );
       return { success: false, error: "Failed to delete message." };
+    }
+  };
+
+  // ─── Forward message ────────────────────────────────────────────────────────
+
+  const forwardMessage = async (
+    messageId: string,
+    targetConversationId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/messages/${messageId}/forward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetConversationId,
+          clientMessageId: crypto.randomUUID(),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || "Failed to forward message." };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Network error forwarding message." };
+    }
+  };
+
+  // ─── Pinned Messages ────────────────────────────────────────────────────────
+
+  const [pins, setPins] = React.useState<any[]>([]);
+
+  const fetchPins = React.useCallback(async () => {
+    if (!conversationId) {
+      setPins([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/pins`);
+      const data = await res.json();
+      if (res.ok && data.pins) {
+        setPins(data.pins);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch pins:", err);
+    }
+  }, [conversationId]);
+
+  React.useEffect(() => {
+    fetchPins();
+  }, [fetchPins]);
+
+  const togglePin = async (
+    messageId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const originalMsg = messagesRef.current.find((m) => m.id === messageId);
+    const wasPinned = !!originalMsg?.isPinned;
+
+    // Optimistic toggle
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, isPinned: !wasPinned } : m))
+    );
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}/pin`, {
+        method: wasPinned ? "DELETE" : "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Rollback
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, isPinned: wasPinned } : m))
+        );
+        return { success: false, error: data.message || data.error || "Failed to toggle pin." };
+      }
+
+      fetchPins();
+      return { success: true };
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, isPinned: wasPinned } : m))
+      );
+      return { success: false, error: "Network error toggling pin." };
+    }
+  };
+
+  // ─── Mark read / unread ─────────────────────────────────────────────────────
+
+  const markConversationRead = async () => {
+    if (!conversationId) return;
+    try {
+      await fetch(`/api/conversations/${conversationId}/read`, {
+        method: "POST",
+      });
+    } catch (err) {
+      console.warn("Failed to mark conversation read:", err);
+    }
+  };
+
+  const markConversationUnread = async () => {
+    if (!conversationId) return;
+    try {
+      await fetch(`/api/conversations/${conversationId}/unread`, {
+        method: "POST",
+      });
+    } catch (err) {
+      console.warn("Failed to mark conversation unread:", err);
     }
   };
 
@@ -1002,11 +1163,20 @@ export function useMessages(conversationId: string | null) {
     hasMore,
     error,
     connectionStatus,
+    pins,
+    pinnedCount: pins.length,
     sendMessage,
     sendReply,
     retryMessage,
     editMessage,
-    deleteMessage,
+    deleteMessage: deleteMessageForEveryone,
+    deleteMessageForMe,
+    deleteMessageForEveryone,
+    forwardMessage,
+    togglePin,
+    fetchPins,
+    markConversationRead,
+    markConversationUnread,
     addReaction,
     removeReaction,
     loadOlderMessages,

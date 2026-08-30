@@ -12,6 +12,7 @@ import { MessageFeed, type MessageFeedHandle } from "./message-feed";
 import { MessageComposer } from "./message-composer";
 import { InChatSearch } from "./in-chat-search";
 import { StarredMessagesDialog } from "./starred-messages-dialog";
+import { PinnedMessagesPanel } from "@/components/messages/pinned-messages-panel";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails, ChatMessage, ReplyPreviewData } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
@@ -39,15 +40,30 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     isLoadingOlder,
     hasMore,
     connectionStatus,
+    pins,
+    pinnedCount,
     sendMessage,
     sendReply,
     retryMessage,
     editMessage,
-    deleteMessage,
+    deleteMessageForMe,
+    deleteMessageForEveryone,
+    forwardMessage,
+    togglePin,
+    markConversationRead,
     addReaction,
     removeReaction,
     loadOlderMessages,
   } = useMessages(conversation.id);
+
+  // Automatically mark conversation as read when active
+  const markReadRef = React.useRef(markConversationRead);
+  React.useEffect(() => {
+    markReadRef.current = markConversationRead;
+  });
+  React.useEffect(() => {
+    markReadRef.current();
+  }, [conversation.id, messages.length]);
 
   // ── Typing + presence ─────────────────────────────────────────────────────
   const { typingUsers, sendTyping, stopTyping } = useTyping(conversation.id);
@@ -65,6 +81,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
   } = useStarredMessages(conversation.id);
 
   const [showStarredDialog, setShowStarredDialog] = React.useState(false);
+  const [showPinnedPanel, setShowPinnedPanel] = React.useState(false);
 
   // ── In-Chat Search ────────────────────────────────────────────────────────
   const [showInChatSearch, setShowInChatSearch] = React.useState(false);
@@ -109,7 +126,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     }
   }, [currentMatch?.id]);
 
-  // Jump to message (e.g. from Starred Messages dialog or reply quote)
+  // Jump to message (e.g. from Starred Messages dialog, Reply quote, or Pinned Messages)
   const handleJumpToMessage = (convId: string, msgId: string) => {
     if (convId === conversation.id && feedRef.current) {
       feedRef.current.scrollToMessage(msgId);
@@ -165,11 +182,6 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     setEditingMessage(message);
   };
 
-  /** Soft-delete a message */
-  const handleDeleteMessage = async (messageId: string) => {
-    await deleteMessage(messageId);
-  };
-
   /** Toggle reaction */
   const handleToggleReaction = async (
     messageId: string,
@@ -197,10 +209,25 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         conversation={conversation}
         connectionStatus={connectionStatus}
         isOnline={isRecipientOnline}
+        pinnedCount={pinnedCount}
         onBack={onBack}
         onToggleSearch={() => setShowInChatSearch((prev) => !prev)}
         onOpenStarred={() => setShowStarredDialog(true)}
+        onTogglePinned={() => setShowPinnedPanel((prev) => !prev)}
       />
+
+      {/* Pinned Messages Panel */}
+      {showPinnedPanel && (
+        <PinnedMessagesPanel
+          conversationId={conversation.id}
+          pins={pins}
+          onJumpToMessage={(msgId) => {
+            handleJumpToMessage(conversation.id, msgId);
+          }}
+          onUnpinMessage={(msgId) => togglePin(msgId)}
+          onClose={() => setShowPinnedPanel(false)}
+        />
+      )}
 
       {/* In-Chat Search Overlay Banner */}
       <InChatSearch
@@ -234,12 +261,16 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         hasMore={hasMore}
         typingUsers={typingUsers}
         starredMessageIds={starredMessageIds}
+        unreadCount={conversation.unreadCount || 0}
         onLoadOlder={loadOlderMessages}
         onRetryMessage={retryMessage}
         onReplyToMessage={handleReplyToMessage}
         onToggleReaction={handleToggleReaction}
         onEditMessage={handleEditMessage}
-        onDeleteMessage={handleDeleteMessage}
+        onDeleteForMe={deleteMessageForMe}
+        onDeleteForEveryone={deleteMessageForEveryone}
+        onTogglePin={togglePin}
+        onForwardMessage={(msg) => {}}
         onToggleStar={toggleStar}
       />
 

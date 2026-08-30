@@ -9,7 +9,7 @@ export type Json =
 export type ConversationType = "direct" | "group";
 export type MemberRole = "owner" | "admin" | "member";
 export type MessageType = "text" | "image" | "file";
-export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥";
+export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥" | "😡" | "👏";
 export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked" | "cancelled" | "expired";
 export type FriendshipState = "NONE" | "PENDING_OUTGOING" | "PENDING_INCOMING" | "FRIENDS" | "SELF";
 export type UserStatus = "online" | "offline" | "away" | "busy";
@@ -186,6 +186,11 @@ export interface Database {
           content: string;
           message_type: MessageType;
           reply_to_message_id: string | null;
+          client_message_id: string | null;
+          edited_at: string | null;
+          deleted_by: string | null;
+          delete_scope: "me" | "everyone" | null;
+          forwarded_from_message_id: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -197,6 +202,11 @@ export interface Database {
           content: string;
           message_type?: MessageType;
           reply_to_message_id?: string | null;
+          client_message_id?: string | null;
+          edited_at?: string | null;
+          deleted_by?: string | null;
+          delete_scope?: "me" | "everyone" | null;
+          forwarded_from_message_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -208,6 +218,11 @@ export interface Database {
           content?: string;
           message_type?: MessageType;
           reply_to_message_id?: string | null;
+          client_message_id?: string | null;
+          edited_at?: string | null;
+          deleted_by?: string | null;
+          delete_scope?: "me" | "everyone" | null;
+          forwarded_from_message_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -300,6 +315,117 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      message_user_states: {
+        Row: {
+          user_id: string;
+          message_id: string;
+          hidden_at: string;
+        };
+        Insert: {
+          user_id: string;
+          message_id: string;
+          hidden_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          message_id?: string;
+          hidden_at?: string;
+        };
+        Relationships: [];
+      };
+      message_pins: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          message_id: string;
+          pinned_by: string;
+          pinned_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          message_id: string;
+          pinned_by: string;
+          pinned_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          message_id?: string;
+          pinned_by?: string;
+          pinned_at?: string;
+        };
+        Relationships: [];
+      };
+      message_delivery_states: {
+        Row: {
+          message_id: string;
+          user_id: string;
+          delivered_at: string;
+        };
+        Insert: {
+          message_id: string;
+          user_id: string;
+          delivered_at?: string;
+        };
+        Update: {
+          message_id?: string;
+          user_id?: string;
+          delivered_at?: string;
+        };
+        Relationships: [];
+      };
+      conversation_user_states: {
+        Row: {
+          user_id: string;
+          conversation_id: string;
+          last_read_message_id: string | null;
+          last_read_at: string | null;
+          unread_count: number;
+          is_marked_unread: boolean;
+        };
+        Insert: {
+          user_id: string;
+          conversation_id: string;
+          last_read_message_id?: string | null;
+          last_read_at?: string | null;
+          unread_count?: number;
+          is_marked_unread?: boolean;
+        };
+        Update: {
+          user_id?: string;
+          conversation_id?: string;
+          last_read_message_id?: string | null;
+          last_read_at?: string | null;
+          unread_count?: number;
+          is_marked_unread?: boolean;
+        };
+        Relationships: [];
+      };
+      conversation_drafts: {
+        Row: {
+          user_id: string;
+          conversation_id: string;
+          content: string;
+          reply_to_message_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          conversation_id: string;
+          content: string;
+          reply_to_message_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          conversation_id?: string;
+          content?: string;
+          reply_to_message_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       attachments: {
         Row: {
@@ -1511,6 +1637,95 @@ export interface Database {
         };
         Returns: boolean;
       };
+      send_message: {
+        Args: {
+          p_conversation_id: string;
+          p_content: string;
+          p_client_message_id?: string | null;
+          p_reply_to_message_id?: string | null;
+          p_forwarded_from_message_id?: string | null;
+          p_message_type?: string | null;
+        };
+        Returns: Json;
+      };
+      edit_message: {
+        Args: {
+          p_message_id: string;
+          p_content: string;
+        };
+        Returns: Json;
+      };
+      delete_message_for_me: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: Json;
+      };
+      delete_message_for_everyone: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: Json;
+      };
+      forward_message: {
+        Args: {
+          p_message_id: string;
+          p_target_conversation_id: string;
+          p_client_message_id?: string | null;
+        };
+        Returns: Json;
+      };
+      pin_message: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: Json;
+      };
+      unpin_message: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: Json;
+      };
+      toggle_message_reaction: {
+        Args: {
+          p_message_id: string;
+          p_reaction: string;
+        };
+        Returns: Json;
+      };
+      mark_message_delivered: {
+        Args: {
+          p_message_id: string;
+        };
+        Returns: Json;
+      };
+      mark_conversation_read: {
+        Args: {
+          p_conversation_id: string;
+        };
+        Returns: Json;
+      };
+      mark_conversation_unread: {
+        Args: {
+          p_conversation_id: string;
+        };
+        Returns: Json;
+      };
+      save_draft: {
+        Args: {
+          p_conversation_id: string;
+          p_content: string;
+          p_reply_to_message_id?: string | null;
+        };
+        Returns: Json;
+      };
+      delete_draft: {
+        Args: {
+          p_conversation_id: string;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -1602,5 +1817,29 @@ export interface ModerationReport {
     username: string;
     display_name?: string;
   };
+}
+
+export type MessageUserState = Database["public"]["Tables"]["message_user_states"]["Row"];
+export type MessagePin = Database["public"]["Tables"]["message_pins"]["Row"];
+export type MessageDeliveryState = Database["public"]["Tables"]["message_delivery_states"]["Row"];
+export type ConversationUserState = Database["public"]["Tables"]["conversation_user_states"]["Row"];
+export type ConversationDraft = Database["public"]["Tables"]["conversation_drafts"]["Row"];
+
+export interface MessageActionState {
+  canReply: boolean;
+  canEdit: boolean;
+  canDeleteForMe: boolean;
+  canDeleteForEveryone: boolean;
+  canForward: boolean;
+  canReact: boolean;
+  canPin: boolean;
+  canReport: boolean;
+}
+
+export interface MessageDto extends Message {
+  sender?: Profile | null;
+  isPinned?: boolean;
+  isDeletedForMe?: boolean;
+  deliveryStates?: MessageDeliveryState[];
 }
 

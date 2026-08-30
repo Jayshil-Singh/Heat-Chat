@@ -51,6 +51,9 @@ export interface ChatMessage extends Message {
   reactions?: ReactionSummary[];
   replyPreview?: ReplyPreviewData | null;
   attachments?: AttachmentWithUrl[];
+  isPinned?: boolean;
+  forwardedFrom?: { id: string; senderName?: string; content?: string } | null;
+  isDeletedForMe?: boolean;
 }
 
 export interface ConversationMemberWithProfile {
