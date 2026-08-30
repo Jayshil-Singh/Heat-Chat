@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, X, Check, Pencil, ImagePlus, Paperclip } from "lucide-react";
+import { Send, Loader2, X, Check, Pencil, ImagePlus, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   MAX_MESSAGE_LENGTH,
@@ -9,7 +9,9 @@ import {
 } from "@/lib/validation/message";
 import { ReplyBanner } from "./reply-banner";
 import { AttachmentPreview } from "./attachment-preview";
+import { VoiceRecorderBar } from "./voice-recorder-bar";
 import { useMediaUpload, type PendingAttachment } from "@/hooks/use-media-upload";
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
 import type { ChatMessage, ReplyPreviewData } from "@/types/chat";
 
 interface MessageComposerProps {
@@ -53,6 +55,7 @@ export function MessageComposer({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [validationError, setValidationError] = React.useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = React.useState(false);
 
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -66,6 +69,16 @@ export function MessageComposer({
     removeAttachment,
     clearAll: clearAttachments,
   } = useMediaUpload();
+
+  const voiceRecorder = useVoiceRecorder();
+
+  // Discard voice recorder when leaving a conversation
+  const voiceDiscard = voiceRecorder.discard;
+  React.useEffect(() => {
+    return () => {
+      voiceDiscard();
+    };
+  }, [voiceDiscard]);
 
   // Draft storage — preserves the in-progress text when edit mode is entered/left
   const draftRef = React.useRef<string>("");
@@ -331,13 +344,13 @@ export function MessageComposer({
         </div>
       )}
 
-      {/* Hidden File Input */}
+      {/* Hidden File Input — accepts images, video, audio, and common docs */}
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileInputChange}
         multiple
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg,audio/mpeg,audio/ogg,audio/wav,audio/webm,application/pdf,text/plain,application/zip"
         className="hidden"
         aria-hidden="true"
       />
@@ -381,6 +394,48 @@ export function MessageComposer({
         />
       )}
 
+      {/* Voice Recorder Bar */}
+      {showVoiceRecorder && !isEditing && (
+        <VoiceRecorderBar
+          recorder={voiceRecorder}
+          disabled={disabled || isSubmitting}
+          onSend={async (blob, mimeType, durationSeconds) => {
+            setShowVoiceRecorder(false);
+            voiceRecorder.discard();
+            // Wrap the blob as a PendingAttachment-compatible structure that
+            // use-messages will detect by file type and route as a voice message.
+            const ext = mimeType.includes("ogg") ? ".ogg" : ".webm";
+            const voiceFile = new File([blob], `voice_message${ext}`, {
+              type: mimeType,
+              lastModified: Date.now(),
+            });
+            const voiceAttachment: PendingAttachment = {
+              id: `voice_${Date.now()}`,
+              originalFile: voiceFile,
+              processed: {
+                file: voiceFile,
+                fileName: `${crypto.randomUUID()}${ext}`,
+                originalFileName: voiceFile.name,
+                mimeType,
+                fileSize: blob.size,
+                width: 0,
+                height: 0,
+                previewUrl: "",
+                // @ts-expect-error — extended field for voice duration
+                durationSeconds,
+              },
+              status: "ready",
+              progress: 0,
+            };
+            await onSendMessage("", [voiceAttachment]);
+          }}
+          onDiscard={() => {
+            voiceRecorder.discard();
+            setShowVoiceRecorder(false);
+          }}
+        />
+      )}
+
       {/* Errors (validation or media upload) */}
       {(validationError || mediaUploadError) && (
         <div className="px-4 pb-1 pt-1.5 text-xs font-medium text-red-500" role="alert">
@@ -400,9 +455,9 @@ export function MessageComposer({
             variant="ghost"
             size="icon"
             onClick={() => fileInputRef.current?.click()}
-            disabled={disabled || isSubmitting || isMediaProcessing}
-            title="Attach images (JPG, PNG, WebP)"
-            aria-label="Attach images"
+            disabled={disabled || isSubmitting || isMediaProcessing || showVoiceRecorder}
+            title="Attach files"
+            aria-label="Attach files"
             className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
           >
             {isMediaProcessing ? (
@@ -472,20 +527,42 @@ export function MessageComposer({
             </Button>
           </div>
         ) : (
-          <Button
-            type="submit"
-            variant="heat"
-            size="icon"
-            disabled={!hasValidInput || isSubmitting || disabled || isOverLength || isMediaProcessing}
-            aria-label="Send message"
-            className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
-          >
-            {isSubmitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
+          <>
+            {/* Mic button — shown when no text typed and no attachments staged */}
+            {!content.trim() && stagedAttachments.length === 0 && !showVoiceRecorder && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setShowVoiceRecorder(true);
+                  voiceRecorder.start();
+                }}
+                disabled={disabled || isSubmitting}
+                aria-label="Record voice message"
+                className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Mic className="h-5 w-5" />
+              </Button>
             )}
-          </Button>
+            {/* Send button — shown when there is text or attachments */}
+            {(content.trim() || stagedAttachments.length > 0) && (
+              <Button
+                type="submit"
+                variant="heat"
+                size="icon"
+                disabled={!hasValidInput || isSubmitting || disabled || isOverLength || isMediaProcessing}
+                aria-label="Send message"
+                className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+          </>
         )}
       </form>
     </div>

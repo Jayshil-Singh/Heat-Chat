@@ -48,13 +48,13 @@ export function useMediaUpload() {
     const availableSlots = MAX_ATTACHMENTS_PER_MESSAGE - currentCount;
 
     if (availableSlots <= 0) {
-      setUploadError(`Maximum of ${MAX_ATTACHMENTS_PER_MESSAGE} images allowed per message.`);
+      setUploadError(`Maximum of ${MAX_ATTACHMENTS_PER_MESSAGE} attachments allowed per message.`);
       return;
     }
 
     const filesToProcess = fileArray.slice(0, availableSlots);
     if (fileArray.length > availableSlots) {
-      setUploadError(`Only ${availableSlots} more image(s) could be added (max ${MAX_ATTACHMENTS_PER_MESSAGE}).`);
+      setUploadError(`Only ${availableSlots} more file(s) could be added (max ${MAX_ATTACHMENTS_PER_MESSAGE}).`);
     }
 
     setIsProcessing(true);
@@ -68,22 +68,50 @@ export function useMediaUpload() {
 
     setStagedAttachments((prev) => [...prev, ...newPendingItems]);
 
-    // Process images sequentially / in parallel
+    // Process files — images get canvas compression, everything else gets a passthrough
     for (const item of newPendingItems) {
+      const isImage = item.originalFile.type.startsWith("image/");
       try {
-        const processed = await processImageFile(item.originalFile);
-        setStagedAttachments((prev) =>
-          prev.map((att) =>
-            att.id === item.id
-              ? { ...att, processed, status: "ready" as const, progress: 0 }
-              : att
-          )
-        );
+        if (isImage) {
+          const processed = await processImageFile(item.originalFile);
+          setStagedAttachments((prev) =>
+            prev.map((att) =>
+              att.id === item.id
+                ? { ...att, processed, status: "ready" as const, progress: 0 }
+                : att
+            )
+          );
+        } else {
+          // Non-image: passthrough without canvas processing
+          const safeId = (typeof crypto !== "undefined" && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+          const ext = item.originalFile.name.includes(".")
+            ? item.originalFile.name.slice(item.originalFile.name.lastIndexOf("."))
+            : "";
+          const processed: ProcessedImage = {
+            file: item.originalFile,
+            fileName: `${safeId}${ext}`,
+            originalFileName: item.originalFile.name,
+            mimeType: item.originalFile.type || "application/octet-stream",
+            fileSize: item.originalFile.size,
+            width: 0,
+            height: 0,
+            previewUrl: "",
+          };
+          setStagedAttachments((prev) =>
+            prev.map((att) =>
+              att.id === item.id
+                ? { ...att, processed, status: "ready" as const, progress: 0 }
+                : att
+            )
+          );
+        }
       } catch (err: any) {
         setStagedAttachments((prev) =>
           prev.map((att) =>
             att.id === item.id
-              ? { ...att, status: "failed" as const, error: err.message || "Failed to process image." }
+              ? { ...att, status: "failed" as const, error: err.message || "Failed to process file." }
               : att
           )
         );

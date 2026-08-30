@@ -134,18 +134,35 @@ export function useMessages(conversationId: string | null) {
         }[]
       );
 
-      // Batch-resolve signed URLs for all attachments
+      // Batch-resolve signed URLs for all attachments (main + thumbnails)
       const rawAttachments = (attachmentsRes.data || []) as Attachment[];
       const attachmentsMap = new Map<string, AttachmentWithUrl[]>();
 
       if (rawAttachments.length > 0) {
         const paths = rawAttachments.map((a) => a.storage_path);
-        const { data: signedUrlsData } = await supabase.storage
-          .from("chat-attachments")
-          .createSignedUrls(paths, 3600);
+        const thumbnailPaths = rawAttachments
+          .map((a) => (a as any).thumbnail_path as string | null | undefined)
+          .filter((p): p is string => !!p);
+
+        const [signedUrlsRes, thumbnailSignedUrlsRes] = await Promise.all([
+          supabase.storage.from("chat-attachments").createSignedUrls(paths, 3600),
+          thumbnailPaths.length > 0
+            ? supabase.storage.from("chat-attachments").createSignedUrls(thumbnailPaths, 3600)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        // Build thumbnail signed URL map by storage_path
+        const thumbSignedMap = new Map<string, string>();
+        (thumbnailSignedUrlsRes.data || []).forEach((row) => {
+          const p = (row as { path: string | null }).path;
+          const s = (row as { signedUrl: string | null }).signedUrl;
+          if (p && s) thumbSignedMap.set(p, s);
+        });
 
         rawAttachments.forEach((att, idx) => {
-          const signedUrl = signedUrlsData?.[idx]?.signedUrl || "";
+          const signedUrl = signedUrlsRes.data?.[idx]?.signedUrl || "";
+          const thumbPath = (att as any).thumbnail_path as string | null | undefined;
+          const thumbnailSignedUrl = thumbPath ? (thumbSignedMap.get(thumbPath) || null) : null;
           const list = attachmentsMap.get(att.message_id) || [];
           list.push({
             id: att.id,
@@ -155,6 +172,8 @@ export function useMessages(conversationId: string | null) {
             fileSize: att.file_size,
             width: att.width,
             height: att.height,
+            durationSeconds: (att as any).duration_seconds ?? null,
+            thumbnailSignedUrl,
             storagePath: att.storage_path,
             signedUrl,
           });
@@ -642,6 +661,20 @@ export function useMessages(conversationId: string | null) {
       if (validationErr) return { success: false, error: validationErr };
     }
 
+    /** Infer canonical message_type from the first attachment's MIME type */
+    function inferMessageType(
+      attachments: PendingAttachment[]
+    ): import("@/types/database").MessageType {
+      const mimeType = attachments[0]?.processed?.mimeType || attachments[0]?.originalFile?.type || "";
+      if (mimeType.startsWith("image/")) return "image";
+      if (mimeType.startsWith("video/")) return "video";
+      if (mimeType === "audio/webm" || mimeType.startsWith("audio/webm;")) return "voice";
+      if (mimeType.startsWith("audio/")) return "audio";
+      return "file";
+    }
+
+    const derivedType = hasAttachments ? inferMessageType(stagedAttachments!) : "text";
+
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Build optimistic attachments
@@ -663,7 +696,7 @@ export function useMessages(conversationId: string | null) {
       conversation_id: conversationId,
       sender_id: user.id,
       content: trimmedContent,
-      message_type: hasAttachments ? "image" : "text",
+      message_type: derivedType,
       reply_to_message_id: replyToMessageId || null,
       forwarded_from_message_id: null,
       client_message_id: null,
@@ -688,7 +721,13 @@ export function useMessages(conversationId: string | null) {
     let createdMessageId: string | null = null;
 
     try {
-      const messageContent = trimmedContent || (hasAttachments ? "Photo" : "");
+      const messageContent =
+        trimmedContent ||
+        (derivedType === "voice" ? "" :
+         derivedType === "audio" ? "" :
+         derivedType === "video" ? "" :
+         derivedType === "file" ? "" :
+         "");
 
       const insertPayload: {
         conversation_id: string;
@@ -700,7 +739,7 @@ export function useMessages(conversationId: string | null) {
         conversation_id: conversationId,
         sender_id: user.id,
         content: messageContent,
-        message_type: hasAttachments ? "image" : "text",
+        message_type: derivedType,
       };
 
       if (replyToMessageId) {
@@ -760,6 +799,7 @@ export function useMessages(conversationId: string | null) {
               file_size: processed.fileSize,
               width: processed.width,
               height: processed.height,
+              duration_seconds: (processed as any).durationSeconds ?? null,
             })
             .select("*")
             .single();
@@ -780,8 +820,10 @@ export function useMessages(conversationId: string | null) {
             fileSize: insertedAtt.file_size,
             width: insertedAtt.width,
             height: insertedAtt.height,
+            durationSeconds: (insertedAtt as any).duration_seconds ?? null,
+            thumbnailSignedUrl: null,
             storagePath: insertedAtt.storage_path,
-            signedUrl: signedData?.signedUrl || processed.previewUrl,
+            signedUrl: signedData?.signedUrl || (processed as any).previewUrl || "",
           });
         }
       }

@@ -3,11 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Pin } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Pin, Images } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
 import { GroupDetailsDialog } from "./group-details-dialog";
+import { MediaGalleryDialog } from "./media-gallery-dialog";
 import { usePresence } from "@/hooks/use-presence";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails } from "@/types/chat";
@@ -23,6 +24,7 @@ interface ChatHeaderProps {
   onToggleSearch?: () => void;
   onOpenStarred?: () => void;
   onTogglePinned?: () => void;
+  onOpenMedia?: () => void;
 }
 
 export function ChatHeader({
@@ -35,12 +37,14 @@ export function ChatHeader({
   onToggleSearch,
   onOpenStarred,
   onTogglePinned,
+  onOpenMedia,
 }: ChatHeaderProps) {
   const router = useRouter();
   const { isUserOnline } = usePresence();
   const { isConversationMuted, toggleMute } = useNotificationContext();
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [showGroupModal, setShowGroupModal] = React.useState(false);
+  const [showMediaGallery, setShowMediaGallery] = React.useState(false);
 
   if (!conversation) return null;
 
@@ -193,6 +197,17 @@ export function ChatHeader({
             </Button>
           )}
 
+          {/* Media Gallery button */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setShowMediaGallery(true)}
+            title="Shared media, audio & files"
+            aria-label="View shared media gallery"
+          >
+            <Images className="h-4 w-4 text-zinc-500 hover:text-heat-500" />
+          </Button>
+
           <Button
             variant="ghost"
             size="icon-sm"
@@ -251,6 +266,13 @@ export function ChatHeader({
           onRefreshConversation={onRefreshConversation}
         />
       )}
+
+      {/* Media Gallery */}
+      <MediaGalleryDialog
+        conversationId={conversation.id}
+        isOpen={showMediaGallery}
+        onClose={() => setShowMediaGallery(false)}
+      />
     </>
   );
 }

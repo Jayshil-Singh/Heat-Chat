@@ -39,6 +39,10 @@ export interface AttachmentWithUrl {
   fileSize: number;
   width?: number | null;
   height?: number | null;
+  /** Duration in seconds — for audio, voice, and video attachments */
+  durationSeconds?: number | null;
+  /** Signed URL for thumbnail (video poster, etc.) */
+  thumbnailSignedUrl?: string | null;
   storagePath: string;
   signedUrl: string;
 }

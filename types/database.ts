@@ -8,7 +8,7 @@ export type Json =
 
 export type ConversationType = "direct" | "group";
 export type MemberRole = "owner" | "admin" | "member";
-export type MessageType = "text" | "image" | "file";
+export type MessageType = "text" | "image" | "video" | "audio" | "voice" | "file";
 export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥" | "😡" | "👏";
 export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked" | "cancelled" | "expired";
 export type FriendshipState = "NONE" | "PENDING_OUTGOING" | "PENDING_INCOMING" | "FRIENDS" | "SELF";
@@ -437,6 +437,9 @@ export interface Database {
           file_size: number;
           width: number | null;
           height: number | null;
+          duration_seconds: number | null;
+          thumbnail_path: string | null;
+          metadata: Record<string, unknown> | null;
           created_at: string;
         };
         Insert: {
@@ -448,6 +451,9 @@ export interface Database {
           file_size: number;
           width?: number | null;
           height?: number | null;
+          duration_seconds?: number | null;
+          thumbnail_path?: string | null;
+          metadata?: Record<string, unknown> | null;
           created_at?: string;
         };
         Update: {
@@ -459,6 +465,9 @@ export interface Database {
           file_size?: number;
           width?: number | null;
           height?: number | null;
+          duration_seconds?: number | null;
+          thumbnail_path?: string | null;
+          metadata?: Record<string, unknown> | null;
           created_at?: string;
         };
         Relationships: [
