@@ -85,9 +85,10 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
   };
 
   return (
-    <aside className="hidden md:flex h-full md:w-20 md:p-3 lg:w-64 lg:p-4 flex-col justify-between border-r border-zinc-200 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-950/70 backdrop-blur-xl shrink-0 transition-all duration-200">
-      {/* Brand Header */}
-      <div className="space-y-4">
+    <aside className="hidden md:flex h-full md:w-20 md:p-3 lg:w-64 lg:p-4 flex-col border-r border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/80 backdrop-blur-xl shrink-0 transition-all duration-200">
+      {/* Scrollable Navigation / Content Area */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-0.5 no-scrollbar">
+        {/* Brand Header */}
         <div className="flex items-center justify-between md:justify-center lg:justify-between px-1">
           <Link
             href="/chat"
@@ -136,7 +137,7 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
         )}
 
         {/* Navigation Items */}
-        <nav className="space-y-1 pt-1" aria-label="Main Navigation">
+        <nav className="space-y-1" aria-label="Main Navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -169,13 +170,17 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
         </nav>
       </div>
 
-      {/* Footer Area */}
-      <div className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-center lg:justify-between px-1">
-          <span className="hidden lg:inline text-xs font-medium text-zinc-500 dark:text-zinc-400">
+      {/* Footer Area: Fixed to bottom of sidebar */}
+      <div className="shrink-0 pt-4 mt-auto border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+        {/* Appearance Section */}
+        <div className="hidden lg:flex flex-col gap-1.5 px-0.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Appearance
           </span>
-          <ThemeToggle />
+          <ThemeToggle className="w-full" />
+        </div>
+        <div className="hidden md:flex lg:hidden justify-center">
+          <ThemeToggle compact />
         </div>
 
         {/* User profile / Auth status */}

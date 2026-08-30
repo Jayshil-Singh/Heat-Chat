@@ -89,7 +89,12 @@ export function AdminHeader() {
             <span>Admin Portal</span>
           </div>
 
-          <ThemeToggle />
+          <div className="hidden sm:block">
+            <ThemeToggle />
+          </div>
+          <div className="sm:hidden">
+            <ThemeToggle compact />
+          </div>
 
           <Link href="/admin/profile" className="flex items-center gap-2 pl-1">
             <Avatar

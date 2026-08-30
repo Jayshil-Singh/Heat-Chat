@@ -57,7 +57,12 @@ export default function HomePage() {
 
           {/* Nav Right CTAs */}
           <div className="flex items-center gap-3">
-            <ThemeToggle />
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
+            <div className="sm:hidden">
+              <ThemeToggle compact />
+            </div>
             {!isLoading && (
               <>
                 {user && isEmailVerified ? (

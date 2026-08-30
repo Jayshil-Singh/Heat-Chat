@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Search className="h-4 w-4" />
                 </button>
                 <MobileNotificationCenter />
-                <ThemeToggle />
+                <ThemeToggle compact />
               </div>
             </header>
 
