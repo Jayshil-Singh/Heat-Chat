@@ -8,7 +8,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-zinc-50 px-4 py-8 dark:bg-zinc-950 sm:px-6 lg:px-8">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center bg-zinc-50 px-4 py-8 dark:bg-zinc-950 sm:px-6 lg:px-8">
       {/* Background ambient glow */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
         <div className="h-96 w-96 rounded-full bg-gradient-to-tr from-heat-500/10 to-amber-500/10 blur-3xl dark:from-heat-500/5 dark:to-amber-500/5" />
@@ -20,6 +20,7 @@ export default function AuthLayout({
           <Link
             href="/"
             className="flex items-center gap-3 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 rounded-2xl p-1"
+            title="Heat Chat"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-lg shadow-heat-500/30">
               <Flame className="h-7 w-7 fill-current" />

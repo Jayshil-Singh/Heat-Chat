@@ -7,13 +7,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  KeyRound,
   AlertCircle,
-  CheckCircle2,
-  ArrowLeft,
   Loader2,
-  Flame,
-  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -327,38 +322,14 @@ function UpdatePasswordForm() {
 
 export default function UpdatePasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-950">
-      <div className="w-full max-w-md space-y-6 rounded-3xl border border-zinc-200/80 bg-white/90 p-8 shadow-xl backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/90">
-        <div className="flex flex-col items-center justify-center space-y-2">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 transition-transform hover:scale-105"
-            title="Heat Chat"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-lg shadow-heat-500/30">
-              <Flame className="h-6 w-6 fill-current" />
-            </div>
-          </Link>
-          <div className="text-center">
-            <h1 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-white">
-              Heat Chat
-            </h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Private friends chat
-            </p>
-          </div>
+    <React.Suspense
+      fallback={
+        <div className="flex justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-heat-500" />
         </div>
-
-        <React.Suspense
-          fallback={
-            <div className="flex justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-heat-500" />
-            </div>
-          }
-        >
-          <UpdatePasswordForm />
-        </React.Suspense>
-      </div>
-    </div>
+      }
+    >
+      <UpdatePasswordForm />
+    </React.Suspense>
   );
 }
