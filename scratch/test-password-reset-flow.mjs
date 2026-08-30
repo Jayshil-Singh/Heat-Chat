@@ -37,7 +37,11 @@ async function runPasswordResetSuite() {
   assert(fs.existsSync(resetPagePath), "app/(auth)/reset-password/page.tsx exists");
   const resetPageContent = fs.readFileSync(resetPagePath, "utf-8");
   assert(resetPageContent.includes("resetPasswordForEmail"), "Calls supabase.auth.resetPasswordForEmail");
-  assert(resetPageContent.includes("getCallbackUrl(\"/auth/callback?next=/update-password\")"), "Specifies explicit redirectTo with getCallbackUrl");
+  // redirectTo must be plain /auth/callback (no ?next= suffix) so it exactly matches
+  // the Supabase Redirect URL allowlist entry — Supabase rejects redirectTo URLs
+  // that don't match the allowlist, and may not match when a query string is present.
+  // The callback route detects type=recovery and routes to /update-password.
+  assert(resetPageContent.includes("getCallbackUrl(\"/auth/callback\")"), "Specifies explicit redirectTo with getCallbackUrl (plain /auth/callback, no query string)");
   assert(!resetPageContent.includes("min-h-screen"), "reset-password page does NOT declare nested min-h-screen");
   assert(!resetPageContent.includes("min-h-dvh"), "reset-password page does NOT declare nested min-h-dvh");
   assert(!resetPageContent.includes("rounded-3xl border"), "reset-password page does NOT declare nested outer card");
@@ -87,7 +91,7 @@ async function runPasswordResetSuite() {
   const adminForgotPath = path.join(process.cwd(), "app", "admin", "forgot-password", "page.tsx");
   assert(fs.existsSync(adminForgotPath), "app/admin/forgot-password/page.tsx exists");
   const adminForgotContent = fs.readFileSync(adminForgotPath, "utf-8");
-  assert(adminForgotContent.includes("getCallbackUrl(\"/auth/callback?next=/update-password\")"), "Admin forgot password uses centralized getCallbackUrl");
+  assert(adminForgotContent.includes("getCallbackUrl(\"/auth/callback\")"), "Admin forgot password uses centralized getCallbackUrl (plain /auth/callback)");
 
   // 8. Password Reset Email Template Invariants
   console.log("\n--- 8. Password Reset Email Template Invariants ---");

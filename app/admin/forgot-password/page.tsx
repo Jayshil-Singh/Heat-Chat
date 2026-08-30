@@ -26,8 +26,10 @@ export default function AdminForgotPasswordPage() {
 
     try {
       const supabase = createClient();
+      // Use plain /auth/callback so it exactly matches the Supabase allowlist entry.
+      // The callback route detects type=recovery and routes to /update-password.
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: getCallbackUrl("/auth/callback?next=/update-password"),
+        redirectTo: getCallbackUrl("/auth/callback"),
       });
 
       if (error) {

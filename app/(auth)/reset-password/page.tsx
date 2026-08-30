@@ -36,7 +36,13 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      const redirectUrl = getCallbackUrl("/auth/callback?next=/update-password");
+      // Use plain /auth/callback — no query string — so the URL exactly matches
+      // the Supabase Redirect URL allowlist entry. The callback route detects
+      // type=recovery from the Supabase-appended parameter and routes to /update-password.
+      const redirectUrl = getCallbackUrl("/auth/callback");
+      // Debug: verify the exact redirectTo value in browser DevTools console
+      // Remove after production verification is complete
+      console.info("[Heat Chat] resetPasswordForEmail redirectTo:", redirectUrl);
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: redirectUrl,
       });
