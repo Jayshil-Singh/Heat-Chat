@@ -4,15 +4,25 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") || "/chat";
+  const next = requestUrl.searchParams.get("next") || "";
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
   const error = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
 
+  const isPasswordRecovery =
+    next === "/update-password" ||
+    type === "recovery" ||
+    next.includes("/update-password");
+
   // If Supabase redirected back with an error (e.g. token expired)
   if (error || errorDescription) {
     const errorMsg = errorDescription || error || "Verification failed";
+    if (isPasswordRecovery) {
+      const redirectUrl = new URL("/update-password", request.url);
+      redirectUrl.searchParams.set("error", "invalid_or_expired");
+      return NextResponse.redirect(redirectUrl);
+    }
     const redirectUrl = new URL("/verify-email", request.url);
     redirectUrl.searchParams.set("error", errorMsg);
     return NextResponse.redirect(redirectUrl);
@@ -24,6 +34,11 @@ export async function GET(request: NextRequest) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
     if (exchangeError) {
       console.error("Auth callback code exchange error:", exchangeError.message);
+      if (isPasswordRecovery) {
+        const redirectUrl = new URL("/update-password", request.url);
+        redirectUrl.searchParams.set("error", "invalid_or_expired");
+        return NextResponse.redirect(redirectUrl);
+      }
       const redirectUrl = new URL("/verify-email", request.url);
       redirectUrl.searchParams.set(
         "error",
@@ -38,6 +53,11 @@ export async function GET(request: NextRequest) {
     });
     if (otpError) {
       console.error("Auth callback verifyOtp error:", otpError.message);
+      if (isPasswordRecovery) {
+        const redirectUrl = new URL("/update-password", request.url);
+        redirectUrl.searchParams.set("error", "invalid_or_expired");
+        return NextResponse.redirect(redirectUrl);
+      }
       const redirectUrl = new URL("/verify-email", request.url);
       redirectUrl.searchParams.set(
         "error",
@@ -47,13 +67,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 1. Password Recovery Flow:
+  // Must preserve the active recovery session so the user can call updateUser({ password })
+  if (isPasswordRecovery) {
+    const updatePasswordUrl = new URL("/update-password", request.url);
+    return NextResponse.redirect(updatePasswordUrl);
+  }
+
+  // 2. Normal Signup / Email Verification Flow:
   // Check the authoritative user verification state
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user?.email_confirmed_at) {
-    // User is fully verified: clear token session and redirect to /login for credential authentication
+    // Normal registration user is verified: clear temporary token session and redirect to /login
     await supabase.auth.signOut();
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("verified", "true");

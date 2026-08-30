@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { getCallbackUrl } from "@/lib/utils/site-url";
 
 export default function AdminForgotPasswordPage() {
   const [email, setEmail] = React.useState("");
@@ -26,7 +27,7 @@ export default function AdminForgotPasswordPage() {
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: getCallbackUrl("/auth/callback?next=/update-password"),
       });
 
       if (error) {

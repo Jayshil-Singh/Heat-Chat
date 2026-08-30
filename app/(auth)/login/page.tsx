@@ -14,6 +14,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/chat";
   const isVerified = searchParams.get("verified") === "true";
+  const isResetSuccess = searchParams.get("reset") === "success";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -92,6 +93,16 @@ function LoginForm() {
         >
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
           <span>Your email has been verified successfully. Please sign in to enter Heat Chat.</span>
+        </div>
+      )}
+
+      {isResetSuccess && (
+        <div
+          className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
+          role="status"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          <span>Password updated successfully. Please sign in with your new password.</span>
         </div>
       )}
 
