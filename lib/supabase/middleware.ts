@@ -34,8 +34,18 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isEmailVerified = Boolean(user?.email_confirmed_at);
   const pathname = request.nextUrl.pathname;
+
+  // 0. Explicit bypass for auth callback, update-password recovery, and API routes
+  if (
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/update-password") ||
+    pathname.startsWith("/api/")
+  ) {
+    return supabaseResponse;
+  }
+
+  const isEmailVerified = Boolean(user?.email_confirmed_at);
 
   // Normal user protected paths
   const isNormalProtectedRoute =
