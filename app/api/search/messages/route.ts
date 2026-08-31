@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("search_messages", {
       p_query: trimmedQuery,
       p_conversation_id: conversationId,

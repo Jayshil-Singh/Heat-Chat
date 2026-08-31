@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("search_people", {
       p_query: trimmed,
       p_limit: limit,

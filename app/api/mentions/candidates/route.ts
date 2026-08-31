@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("get_mention_candidates", {
       p_conversation_id: conversationId,
       p_query: q.trim(),

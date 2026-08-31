@@ -50,7 +50,6 @@ export async function PATCH(
       while ((m = mentionsRegex.exec(content || "")) !== null) {
         if (m[1]) usernames.push(m[1].toLowerCase());
       }
-      // eslint-disable-next-line
       await (supabase.rpc as any)("reconcile_message_mentions", {
         p_message_id: messageId,
         p_new_usernames: Array.from(new Set(usernames)),

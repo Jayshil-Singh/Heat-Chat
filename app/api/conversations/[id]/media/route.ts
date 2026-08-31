@@ -38,7 +38,6 @@ export async function GET(
   }
 
   // Call secure RPC that enforces membership and hidden-message exclusion
-  // eslint-disable-next-line
   const { data, error } = await (supabase.rpc as any)("get_conversation_media", {
     p_conversation_id: conversationId,
     p_category: category,

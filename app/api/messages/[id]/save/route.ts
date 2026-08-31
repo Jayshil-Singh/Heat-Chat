@@ -33,7 +33,6 @@ export async function POST(
   }
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("save_message", {
       p_message_id: messageId,
     })) as { data: boolean | null; error: { message?: string } | null };
@@ -98,7 +97,6 @@ export async function DELETE(
   }
 
   try {
-    // eslint-disable-next-line
     const { error } = (await (supabase.rpc as any)("unsave_message", {
       p_message_id: messageId,
     })) as { error: { message?: string } | null };

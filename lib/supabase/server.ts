@@ -6,23 +6,27 @@ export async function createClient() {
   const cookieStore = await cookies();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabasePublishableKey =
+  const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabasePublishableKey) {
+  if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      "Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be configured."
+      "[Heat Chat] Missing Supabase environment variables: " +
+      "NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY " +
+      "(or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be set in your Vercel project environment variables. " +
+      "See: https://vercel.com/docs/projects/environment-variables"
     );
   }
 
   if (supabaseUrl.includes("placeholder.supabase.co")) {
     throw new Error(
-      "Invalid Supabase URL: placeholder.supabase.co is not a valid project URL. Set NEXT_PUBLIC_SUPABASE_URL to your active Supabase project (e.g. https://rmvpdcftfdeizitnrvkw.supabase.co)."
+      "[Heat Chat] Invalid Supabase URL: placeholder.supabase.co is not a real project. " +
+      "Set NEXT_PUBLIC_SUPABASE_URL=https://rmvpdcftfdeizitnrvkw.supabase.co in Vercel."
     );
   }
 
-  return createServerClient<Database>(supabaseUrl, supabasePublishableKey, {
+  return createServerClient<Database>(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

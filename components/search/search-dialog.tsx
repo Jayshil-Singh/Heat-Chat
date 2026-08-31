@@ -80,7 +80,8 @@ export function SearchDialog({
       clearGlobalSearch();
       setShowFilters(false);
     }
-  }, [isOpen, initialCategory, initialConversationId]);
+  }, [isOpen, initialCategory, initialConversationId, clearGlobalSearch, setActiveCategory, setFilters]);
+
 
   // Jump to message in chat
   const handleJumpToMessage = (conversationId: string, messageId: string) => {

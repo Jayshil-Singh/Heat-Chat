@@ -49,7 +49,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("search_media", {
       p_query: q?.trim() || null,
       p_category: category,

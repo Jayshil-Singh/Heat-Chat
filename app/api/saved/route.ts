@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 30 : rawLimit, 1), 100);
 
   try {
-    // eslint-disable-next-line
     const { data, error } = (await (supabase.rpc as any)("get_saved_messages", {
       p_query: q?.trim() || null,
       p_conversation_id: conversationId,
