@@ -229,14 +229,17 @@ export async function POST(
       if (error.message.includes("PRIVACY_RESTRICTED")) {
         return NextResponse.json({ error: "PRIVACY_RESTRICTED", message: "This user does not accept direct messages." }, { status: 403 });
       }
-      if (error.message.includes("MESSAGE_TOO_LONG")) {
-        return NextResponse.json({ error: "MESSAGE_TOO_LONG", message: "Message exceeds 4000 characters." }, { status: 400 });
+      if (error.message.includes("MESSAGE_TOO_LONG") || error.message.includes("message_content_length")) {
+        return NextResponse.json({ error: "MESSAGE_TOO_LONG", message: "Message or caption exceeds character limit." }, { status: 400 });
+      }
+      if (error.message.includes("MESSAGE_EMPTY")) {
+        return NextResponse.json({ error: "MESSAGE_EMPTY", message: "Cannot send an empty message." }, { status: 400 });
       }
       if (error.message.includes("INVALID_REPLY_TARGET")) {
         return NextResponse.json({ error: "INVALID_REPLY_TARGET", message: "Cannot reply to a message outside this conversation." }, { status: 400 });
       }
       console.error("[Heat Chat] send_message RPC error:", error.message);
-      return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE" }, { status: 500 });
+      return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE", message: "Couldn't send this message. Please try again." }, { status: 500 });
     }
 
     return NextResponse.json({

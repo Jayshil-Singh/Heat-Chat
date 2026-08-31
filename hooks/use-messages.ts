@@ -760,9 +760,24 @@ export function useMessages(conversationId: string | null) {
           )
         );
         pendingTempIdsRef.current.delete(trimmedContent || tempId);
+        const rawErr = insertError?.message || "";
+        let friendlyErr = "Failed to send message.";
+        if (rawErr.includes("message_content_length") || rawErr.includes("MESSAGE_TOO_LONG")) {
+          friendlyErr = hasAttachments ? "Caption is too long (max 4000 characters)." : "Message is too long (max 4000 characters).";
+        } else if (rawErr.includes("MESSAGE_EMPTY")) {
+          friendlyErr = "Cannot send an empty message.";
+        } else if (rawErr.includes("MESSAGE_BLOCKED")) {
+          friendlyErr = "You cannot message this user.";
+        } else if (rawErr.includes("PRIVACY_RESTRICTED")) {
+          friendlyErr = "This user does not accept direct messages.";
+        } else if (rawErr.includes("CONVERSATION_ACCESS_DENIED")) {
+          friendlyErr = "You are not a member of this conversation.";
+        } else if (hasAttachments) {
+          friendlyErr = "Couldn't send this file. Please try again.";
+        }
         return {
           success: false,
-          error: insertError?.message || "Failed to send message.",
+          error: friendlyErr,
         };
       }
 
@@ -875,8 +890,16 @@ export function useMessages(conversationId: string | null) {
           m.tempId === tempId ? { ...m, status: "failed" } : m
         )
       );
-      pendingTempIdsRef.current.delete(trimmedContent || tempId);
-      return { success: false, error: err.message || "Failed to send message." };
+      const catchErr = err?.message || "";
+      let friendlyCatchErr = "Failed to send message.";
+      if (catchErr.includes("message_content_length") || catchErr.includes("MESSAGE_TOO_LONG")) {
+        friendlyCatchErr = hasAttachments ? "Caption is too long (max 4000 characters)." : "Message is too long (max 4000 characters).";
+      } else if (catchErr.includes("Upload failed")) {
+        friendlyCatchErr = catchErr;
+      } else if (hasAttachments) {
+        friendlyCatchErr = "Couldn't send this file. Please try again.";
+      }
+      return { success: false, error: friendlyCatchErr };
     }
   };
 

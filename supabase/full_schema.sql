@@ -164,12 +164,15 @@ create table if not exists public.messages (
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   sender_id uuid not null references public.profiles(id) on delete cascade,
   content text not null,
-  message_type text not null default 'text' check (message_type in ('text', 'image', 'file')),
+  message_type text not null default 'text' check (message_type in ('text', 'image', 'video', 'audio', 'voice', 'file')),
   reply_to_message_id uuid references public.messages(id) on delete set null,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
   deleted_at timestamptz,
-  constraint message_content_length check (char_length(content) <= 5000 and char_length(trim(content)) > 0)
+  constraint message_content_length check (
+    char_length(content) <= 5000 and
+    (message_type <> 'text' or char_length(trim(content)) > 0)
+  )
 );
 
 create index if not exists messages_conv_created_idx on public.messages(conversation_id, created_at desc);
@@ -3234,9 +3237,9 @@ begin
     end if;
   end if;
 
-  -- 4. Validate content
+  -- 4. Validate content based on message_type
   v_clean_content := trim(coalesce(p_content, ''));
-  if length(v_clean_content) = 0 then
+  if coalesce(p_message_type, 'text') = 'text' and length(v_clean_content) = 0 then
     raise exception 'MESSAGE_EMPTY';
   end if;
   if length(v_clean_content) > 4000 then
