@@ -42,6 +42,23 @@ export async function PATCH(
       return NextResponse.json({ error: "FAILED_TO_EDIT_MESSAGE" }, { status: 500 });
     }
 
+    // Reconcile mentions if any
+    try {
+      const mentionsRegex = /(?:^|[\s.,!?;:()[\]{}'"])@([a-zA-Z0-9_]{3,30})(?=$|[\s.,!?;:()[\]{}'"])/g;
+      const usernames: string[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = mentionsRegex.exec(content || "")) !== null) {
+        if (m[1]) usernames.push(m[1].toLowerCase());
+      }
+      // eslint-disable-next-line
+      await (supabase.rpc as any)("reconcile_message_mentions", {
+        p_message_id: messageId,
+        p_new_usernames: Array.from(new Set(usernames)),
+      });
+    } catch (mentionErr) {
+      console.warn("[Heat Chat] Failed to reconcile mentions on edit:", mentionErr);
+    }
+
     return NextResponse.json({
       success: true,
       ...((data as Record<string, any>) || {}),

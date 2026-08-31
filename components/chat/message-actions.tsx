@@ -10,6 +10,7 @@ import {
   Trash2,
   Check,
   Star,
+  Bookmark,
 } from "lucide-react";
 import { ReactionPicker } from "./reaction-picker";
 import type { ReactionType } from "@/types/database";
@@ -173,7 +174,7 @@ export function MessageActions({
               Reply
             </button>
 
-            {/* Star / Unstar — non-deleted messages */}
+            {/* Save / Unsave — non-deleted messages */}
             {!isDeleted && onToggleStar && (
               <button
                 role="menuitem"
@@ -184,7 +185,7 @@ export function MessageActions({
                 }}
                 className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700/50 focus-visible:outline-none focus-visible:bg-zinc-50"
               >
-                <Star
+                <Bookmark
                   className={`h-3.5 w-3.5 ${
                     isStarred
                       ? "fill-amber-400 text-amber-400"
@@ -192,7 +193,7 @@ export function MessageActions({
                   }`}
                   aria-hidden="true"
                 />
-                {isStarred ? "Unstar message" : "Star message"}
+                {isStarred ? "Remove from saved" : "Save message"}
               </button>
             )}
 

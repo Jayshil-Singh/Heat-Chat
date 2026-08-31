@@ -15,6 +15,7 @@ import type {
 } from "@/types/database";
 import type { ChatMessage, ReactionSummary, ReplyPreviewData, AttachmentWithUrl } from "@/types/chat";
 import type { PendingAttachment } from "./use-media-upload";
+import { extractMentions } from "@/lib/mentions/mention-parser";
 
 const PAGE_SIZE = 50;
 const REPLY_CONTENT_TRUNCATE = 100;
@@ -842,6 +843,17 @@ export function useMessages(conversationId: string | null) {
             : m
         )
       );
+
+      // Record message mentions asynchronously if any
+      const mentionedUsernames = extractMentions(trimmedContent);
+      if (mentionedUsernames.length > 0 && insertedMsg?.id) {
+        (supabase.rpc as any)("record_message_mentions", {
+          p_message_id: insertedMsg.id,
+          p_mentioned_usernames: mentionedUsernames,
+        }).catch((mentionErr: any) => {
+          console.warn("Failed to record mentions on send:", mentionErr);
+        });
+      }
 
       pendingTempIdsRef.current.delete(trimmedContent || tempId);
       return { success: true };

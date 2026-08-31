@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Star, X, MessageSquare, ExternalLink, Trash2 } from "lucide-react";
+import { Star, Bookmark, X, MessageSquare, ExternalLink, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { StarredMessageWithDetails } from "@/types/chat";
@@ -76,14 +76,14 @@ export function StarredMessagesDialog({
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/80 shrink-0">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-              <Star className="h-4 w-4 fill-current" />
+              <Bookmark className="h-4 w-4 fill-current" />
             </div>
             <div>
               <h2
                 id="starred-messages-title"
                 className="text-sm font-bold text-zinc-900 dark:text-white"
               >
-                Starred Messages
+                Saved Messages
               </h2>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 {filtered.length} saved {filtered.length === 1 ? "message" : "messages"}
@@ -95,7 +95,7 @@ export function StarredMessagesDialog({
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            aria-label="Close starred messages"
+            aria-label="Close saved messages"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -122,7 +122,7 @@ export function StarredMessagesDialog({
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
               }`}
             >
-              All Starred ({starredMessages.length})
+              All Saved ({starredMessages.length})
             </button>
           </div>
         )}
@@ -144,13 +144,13 @@ export function StarredMessagesDialog({
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-500 dark:bg-amber-950/30 dark:text-amber-400 mb-3">
-                <Star className="h-6 w-6 fill-current opacity-80" />
+                <Bookmark className="h-6 w-6 fill-current opacity-80" />
               </div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-                No starred messages
+                No saved messages
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-[220px]">
-                Hover over any message and click the star icon to bookmark it for later.
+                Click the bookmark icon on any message to save it for later.
               </p>
             </div>
           ) : (

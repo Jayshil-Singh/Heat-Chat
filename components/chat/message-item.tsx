@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Pencil,
   Star,
+  Bookmark,
   Share2,
   Pin,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { ReportDialog } from "@/components/reports/report-dialog";
 import { MessageReactions } from "./message-reactions";
 import { ReplyPreview } from "./reply-preview";
 import { MessageAttachment } from "./message-attachment";
+import { MentionText } from "@/components/mentions/mention-text";
 import type { ChatMessage } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
@@ -256,13 +258,13 @@ export function MessageItem({
                     message.content === "📷 Photo")
                 ) && (
                   <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
-                    {message.content}
+                    <MentionText content={message.content} isCurrentUser={isCurrentUser} />
                   </p>
                 )}
             </>
           )}
 
-          {/* Footer: timestamp + edit indicator + pin indicator + receipts */}
+          {/* Footer: timestamp + edit indicator + pin indicator + saved indicator + receipts */}
           <div
             className={`mt-1 flex items-center justify-end gap-1 text-[10px] select-none ${
               isCurrentUser ? "text-white/70" : "text-zinc-400 dark:text-zinc-500"
@@ -278,10 +280,10 @@ export function MessageItem({
             )}
             {isStarred && !isDeleted && (
               <span
-                title="Starred message"
+                title="Saved message"
                 className="flex items-center text-amber-400 dark:text-amber-400 mr-0.5"
               >
-                <Star className="h-2.5 w-2.5 fill-current" />
+                <Bookmark className="h-2.5 w-2.5 fill-current" />
               </span>
             )}
             {edited && !isDeleted && (

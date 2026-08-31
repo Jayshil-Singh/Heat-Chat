@@ -660,6 +660,43 @@ export interface Database {
           }
         ];
       };
+      message_mentions: {
+        Row: {
+          id: string;
+          message_id: string;
+          mentioned_user_id: string;
+          username_snapshot: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          mentioned_user_id: string;
+          username_snapshot?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          message_id?: string;
+          mentioned_user_id?: string;
+          username_snapshot?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "message_mentions_message_id_fkey";
+            columns: ["message_id"];
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "message_mentions_mentioned_user_id_fkey";
+            columns: ["mentioned_user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       user_privacy_settings: {
         Row: {
           user_id: string;
@@ -1815,6 +1852,7 @@ export type NotificationPreference = Database["public"]["Tables"]["notification_
 export type ConversationNotificationPreference = Database["public"]["Tables"]["conversation_notification_preferences"]["Row"];
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type StarredMessage = Database["public"]["Tables"]["starred_messages"]["Row"];
+export type MessageMention = Database["public"]["Tables"]["message_mentions"]["Row"];
 export type UserPrivacySettings = Database["public"]["Tables"]["user_privacy_settings"]["Row"];
 export type BlockedUser = Database["public"]["Tables"]["blocked_users"]["Row"];
 

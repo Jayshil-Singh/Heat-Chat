@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useMessages } from "@/hooks/use-messages";
 import { useTyping } from "@/hooks/use-typing";
@@ -131,7 +132,19 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     }
   }, [currentMatch?.id]);
 
-  // Jump to message (e.g. from Starred Messages dialog, Reply quote, or Pinned Messages)
+  // ── Jump to message from URL query param (e.g. ?msgId=...) ────────────────
+  const searchParams = useSearchParams();
+  const targetMsgId = searchParams.get("msgId");
+  React.useEffect(() => {
+    if (targetMsgId && !isMessagesLoading && messages.length > 0 && feedRef.current) {
+      const timer = setTimeout(() => {
+        feedRef.current?.scrollToMessage(targetMsgId);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [targetMsgId, isMessagesLoading, messages.length]);
+
+  // Jump to message (e.g. from Saved Messages dialog, Reply quote, or Search)
   const handleJumpToMessage = (convId: string, msgId: string) => {
     if (convId === conversation.id && feedRef.current) {
       feedRef.current.scrollToMessage(msgId);
@@ -286,8 +299,9 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         onToggleStar={toggleStar}
       />
 
-      {/* Message Composer (handles reply banner + edit mode + draft autosave) */}
+      {/* Message Composer (handles reply banner + edit mode + draft autosave + mentions) */}
       <MessageComposer
+        conversationId={conversation.id}
         onSendMessage={handleSendMessage}
         onTyping={sendTyping}
         replyTo={replyTo}

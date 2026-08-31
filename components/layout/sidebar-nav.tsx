@@ -9,6 +9,7 @@ import {
   Settings,
   Flame,
   User,
+  Bookmark,
   ShieldCheck,
   LogOut,
   LogIn,
@@ -57,6 +58,11 @@ const navItems: NavItem[] = [
     label: "Friends",
     href: "/friends",
     icon: Users,
+  },
+  {
+    label: "Saved",
+    href: "/saved",
+    icon: Bookmark,
   },
   {
     label: "Settings",

@@ -3863,5 +3863,57 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- ==============================================================================
+-- PHASE 5: FULL-TEXT SEARCH, SAVED MESSAGES & MENTIONS
+-- ==============================================================================
 
+create table if not exists public.message_mentions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.messages(id) on delete cascade,
+  mentioned_user_id uuid not null references public.profiles(id) on delete cascade,
+  username_snapshot text,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  constraint unique_message_mention unique (message_id, mentioned_user_id)
+);
 
+create index if not exists idx_message_mentions_msg 
+  on public.message_mentions(message_id);
+create index if not exists idx_message_mentions_user_created 
+  on public.message_mentions(mentioned_user_id, created_at desc);
+
+alter table public.message_mentions enable row level security;
+
+create policy "Members can view message mentions in accessible conversations"
+  on public.message_mentions for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and m.deleted_at is null
+        and public.is_conversation_member(m.conversation_id, auth.uid())
+    )
+  );
+
+create policy "Senders can insert mentions for their messages"
+  on public.message_mentions for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and m.sender_id = auth.uid()
+        and public.is_conversation_member(m.conversation_id, auth.uid())
+    )
+  );
+
+create policy "Senders can delete mentions for their messages"
+  on public.message_mentions for delete
+  to authenticated
+  using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and m.sender_id = auth.uid()
+    )
+  );

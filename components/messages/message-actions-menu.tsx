@@ -16,6 +16,8 @@ import {
   Flag,
   Check,
   Star,
+  Bookmark,
+  BookmarkCheck,
   EyeOff,
   X,
 } from "lucide-react";
@@ -327,14 +329,14 @@ export function MessageActionsMenu({
                       }}
                       className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
                     >
-                      <Star
+                      <Bookmark
                         className={`h-3.5 w-3.5 ${
                           isStarred
                             ? "fill-amber-400 text-amber-400"
                             : "text-zinc-400"
                         }`}
                       />
-                      <span>{isStarred ? "Unstar message" : "Star message"}</span>
+                      <span>{isStarred ? "Remove from saved" : "Save message"}</span>
                     </button>
                   )}
 
@@ -531,12 +533,12 @@ export function MessageActionsMenu({
                   }}
                   className="flex w-full items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-medium text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 transition-colors"
                 >
-                  <Star
+                  <Bookmark
                     className={`h-4 w-4 ${
                       isStarred ? "fill-amber-400 text-amber-400" : "text-zinc-500"
                     }`}
                   />
-                  <span>{isStarred ? "Unstar message" : "Star message"}</span>
+                  <span>{isStarred ? "Remove from saved" : "Save message"}</span>
                 </button>
               )}
 

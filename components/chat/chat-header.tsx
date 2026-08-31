@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Pin, Images } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Bookmark, Pin, Images } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
@@ -190,10 +190,10 @@ export function ChatHeader({
               variant="ghost"
               size="icon-sm"
               onClick={onOpenStarred}
-              title="Starred messages"
-              aria-label="View starred messages"
+              title="Saved messages"
+              aria-label="View saved messages"
             >
-              <Star className="h-4 w-4 text-zinc-500 hover:text-amber-500" />
+              <Bookmark className="h-4 w-4 text-zinc-500 hover:text-amber-500" />
             </Button>
           )}
 

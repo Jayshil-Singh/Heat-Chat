@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, Users, Settings, User } from "lucide-react";
+import { MessageSquare, Users, Bookmark, Settings, User } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const tabs = [
@@ -16,6 +16,11 @@ const tabs = [
     label: "Friends",
     href: "/friends",
     icon: Users,
+  },
+  {
+    label: "Saved",
+    href: "/saved",
+    icon: Bookmark,
   },
   {
     label: "Settings",

@@ -157,7 +157,10 @@ export function NotificationCenter({
       onMarkAsRead(notif.id);
     }
     setIsOpen(false);
-    router.push(`/chat/${notif.conversationId}`);
+    const targetUrl = notif.messageId
+      ? `/chat/${notif.conversationId}?msgId=${notif.messageId}`
+      : `/chat/${notif.conversationId}`;
+    router.push(targetUrl);
   };
 
   const popoverContent = isOpen && coords && (
@@ -230,11 +233,15 @@ export function NotificationCenter({
         ) : (
           notifications.map((notif) => {
             const isUnread = !notif.readAt;
+            const isMention = (notif as any).type === "mention";
             const senderName = notif.sender?.display_name || "Friend";
-            const title =
-              notif.conversationType === "group"
-                ? `${senderName} in ${notif.conversationName}`
-                : senderName;
+            const title = isMention
+              ? notif.conversationType === "group"
+                ? `${senderName} mentioned you in ${notif.conversationName}`
+                : `${senderName} mentioned you`
+              : notif.conversationType === "group"
+              ? `${senderName} in ${notif.conversationName}`
+              : senderName;
 
             return (
               <div

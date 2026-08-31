@@ -157,6 +157,100 @@ export interface StarredMessageWithDetails {
   };
 }
 
+export type SearchCategory =
+  | "all"
+  | "messages"
+  | "people"
+  | "media"
+  | "files"
+  | "saved";
+
+export interface SearchMessageResult {
+  id: string;
+  conversationId: string;
+  conversationName: string;
+  conversationType: ConversationType;
+  senderId: string;
+  senderName: string;
+  senderUsername: string;
+  senderAvatar: string | null;
+  content: string;
+  messageType: string;
+  createdAt: string;
+  editedAt?: string | null;
+  rank: number;
+  isSaved?: boolean;
+  attachments?: AttachmentWithUrl[];
+}
+
+export interface SearchMediaResult {
+  attachmentId: string;
+  messageId: string;
+  conversationId: string;
+  conversationName: string;
+  senderId: string;
+  senderName: string;
+  senderUsername: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  width?: number | null;
+  height?: number | null;
+  durationSeconds?: number | null;
+  storagePath: string;
+  thumbnailPath?: string | null;
+  messageType: string;
+  messageContent: string;
+  createdAt: string;
+  signedUrl?: string;
+  thumbnailSignedUrl?: string | null;
+}
+
+export interface SearchPeopleResult {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  status: string;
+  isFriend: boolean;
+  isBlocked: boolean;
+}
+
+export interface SavedMessageDto {
+  savedId: string;
+  savedAt: string;
+  messageId: string;
+  conversationId: string;
+  conversationName: string;
+  conversationType: ConversationType;
+  senderId: string;
+  senderName: string;
+  senderUsername: string;
+  senderAvatar: string | null;
+  content: string;
+  messageType: string;
+  isDeleted: boolean;
+  createdAt: string;
+  editedAt?: string | null;
+  attachments?: AttachmentWithUrl[];
+}
+
+export interface MessageMentionDto {
+  id?: string;
+  messageId?: string;
+  mentionedUserId: string;
+  usernameSnapshot?: string | null;
+  createdAt?: string;
+}
+
+export interface MentionCandidate {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 export interface InChatSearchResult {
   id: string;
   conversationId: string;

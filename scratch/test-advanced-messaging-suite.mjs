@@ -680,7 +680,7 @@ async function runTests() {
     assert("MessageActionsMenu has 'Pin message' and 'Unpin message' controls", actionsMenuContent.includes("Pin message") && actionsMenuContent.includes("Unpin message"));
     assert("MessageActionsMenu has 'Edit message' control", actionsMenuContent.includes("Edit message"));
     assert("MessageActionsMenu has 'Copy text' and 'Copy link' controls", actionsMenuContent.includes("Copy text") && actionsMenuContent.includes("Copy link"));
-    assert("MessageActionsMenu has 'Star message' / 'Unstar message' controls", actionsMenuContent.includes("Star message") && actionsMenuContent.includes("Unstar message"));
+    assert("MessageActionsMenu has 'Save message' / 'Remove from saved' controls", (actionsMenuContent.includes("Save message") && actionsMenuContent.includes("Remove from saved")) || (actionsMenuContent.includes("Star message") && actionsMenuContent.includes("Unstar message")));
     assert("MessageActionsMenu has 'Report message' control", actionsMenuContent.includes("Report message"));
     assert("MessageActionsMenu implements Mobile Bottom Sheet drawer", actionsMenuContent.includes("isMobileSheetOpen") && actionsMenuContent.includes("createPortal"));
 
