@@ -5,22 +5,24 @@ let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = nul
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const supabasePublishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabasePublishableKey) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(
-        "Supabase credentials not found in environment. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local"
-      );
-    }
+    throw new Error(
+      "Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be configured."
+    );
   }
 
-  // Fallback to avoid crashes during early setup/build if env vars are pending
-  const url = supabaseUrl || "https://placeholder.supabase.co";
-  const key = supabasePublishableKey || "placeholder-key";
+  if (supabaseUrl.includes("placeholder.supabase.co")) {
+    throw new Error(
+      "Invalid Supabase URL: placeholder.supabase.co is not a valid project URL. Set NEXT_PUBLIC_SUPABASE_URL to your active Supabase project (e.g. https://rmvpdcftfdeizitnrvkw.supabase.co)."
+    );
+  }
 
   if (!browserClient) {
-    browserClient = createBrowserClient<Database>(url, key);
+    browserClient = createBrowserClient<Database>(supabaseUrl, supabasePublishableKey);
   }
 
   return browserClient;

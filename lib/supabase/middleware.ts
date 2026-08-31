@@ -7,8 +7,18 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "placeholder-key";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabasePublishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // If environment variables are missing during initial setup, allow public routes to pass without crashing
+  if (!supabaseUrl || !supabasePublishableKey || supabaseUrl.includes("placeholder.supabase.co")) {
+    console.error(
+      "[Heat Chat Middleware] Missing or invalid NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY environment variables."
+    );
+    return supabaseResponse;
+  }
 
   const supabase = createServerClient<Database>(supabaseUrl, supabasePublishableKey, {
     cookies: {
