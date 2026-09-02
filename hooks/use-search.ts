@@ -48,6 +48,16 @@ export function useSearch() {
   const [hasMore, setHasMore] = React.useState(false);
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
 
+  // Active query ref to avoid stale closure races
+  const currentQueryRef = React.useRef(globalQuery);
+  currentQueryRef.current = globalQuery;
+
+  const activeCategoryRef = React.useRef(activeCategory);
+  activeCategoryRef.current = activeCategory;
+
+  const filtersRef = React.useRef(filters);
+  filtersRef.current = filters;
+
   // Calculate timestamp range boundary
   const getDateRangeBounds = React.useCallback((range?: string | null): { after?: string } => {
     if (!range || range === "all") return {};
@@ -85,7 +95,6 @@ export function useSearch() {
 
       setIsInChatSearching(true);
       try {
-        // eslint-disable-next-line
         const { data, error } = await (supabase.rpc as any)("search_conversation_messages", {
           p_conv_id: conversationId,
           p_query: trimmed,
@@ -125,16 +134,18 @@ export function useSearch() {
     setIsInChatSearching(false);
   }, []);
 
-  // Multi-category Global Search
+  // Multi-category Global Search Execution
   const executeGlobalSearch = React.useCallback(
     async (
       query: string,
-      category: SearchCategory = activeCategory,
-      activeFilters: SearchFiltersState = filters,
+      category: SearchCategory = activeCategoryRef.current,
+      activeFilters: SearchFiltersState = filtersRef.current,
       cursor?: string | null,
       append = false
     ) => {
       const trimmed = query.trim();
+
+      // Clear search when query is empty and no conversation filter is active
       if (!user?.id || (!trimmed && !activeFilters.conversationId)) {
         if (!append) {
           setMessageResults([]);
@@ -148,6 +159,10 @@ export function useSearch() {
         return;
       }
 
+      // Guard: Messages and People search require at least 2 characters unless scoped to a conversation or saved
+      const canSearchMessages = trimmed.length >= 2 || Boolean(activeFilters.conversationId);
+      const canSearchPeople = trimmed.length >= 2;
+
       if (!append) setIsGlobalSearching(true);
 
       const dateBounds = getDateRangeBounds(activeFilters.dateRange);
@@ -155,8 +170,8 @@ export function useSearch() {
       try {
         const promises: Promise<void>[] = [];
 
-        // 1. Search Messages (if 'all', 'messages', or 'saved')
-        if (category === "all" || category === "messages") {
+        // 1. Search Messages (if 'all' or 'messages')
+        if ((category === "all" || category === "messages") && canSearchMessages) {
           promises.push(
             (async () => {
               const params = new URLSearchParams();
@@ -182,10 +197,12 @@ export function useSearch() {
               }
             })()
           );
+        } else if (!append && !canSearchMessages && (category === "all" || category === "messages")) {
+          setMessageResults([]);
         }
 
         // 2. Search People (if 'all' or 'people')
-        if ((category === "all" || category === "people") && trimmed && !append) {
+        if ((category === "all" || category === "people") && canSearchPeople && !append) {
           promises.push(
             (async () => {
               const res = await fetch(
@@ -199,6 +216,8 @@ export function useSearch() {
               }
             })()
           );
+        } else if (!append && !canSearchPeople && (category === "all" || category === "people")) {
+          setPeopleResults([]);
         }
 
         // 3. Search Media / Files (if 'all', 'media', or 'files')
@@ -260,17 +279,23 @@ export function useSearch() {
         setIsGlobalSearching(false);
       }
     },
-    [user?.id, activeCategory, filters, getDateRangeBounds]
+    [user?.id, getDateRangeBounds]
   );
 
   // Debounced search trigger for typing
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
   const searchGlobal = React.useCallback(
     (query: string, category?: SearchCategory, newFilters?: SearchFiltersState) => {
       setGlobalQuery(query);
-      const cat = category !== undefined ? category : activeCategory;
-      const fil = newFilters !== undefined ? newFilters : filters;
+      const cat = category !== undefined ? category : activeCategoryRef.current;
+      const fil = newFilters !== undefined ? newFilters : filtersRef.current;
 
       if (category !== undefined) setActiveCategory(category);
       if (newFilters !== undefined) setFilters(newFilters);
@@ -279,9 +304,28 @@ export function useSearch() {
 
       searchTimeoutRef.current = setTimeout(() => {
         executeGlobalSearch(query, cat, fil);
-      }, 250);
+      }, 300);
     },
-    [activeCategory, filters, executeGlobalSearch]
+    [executeGlobalSearch]
+  );
+
+  const handleSetActiveCategory = React.useCallback(
+    (cat: SearchCategory) => {
+      setActiveCategory(cat);
+      executeGlobalSearch(currentQueryRef.current, cat, filtersRef.current);
+    },
+    [executeGlobalSearch]
+  );
+
+  const handleSetFilters = React.useCallback(
+    (newFilters: Partial<SearchFiltersState>) => {
+      setFilters((prev) => {
+        const merged = { ...prev, ...newFilters };
+        executeGlobalSearch(currentQueryRef.current, activeCategoryRef.current, merged);
+        return merged;
+      });
+    },
+    [executeGlobalSearch]
   );
 
   const loadMore = React.useCallback(() => {
@@ -290,6 +334,7 @@ export function useSearch() {
   }, [hasMore, isGlobalSearching, nextCursor, globalQuery, activeCategory, filters, executeGlobalSearch]);
 
   const clearGlobalSearch = React.useCallback(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setGlobalQuery("");
     setMessageResults([]);
     setPeopleResults([]);
@@ -332,16 +377,9 @@ export function useSearch() {
     globalQuery,
     setGlobalQuery,
     activeCategory,
-    setActiveCategory: (cat: SearchCategory) => {
-      setActiveCategory(cat);
-      executeGlobalSearch(globalQuery, cat, filters);
-    },
+    setActiveCategory: handleSetActiveCategory,
     filters,
-    setFilters: (newFilters: Partial<SearchFiltersState>) => {
-      const merged = { ...filters, ...newFilters };
-      setFilters(merged);
-      executeGlobalSearch(globalQuery, activeCategory, merged);
-    },
+    setFilters: handleSetFilters,
     messageResults,
     peopleResults,
     mediaResults,

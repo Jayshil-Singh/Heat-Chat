@@ -18,7 +18,7 @@ returns uuid as $$
   join public.conversations c on c.id = cm.conversation_id
   where cm.conversation_id = p_conversation_id
     and cm.user_id <> p_sender_id
-    and c.conversation_type = 'direct'
+    and c.type = 'direct'
   limit 1;
 $$ language sql security definer stable;
 
