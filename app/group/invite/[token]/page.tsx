@@ -67,7 +67,7 @@ export default function GroupInvitePage() {
           <Button
             variant="heat"
             className="w-full text-xs h-9"
-            onClick={() => router.push(`/login?redirect=${encodeURIComponent(`/group/invite/${token}`)}`)}
+            onClick={() => router.push(`/login?redirectTo=${encodeURIComponent(`/group/invite/${token}`)}`)}
           >
             Log in to Join
           </Button>

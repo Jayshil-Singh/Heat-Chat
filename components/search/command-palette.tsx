@@ -146,12 +146,16 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-[10vh] backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-[10vh] backdrop-blur-sm animate-in fade-in duration-150 cursor-pointer"
       role="dialog"
       aria-modal="true"
       aria-labelledby="command-palette-title"
+      onClick={onClose}
     >
-      <div className="flex max-h-[75vh] w-full max-w-xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden">
+      <div
+        className="flex max-h-[75vh] w-full max-w-xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Search Header */}
         <div className="relative flex items-center border-b border-zinc-100 px-4 py-3.5 dark:border-zinc-800/80 shrink-0">
           <Search className="h-4 w-4 text-zinc-400 shrink-0 mr-3" />

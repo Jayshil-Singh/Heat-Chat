@@ -37,6 +37,17 @@ export function DeleteUserDialog({
     }
   }, [isOpen]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
+
   if (!isOpen) return null;
 
   const isConfirmed = confirmationInput.trim() === expectedPhrase;
@@ -70,25 +81,32 @@ export function DeleteUserDialog({
 
       if (!res.ok) {
         if (data.error === "MFA_REAUTH_REQUIRED") {
-          setError("Your MFA verification has expired (>10 minutes). Please re-authenticate your MFA session.");
-        } else {
-          setError(data.error || data.message || "Failed to permanently delete user.");
+          throw new Error("Your MFA verification has expired (>10 minutes). Please re-authenticate your MFA session.");
         }
-        return;
+        throw new Error(data.message || data.error || "Failed to initiate user deletion.");
       }
 
       onSuccess();
-    } catch (err) {
-      console.error("Delete user error:", err);
-      setError("A network error occurred while attempting permanent deletion.");
+      onClose();
+    } catch (err: any) {
+      console.error("[Heat Admin] User deletion error:", err);
+      setError(err.message || "An unexpected error occurred during user deletion.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-lg rounded-3xl border border-red-500/30 bg-white p-6 sm:p-8 shadow-2xl dark:bg-zinc-950 dark:border-red-950/80 space-y-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150 cursor-pointer"
+      onClick={() => {
+        if (!isSubmitting) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-3xl border border-red-500/30 bg-white p-6 sm:p-8 shadow-2xl dark:bg-zinc-950 dark:border-red-950/80 space-y-6 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">

@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
 import type { MemberRole } from "@/types/database";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isValidUuid } from "@/lib/validation/uuid";
 
 /**
  * DELETE /api/groups/[id]/members/[memberId]
@@ -19,6 +18,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   const { id: conversationId, memberId: targetUserId } = await params;
+
+  // 1. Validate UUIDs
+  if (!isValidUuid(conversationId) || !isValidUuid(targetUserId)) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "INVALID_ARGUMENTS", message: "Invalid group or member ID format" } },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
   const {
@@ -30,14 +38,6 @@ export async function DELETE(
     return NextResponse.json(
       { ok: false, data: null, error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 }
-    );
-  }
-
-  // 1. Validate UUIDs
-  if (!UUID_REGEX.test(conversationId) || !UUID_REGEX.test(targetUserId)) {
-    return NextResponse.json(
-      { ok: false, data: null, error: { code: "INVALID_ARGUMENTS", message: "Invalid group or member ID format" } },
-      { status: 400 }
     );
   }
 

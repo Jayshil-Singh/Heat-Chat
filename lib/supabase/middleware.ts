@@ -61,6 +61,7 @@ export async function updateSession(request: NextRequest) {
   const isNormalProtectedRoute =
     pathname.startsWith("/chat") ||
     pathname.startsWith("/friends") ||
+    pathname.startsWith("/saved") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/profile");
 

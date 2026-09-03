@@ -590,12 +590,16 @@ export function EditProfileDialog({
 
       {/* Discard Changes Confirmation Modal */}
       {showDiscardConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
+          onClick={() => setShowDiscardConfirm(false)}
+        >
           <div
-            className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 space-y-4"
+            className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 space-y-4 cursor-default"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="discard-dialog-title"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">

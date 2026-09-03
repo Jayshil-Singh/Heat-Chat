@@ -109,8 +109,14 @@ export function AdminHeader() {
 
       {/* Mobile Navigation Drawer */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-zinc-950/60 backdrop-blur-sm md:hidden">
-          <div className="fixed inset-y-0 left-0 w-72 bg-white p-4 shadow-2xl dark:bg-zinc-950 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-40 bg-zinc-950/60 backdrop-blur-sm md:hidden cursor-pointer"
+          onClick={() => setMobileOpen(false)}
+        >
+          <div
+            className="fixed inset-y-0 left-0 w-72 bg-white p-4 shadow-2xl dark:bg-zinc-950 overflow-y-auto cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-heat-600 via-heat-500 to-amber-400 text-white shadow-md">

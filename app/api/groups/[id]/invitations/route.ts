@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 /**
  * GET /api/groups/[id]/invitations
@@ -10,6 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: conversationId } = await params;
+
+  if (!isValidUuid(conversationId)) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" } },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
   const {
@@ -105,6 +114,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: conversationId } = await params;
+
+  if (!isValidUuid(conversationId)) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" } },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
   const {
@@ -122,9 +139,9 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const inviteeId = body.inviteeId;
 
-  if (!inviteeId || typeof inviteeId !== "string") {
+  if (!inviteeId || typeof inviteeId !== "string" || !isValidUuid(inviteeId)) {
     return NextResponse.json(
-      { ok: false, data: null, error: { code: "VALIDATION_ERROR", message: "inviteeId is required" } },
+      { ok: false, data: null, error: { code: "VALIDATION_ERROR", message: "Valid inviteeId UUID is required" } },
       { status: 400 }
     );
   }

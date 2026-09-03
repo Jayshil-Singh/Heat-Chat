@@ -13,10 +13,10 @@ export function usePolls(conversationId: string | null) {
 
   const supabase = React.useMemo(() => createClient(), []);
 
-  const fetchPolls = React.useCallback(async () => {
+  const fetchPolls = React.useCallback(async (isSilent = false) => {
     if (!conversationId || !user?.id) return;
 
-    setIsLoading(true);
+    if (!isSilent) setIsLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/groups/${conversationId}/polls`);
@@ -32,9 +32,14 @@ export function usePolls(conversationId: string | null) {
       console.warn("usePolls fetch error:", err);
       setError(err.message || "Failed to load polls");
     } finally {
-      setIsLoading(false);
+      if (!isSilent) setIsLoading(false);
     }
   }, [conversationId, user?.id]);
+
+  const fetchPollsRef = React.useRef(fetchPolls);
+  React.useEffect(() => {
+    fetchPollsRef.current = fetchPolls;
+  });
 
   // Initial fetch
   React.useEffect(() => {
@@ -58,7 +63,7 @@ export function usePolls(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         () => {
-          fetchPolls();
+          fetchPollsRef.current(true);
         }
       )
       .on(
@@ -69,7 +74,7 @@ export function usePolls(conversationId: string | null) {
           table: "poll_votes",
         },
         () => {
-          fetchPolls();
+          fetchPollsRef.current(true);
         }
       )
       .subscribe();
@@ -77,7 +82,7 @@ export function usePolls(conversationId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, user?.id, supabase, fetchPolls]);
+  }, [conversationId, user?.id, supabase]);
 
   const createPoll = async (
     question: string,

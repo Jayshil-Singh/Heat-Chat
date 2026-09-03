@@ -72,9 +72,9 @@ export function useTyping(conversationId?: string) {
 
   // Broadcast that current user started typing
   const sendTyping = React.useCallback(() => {
-    if (!conversationId || !user?.id) return;
+    if (!conversationId || !user?.id || !channelRef.current) return;
 
-    const channel = channelRef.current || supabase.channel(`typing:${conversationId}`);
+    const channel = channelRef.current;
 
     const now = Date.now();
     if (now - lastBroadcastRef.current > THROTTLE_BROADCAST_MS) {
@@ -101,16 +101,16 @@ export function useTyping(conversationId?: string) {
         },
       });
     }, TYPING_TIMEOUT_MS);
-  }, [conversationId, user?.id, user?.email, profile, supabase]);
+  }, [conversationId, user?.id, user?.email, profile]);
 
   // Explicitly broadcast that current user stopped typing (e.g. after message sent)
   const stopTyping = React.useCallback(() => {
-    if (!conversationId || !user?.id) return;
+    if (!conversationId || !user?.id || !channelRef.current) return;
 
     if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
     lastBroadcastRef.current = 0;
 
-    const channel = channelRef.current || supabase.channel(`typing:${conversationId}`);
+    const channel = channelRef.current;
     channel.send({
       type: "broadcast",
       event: "typing_stop",
@@ -118,7 +118,7 @@ export function useTyping(conversationId?: string) {
         userId: user.id,
       },
     });
-  }, [conversationId, user?.id, supabase]);
+  }, [conversationId, user?.id]);
 
   const typingStatusText = React.useMemo(() => {
     if (typingUsers.length === 0) return null;

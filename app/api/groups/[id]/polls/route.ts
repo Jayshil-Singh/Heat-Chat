@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
 import type { PollDto } from "@/types/chat";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 /**
  * GET /api/groups/[id]/polls
@@ -11,6 +12,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: conversationId } = await params;
+
+  if (!isValidUuid(conversationId)) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" } },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
   const {
@@ -133,6 +142,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: conversationId } = await params;
+
+  if (!isValidUuid(conversationId)) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" } },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
   const {

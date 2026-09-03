@@ -12,7 +12,8 @@ import { validateEmail, validatePassword } from "@/lib/validation/auth";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/chat";
+  const rawRedirect = searchParams.get("redirectTo") || searchParams.get("redirect") || "/chat";
+  const redirectTo = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/chat";
   const isVerified = searchParams.get("verified") === "true";
   const isResetSuccess = searchParams.get("reset") === "success";
 

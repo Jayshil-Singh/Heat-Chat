@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 /**
  * POST /api/messages/[id]/save
@@ -25,9 +26,9 @@ export async function POST(
   }
 
   const { id: messageId } = await params;
-  if (!messageId) {
+  if (!isValidUuid(messageId)) {
     return NextResponse.json(
-      { ok: false, data: null, error: { code: "MESSAGE_NOT_FOUND", message: "Message ID is required" } },
+      { ok: false, data: null, error: { code: "INVALID_MESSAGE_ID", message: "Invalid message ID format" } },
       { status: 400 }
     );
   }
@@ -89,9 +90,9 @@ export async function DELETE(
   }
 
   const { id: messageId } = await params;
-  if (!messageId) {
+  if (!isValidUuid(messageId)) {
     return NextResponse.json(
-      { ok: false, data: null, error: { code: "MESSAGE_NOT_FOUND", message: "Message ID is required" } },
+      { ok: false, data: null, error: { code: "INVALID_MESSAGE_ID", message: "Invalid message ID format" } },
       { status: 400 }
     );
   }

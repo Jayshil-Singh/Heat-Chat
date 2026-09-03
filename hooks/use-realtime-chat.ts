@@ -60,6 +60,34 @@ export function useRealtimeChat({
     React.useState<ConnectionStatus>("disconnected");
   const supabase = React.useMemo(() => createClient(), []);
 
+  const callbacksRef = React.useRef({
+    onNewMessage,
+    onMessageUpdate,
+    onMessageDelete,
+    onReadReceipt,
+    onReactionInsert,
+    onReactionDelete,
+    onPinInsert,
+    onPinDelete,
+    onDeliveryInsert,
+    onReconnectSync,
+  });
+
+  React.useEffect(() => {
+    callbacksRef.current = {
+      onNewMessage,
+      onMessageUpdate,
+      onMessageDelete,
+      onReadReceipt,
+      onReactionInsert,
+      onReactionDelete,
+      onPinInsert,
+      onPinDelete,
+      onDeliveryInsert,
+      onReconnectSync,
+    };
+  });
+
   React.useEffect(() => {
     if (!conversationId) {
       setConnectionStatus("disconnected");
@@ -82,7 +110,7 @@ export function useRealtimeChat({
         },
         (payload) => {
           if (payload.new) {
-            onNewMessage(payload.new as Message);
+            callbacksRef.current.onNewMessage(payload.new as Message);
           }
         }
       )
@@ -95,8 +123,8 @@ export function useRealtimeChat({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          if (payload.new && onMessageUpdate) {
-            onMessageUpdate(payload.new as Message);
+          if (payload.new && callbacksRef.current.onMessageUpdate) {
+            callbacksRef.current.onMessageUpdate(payload.new as Message);
           }
         }
       )
@@ -109,8 +137,8 @@ export function useRealtimeChat({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          if (payload.old?.id && onMessageDelete) {
-            onMessageDelete(payload.old.id as string);
+          if (payload.old?.id && callbacksRef.current.onMessageDelete) {
+            callbacksRef.current.onMessageDelete(payload.old.id as string);
           }
         }
       )
@@ -123,8 +151,8 @@ export function useRealtimeChat({
           table: "message_reads",
         },
         (payload) => {
-          if (payload.new && onReadReceipt) {
-            onReadReceipt(payload.new as MessageRead);
+          if (payload.new && callbacksRef.current.onReadReceipt) {
+            callbacksRef.current.onReadReceipt(payload.new as MessageRead);
           }
         }
       )
@@ -137,8 +165,8 @@ export function useRealtimeChat({
           table: "message_reactions",
         },
         (payload) => {
-          if (payload.new && onReactionInsert) {
-            onReactionInsert(payload.new as MessageReaction);
+          if (payload.new && callbacksRef.current.onReactionInsert) {
+            callbacksRef.current.onReactionInsert(payload.new as MessageReaction);
           }
         }
       )
@@ -150,8 +178,8 @@ export function useRealtimeChat({
           table: "message_reactions",
         },
         (payload) => {
-          if (payload.old && onReactionDelete) {
-            onReactionDelete(
+          if (payload.old && callbacksRef.current.onReactionDelete) {
+            callbacksRef.current.onReactionDelete(
               payload.old as Pick<
                 MessageReaction,
                 "id" | "message_id" | "user_id" | "reaction"
@@ -170,8 +198,8 @@ export function useRealtimeChat({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          if (payload.new && onPinInsert) {
-            onPinInsert(payload.new as any);
+          if (payload.new && callbacksRef.current.onPinInsert) {
+            callbacksRef.current.onPinInsert(payload.new as any);
           }
         }
       )
@@ -183,8 +211,8 @@ export function useRealtimeChat({
           table: "message_pins",
         },
         (payload) => {
-          if (payload.old && onPinDelete) {
-            onPinDelete(payload.old as any);
+          if (payload.old && callbacksRef.current.onPinDelete) {
+            callbacksRef.current.onPinDelete(payload.old as any);
           }
         }
       )
@@ -197,8 +225,8 @@ export function useRealtimeChat({
           table: "message_delivery_states",
         },
         (payload) => {
-          if (payload.new && onDeliveryInsert) {
-            onDeliveryInsert(payload.new as any);
+          if (payload.new && callbacksRef.current.onDeliveryInsert) {
+            callbacksRef.current.onDeliveryInsert(payload.new as any);
           }
         }
       )
@@ -207,8 +235,8 @@ export function useRealtimeChat({
           setConnectionStatus("connected");
         } else if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
           setConnectionStatus("reconnecting");
-          if (onReconnectSync) {
-            onReconnectSync();
+          if (callbacksRef.current.onReconnectSync) {
+            callbacksRef.current.onReconnectSync();
           }
         } else if (status === "CLOSED") {
           setConnectionStatus("disconnected");
@@ -219,20 +247,7 @@ export function useRealtimeChat({
       supabase.removeChannel(channel);
       setConnectionStatus("disconnected");
     };
-  }, [
-    conversationId,
-    supabase,
-    onNewMessage,
-    onMessageUpdate,
-    onMessageDelete,
-    onReadReceipt,
-    onReactionInsert,
-    onReactionDelete,
-    onPinInsert,
-    onPinDelete,
-    onDeliveryInsert,
-    onReconnectSync,
-  ]);
+  }, [conversationId, supabase]);
 
   return { connectionStatus };
 }
