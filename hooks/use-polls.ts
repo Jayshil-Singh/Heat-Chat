@@ -66,17 +66,6 @@ export function usePolls(conversationId: string | null) {
           fetchPollsRef.current(true);
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "poll_votes",
-        },
-        () => {
-          fetchPollsRef.current(true);
-        }
-      )
       .subscribe();
 
     return () => {

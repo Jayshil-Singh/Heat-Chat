@@ -26,6 +26,33 @@ export async function POST(
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
+    // Check group pin permissions
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("conversation_id, conversations(type, permissions)")
+      .eq("id", messageId)
+      .maybeSingle();
+
+    if (msg?.conversations && (msg.conversations as any).type === "group") {
+      const perms = (msg.conversations as any).permissions || {};
+      const whoCanPin = perms.who_can_pin_messages || "admin_only";
+      if (whoCanPin === "admin_only") {
+        const { data: member } = await supabase
+          .from("conversation_members")
+          .select("role")
+          .eq("conversation_id", msg.conversation_id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!member || (member.role !== "owner" && member.role !== "admin")) {
+          return NextResponse.json(
+            { error: "FORBIDDEN", message: "Only group owners and admins can pin messages in this group." },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     const { data, error } = await supabase.rpc("pin_message", {
       p_message_id: messageId,
     });
@@ -70,6 +97,33 @@ export async function DELETE(
 
     if (authError || !user) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    // Check group pin permissions
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("conversation_id, conversations(type, permissions)")
+      .eq("id", messageId)
+      .maybeSingle();
+
+    if (msg?.conversations && (msg.conversations as any).type === "group") {
+      const perms = (msg.conversations as any).permissions || {};
+      const whoCanPin = perms.who_can_pin_messages || "admin_only";
+      if (whoCanPin === "admin_only") {
+        const { data: member } = await supabase
+          .from("conversation_members")
+          .select("role")
+          .eq("conversation_id", msg.conversation_id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!member || (member.role !== "owner" && member.role !== "admin")) {
+          return NextResponse.json(
+            { error: "FORBIDDEN", message: "Only group owners and admins can unpin messages in this group." },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     const { data, error } = await supabase.rpc("unpin_message", {

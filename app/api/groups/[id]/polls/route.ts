@@ -49,7 +49,20 @@ export async function GET(
     );
   }
 
-  // Fetch polls with options and votes
+  // 1. Try secure RPC that protects anonymous polls and computes aggregate vote counts
+  const { data: rpcPolls, error: rpcErr } = await (supabase.rpc as any)("get_conversation_polls", {
+    p_conversation_id: conversationId,
+  });
+
+  if (!rpcErr && Array.isArray(rpcPolls)) {
+    return NextResponse.json({
+      ok: true,
+      data: { polls: rpcPolls },
+      error: null,
+    });
+  }
+
+  // 2. Fallback: Fetch polls with options and votes if RPC not yet provisioned
   const { data: polls, error: fetchErr } = await supabase
     .from("polls")
     .select(`

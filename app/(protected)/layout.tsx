@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/layout/app-shell";
 import { FriendsProvider } from "@/hooks/use-friends-context";
+import { ConversationsProvider } from "@/hooks/use-conversations";
 import { Flame } from "lucide-react";
 
 export default function ProtectedLayout({
@@ -47,10 +48,12 @@ export default function ProtectedLayout({
   }
 
   // User is confirmed authenticated AND email verified: render full AppShell
-  // FriendsProvider is the single owner of the friends-realtime channel.
+  // FriendsProvider and ConversationsProvider are the single owners of their realtime channels.
   return (
     <FriendsProvider>
-      <AppShell>{children}</AppShell>
+      <ConversationsProvider>
+        <AppShell>{children}</AppShell>
+      </ConversationsProvider>
     </FriendsProvider>
   );
 }

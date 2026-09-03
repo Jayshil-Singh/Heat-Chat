@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 /**
  * GET /api/conversations/[id]/media
@@ -15,14 +16,16 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
+  const { id: conversationId } = await params;
+  if (!isValidUuid(conversationId)) {
+    return NextResponse.json({ error: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" }, { status: 400 });
+  }
 
+  const supabase = await createClient();
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { id: conversationId } = await params;
   const { searchParams } = new URL(request.url);
 
   const category = searchParams.get("category") || "all";

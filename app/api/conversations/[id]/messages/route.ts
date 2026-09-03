@@ -206,6 +206,14 @@ export async function POST(
 ) {
   try {
     const { id: conversationId } = await params;
+
+    if (!isValidUuid(conversationId)) {
+      return NextResponse.json(
+        { error: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -214,6 +222,33 @@ export async function POST(
 
     if (authError || !user) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    // Check group message permissions
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("type, permissions")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (conv && conv.type === "group") {
+      const perms = (conv.permissions as any) || {};
+      const whoCanSend = perms.who_can_send_messages || "all_members";
+      if (whoCanSend === "admin_only") {
+        const { data: member } = await supabase
+          .from("conversation_members")
+          .select("role")
+          .eq("conversation_id", conversationId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!member || (member.role !== "owner" && member.role !== "admin")) {
+          return NextResponse.json(
+            { error: "FORBIDDEN", message: "Only group admins can send messages in this group." },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     const body = await request.json();

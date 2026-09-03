@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 export async function POST(
   request: NextRequest,
@@ -7,6 +8,14 @@ export async function POST(
 ) {
   try {
     const { id: messageId } = await params;
+
+    if (!isValidUuid(messageId)) {
+      return NextResponse.json(
+        { error: "INVALID_MESSAGE_ID", message: "Invalid message ID format" },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -20,8 +29,8 @@ export async function POST(
     const body = await request.json();
     const { targetConversationId, clientMessageId } = body;
 
-    if (!targetConversationId || typeof targetConversationId !== "string") {
-      return NextResponse.json({ error: "TARGET_CONVERSATION_REQUIRED" }, { status: 400 });
+    if (!targetConversationId || typeof targetConversationId !== "string" || !isValidUuid(targetConversationId)) {
+      return NextResponse.json({ error: "TARGET_CONVERSATION_REQUIRED", message: "Valid target conversation UUID is required" }, { status: 400 });
     }
 
     const { data, error } = await supabase.rpc("forward_message", {

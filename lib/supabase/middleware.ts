@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import { getSafeRedirectUrl } from "@/lib/validation/redirect";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -152,9 +153,10 @@ export async function updateSession(request: NextRequest) {
 
   // 5. Verified normal user visiting normal auth routes -> redirect to /chat
   if (user && isEmailVerified && isNormalAuthRoute) {
-    const redirectTo = request.nextUrl.searchParams.get("redirectTo") || "/chat";
+    const rawRedirect = request.nextUrl.searchParams.get("redirectTo");
+    const safeRedirect = getSafeRedirectUrl(rawRedirect, "/chat");
     const url = request.nextUrl.clone();
-    url.pathname = redirectTo;
+    url.pathname = safeRedirect;
     url.search = "";
     return NextResponse.redirect(url);
   }

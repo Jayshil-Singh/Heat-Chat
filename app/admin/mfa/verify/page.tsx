@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 
+import { getSafeRedirectUrl } from "@/lib/validation/redirect";
+
 function AdminMfaVerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/admin/dashboard";
+  const redirectTo = getSafeRedirectUrl(searchParams.get("redirectTo"), "/admin/dashboard");
 
   const [totpCode, setTotpCode] = React.useState("");
   const [recoveryCode, setRecoveryCode] = React.useState("");

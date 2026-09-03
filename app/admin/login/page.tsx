@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 
+import { getSafeRedirectUrl } from "@/lib/validation/redirect";
+
 function AdminLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/admin/dashboard";
+  const redirectTo = getSafeRedirectUrl(searchParams.get("redirectTo"), "/admin/dashboard");
   const urlError = searchParams.get("error");
 
   const [email, setEmail] = React.useState("");

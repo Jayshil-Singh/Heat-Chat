@@ -161,6 +161,34 @@ export async function POST(
     );
   }
 
+  // Check group permissions for who_can_add_members
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("permissions")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  const whoCanAdd = (conv?.permissions as any)?.who_can_add_members || "all_members";
+  if (whoCanAdd === "admin_only" && member.role !== "owner" && member.role !== "admin") {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "FORBIDDEN", message: "Only group owners and admins can invite new members" } },
+      { status: 403 }
+    );
+  }
+
+  // Check if caller or target has blocked the other
+  const { data: isBlocked } = await (supabase.rpc as any)("is_user_blocked", {
+    user_a: user.id,
+    user_b: inviteeId,
+  });
+
+  if (isBlocked) {
+    return NextResponse.json(
+      { ok: false, data: null, error: { code: "BLOCKED_USER", message: "Cannot send group invitations to or from blocked users" } },
+      { status: 403 }
+    );
+  }
+
   // Check if target is already member
   const { data: targetMember } = await supabase
     .from("conversation_members")

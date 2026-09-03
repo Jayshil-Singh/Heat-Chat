@@ -6,7 +6,21 @@ import { useAuth } from "./use-auth";
 import type { Profile, Message, MemberRole } from "@/types/database";
 import type { ConversationWithDetails, ConversationMemberWithProfile } from "@/types/chat";
 
-export function useConversations() {
+export interface ConversationsContextValue {
+  conversations: ConversationWithDetails[];
+  isLoading: boolean;
+  error: string | null;
+  refreshConversations: () => Promise<void>;
+  markConversationUnread: (conversationId: string) => Promise<void>;
+  markConversationRead: (conversationId: string) => Promise<void>;
+  getOrCreateDirectChat: (targetUserId: string) => Promise<{ conversationId?: string; error?: string }>;
+  createGroup: (groupName: string, friendIds: string[], avatarUrl?: string) => Promise<{ conversationId?: string; error?: string }>;
+  leaveGroup: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+export const ConversationsContext = React.createContext<ConversationsContextValue | null>(null);
+
+export function ConversationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [conversations, setConversations] = React.useState<ConversationWithDetails[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -167,11 +181,12 @@ export function useConversations() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Realtime subscriptions for conversations, members, and user_states updates
+  // Single-owner Realtime subscription for conversations, members, and user_states
   React.useEffect(() => {
     if (!user?.id) return;
 
-    const channelName = `user-conversations-${user.id}-${Math.random().toString(36).slice(2, 7)}`;
+    // Stable channel name: exactly one channel per authenticated user across entire app
+    const channelName = `user-conversations-${user.id}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -337,15 +352,51 @@ export function useConversations() {
     }
   };
 
-  return {
-    conversations,
-    isLoading,
-    error,
-    refreshConversations: fetchConversations,
-    markConversationUnread,
-    markConversationRead,
-    getOrCreateDirectChat,
-    createGroup,
-    leaveGroup,
-  };
+  const value: ConversationsContextValue = React.useMemo(
+    () => ({
+      conversations,
+      isLoading,
+      error,
+      refreshConversations: fetchConversations,
+      markConversationUnread,
+      markConversationRead,
+      getOrCreateDirectChat,
+      createGroup,
+      leaveGroup,
+    }),
+    [
+      conversations,
+      isLoading,
+      error,
+      fetchConversations,
+      markConversationUnread,
+      markConversationRead,
+      getOrCreateDirectChat,
+      createGroup,
+      leaveGroup,
+    ]
+  );
+
+  return React.createElement(ConversationsContext.Provider, { value }, children);
+}
+
+export function useConversations(): ConversationsContextValue {
+  const context = React.useContext(ConversationsContext);
+  if (!context) {
+    console.warn(
+      "[ConversationsContext] useConversations called outside ConversationsProvider. Ensure component is wrapped in ConversationsProvider."
+    );
+    return {
+      conversations: [],
+      isLoading: false,
+      error: null,
+      refreshConversations: async () => {},
+      markConversationUnread: async () => {},
+      markConversationRead: async () => {},
+      getOrCreateDirectChat: async () => ({ error: "Not inside ConversationsProvider" }),
+      createGroup: async () => ({ error: "Not inside ConversationsProvider" }),
+      leaveGroup: async () => ({ success: false, error: "Not inside ConversationsProvider" }),
+    };
+  }
+  return context;
 }

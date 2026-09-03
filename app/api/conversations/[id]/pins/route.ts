@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidUuid } from "@/lib/validation/uuid";
 
 export async function GET(
   _request: NextRequest,
@@ -7,6 +8,13 @@ export async function GET(
 ) {
   try {
     const { id: conversationId } = await params;
+
+    if (!isValidUuid(conversationId)) {
+      return NextResponse.json(
+        { error: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" },
+        { status: 400 }
+      );
+    }
     const supabase = await createClient();
     const {
       data: { user },
