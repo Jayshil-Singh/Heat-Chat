@@ -10,6 +10,7 @@ export default function ChatIndexPage() {
     isLoading,
     markConversationUnread,
     markConversationRead,
+    refreshConversations,
   } = useConversations();
 
   return (
@@ -20,6 +21,7 @@ export default function ChatIndexPage() {
         activeConversationId={null}
         onMarkUnread={markConversationUnread}
         onMarkRead={markConversationRead}
+        onRefreshConversations={refreshConversations}
       />
     </div>
   );

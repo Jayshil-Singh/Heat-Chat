@@ -18,6 +18,7 @@ export default function ChatConversationPage({ params }: ChatConversationPagePro
     isLoading,
     markConversationUnread,
     markConversationRead,
+    refreshConversations,
   } = useConversations();
 
   return (
@@ -28,6 +29,7 @@ export default function ChatConversationPage({ params }: ChatConversationPagePro
         activeConversationId={conversationId}
         onMarkUnread={markConversationUnread}
         onMarkRead={markConversationRead}
+        onRefreshConversations={refreshConversations}
       />
     </div>
   );

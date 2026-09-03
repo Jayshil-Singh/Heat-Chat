@@ -8,6 +8,7 @@ import { useTyping } from "@/hooks/use-typing";
 import { usePresence } from "@/hooks/use-presence";
 import { useSearch } from "@/hooks/use-search";
 import { useStarredMessages } from "@/hooks/use-starred-messages";
+import { usePolls } from "@/hooks/use-polls";
 import { ChatHeader } from "./chat-header";
 import { MessageFeed, type MessageFeedHandle } from "./message-feed";
 import { MessageComposer } from "./message-composer";
@@ -15,6 +16,7 @@ import { InChatSearch } from "./in-chat-search";
 import { StarredMessagesDialog } from "./starred-messages-dialog";
 import { PinnedMessagesPanel } from "@/components/messages/pinned-messages-panel";
 import { MessageForwardDialog } from "@/components/messages/message-forward-dialog";
+import { CreatePollDialog } from "@/components/groups/create-poll-dialog";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import type { ConversationWithDetails, ChatMessage, ReplyPreviewData } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
@@ -24,9 +26,10 @@ const REPLY_PREVIEW_TRUNCATE = 100;
 interface ActiveChatProps {
   conversation: ConversationWithDetails;
   onBack?: () => void;
+  onRefreshConversation?: () => void;
 }
 
-export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
+export function ActiveChat({ conversation, onBack, onRefreshConversation }: ActiveChatProps) {
   const { user } = useAuth();
   const { setActiveConversationId } = useNotificationContext();
 
@@ -84,6 +87,15 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
     isLoading: isStarredLoading,
     toggleStar,
   } = useStarredMessages(conversation.id);
+
+  // ── Polls ─────────────────────────────────────────────────────────────────
+  const {
+    createPoll,
+    votePoll,
+    closePoll,
+    getPollByMessageId,
+  } = usePolls(conversation.type === "group" ? conversation.id : null);
+  const [showCreatePollDialog, setShowCreatePollDialog] = React.useState(false);
 
   const [showStarredDialog, setShowStarredDialog] = React.useState(false);
   const [showPinnedPanel, setShowPinnedPanel] = React.useState(false);
@@ -239,6 +251,7 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         onToggleSearch={() => setShowInChatSearch((prev) => !prev)}
         onOpenStarred={() => setShowStarredDialog(true)}
         onTogglePinned={() => setShowPinnedPanel((prev) => !prev)}
+        onRefreshConversation={onRefreshConversation}
       />
 
       {/* Pinned Messages Panel */}
@@ -287,6 +300,10 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         typingUsers={typingUsers}
         starredMessageIds={starredMessageIds}
         unreadCount={conversation.unreadCount || 0}
+        getPollByMessageId={getPollByMessageId}
+        onVotePoll={votePoll}
+        onClosePoll={closePoll}
+        canClosePoll={conversation.currentMemberRole === "owner" || conversation.currentMemberRole === "admin"}
         onLoadOlder={loadOlderMessages}
         onRetryMessage={retryMessage}
         onReplyToMessage={handleReplyToMessage}
@@ -299,9 +316,11 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         onToggleStar={toggleStar}
       />
 
-      {/* Message Composer (handles reply banner + edit mode + draft autosave + mentions) */}
+      {/* Message Composer (handles reply banner + edit mode + draft autosave + mentions + polls) */}
       <MessageComposer
         conversationId={conversation.id}
+        isGroup={conversation.type === "group"}
+        onOpenCreatePoll={() => setShowCreatePollDialog(true)}
         onSendMessage={handleSendMessage}
         onTyping={sendTyping}
         replyTo={replyTo}
@@ -313,6 +332,15 @@ export function ActiveChat({ conversation, onBack }: ActiveChatProps) {
         onSaveDraft={saveDraft}
         onDeleteDraft={deleteDraft}
       />
+
+      {/* Create Poll Dialog */}
+      {showCreatePollDialog && (
+        <CreatePollDialog
+          isOpen={showCreatePollDialog}
+          onClose={() => setShowCreatePollDialog(false)}
+          onSubmit={createPoll}
+        />
+      )}
 
       {/* Starred Messages Modal Dialog */}
       <StarredMessagesDialog

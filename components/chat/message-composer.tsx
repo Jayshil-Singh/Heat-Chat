@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, X, Check, Pencil, ImagePlus, Mic } from "lucide-react";
+import { Send, Loader2, X, Check, Pencil, ImagePlus, Mic, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   MAX_MESSAGE_LENGTH,
@@ -18,6 +18,8 @@ import type { ChatMessage, ReplyPreviewData } from "@/types/chat";
 
 interface MessageComposerProps {
   conversationId?: string;
+  isGroup?: boolean;
+  onOpenCreatePoll?: () => void;
   /** Called for normal sends (and replies — active-chat adds reply context) */
   onSendMessage: (
     content: string,
@@ -43,6 +45,8 @@ interface MessageComposerProps {
 
 export function MessageComposer({
   conversationId,
+  isGroup,
+  onOpenCreatePoll,
   onSendMessage,
   onTyping,
   disabled = false,
@@ -553,22 +557,39 @@ export function MessageComposer({
         >
           {/* Attachment picker trigger button */}
           {!isEditing && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || isSubmitting || isMediaProcessing}
-              title="Attach files"
-              aria-label="Attach files"
-              className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              {isMediaProcessing ? (
-                <Loader2 className="h-5 w-5 animate-spin text-heat-500" />
-              ) : (
-                <ImagePlus className="h-5 w-5" />
+            <div className="flex items-center gap-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || isSubmitting || isMediaProcessing}
+                title="Attach files"
+                aria-label="Attach files"
+                className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                {isMediaProcessing ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-heat-500" />
+                ) : (
+                  <ImagePlus className="h-5 w-5" />
+                )}
+              </Button>
+
+              {isGroup && onOpenCreatePoll && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onOpenCreatePoll}
+                  disabled={disabled || isSubmitting}
+                  title="Create a poll"
+                  aria-label="Create a poll"
+                  className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors hidden sm:flex"
+                >
+                  <BarChart2 className="h-5 w-5" />
+                </Button>
               )}
-            </Button>
+            </div>
           )}
 
           <div className="relative flex-1">

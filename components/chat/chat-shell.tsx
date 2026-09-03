@@ -15,6 +15,7 @@ interface ChatShellProps {
   isLoading: boolean;
   onMarkUnread?: (id: string) => void;
   onMarkRead?: (id: string) => void;
+  onRefreshConversations?: () => void;
 }
 
 export function ChatShell({
@@ -23,6 +24,7 @@ export function ChatShell({
   isLoading,
   onMarkUnread,
   onMarkRead,
+  onRefreshConversations,
 }: ChatShellProps) {
   const router = useRouter();
 
@@ -61,6 +63,7 @@ export function ChatShell({
           <ActiveChat
             conversation={activeConversation}
             onBack={() => router.push("/chat")}
+            onRefreshConversation={onRefreshConversations}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 bg-zinc-50/50 dark:bg-zinc-900/20">

@@ -4,7 +4,7 @@ import * as React from "react";
 import { ArrowDown, MessageSquare, Loader2 } from "lucide-react";
 import { MessageItem } from "./message-item";
 import { TypingIndicator } from "./typing-indicator";
-import type { ChatMessage, TypingUser } from "@/types/chat";
+import type { ChatMessage, TypingUser, PollDto } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
 import { UnreadDivider } from "@/components/messages/unread-divider";
@@ -29,6 +29,10 @@ interface MessageFeedProps {
   typingUsers: TypingUser[];
   starredMessageIds?: Set<string>;
   unreadCount?: number;
+  getPollByMessageId?: (messageId: string) => PollDto | undefined;
+  onVotePoll?: (pollId: string, optionIds: string[]) => Promise<any>;
+  onClosePoll?: (pollId: string) => Promise<any>;
+  canClosePoll?: boolean;
   onLoadOlder: () => Promise<void>;
   onRetryMessage?: (message: ChatMessage) => void;
   onReplyToMessage?: (message: ChatMessage) => void;
@@ -79,6 +83,10 @@ export const MessageFeed = React.forwardRef<
     typingUsers,
     starredMessageIds,
     unreadCount = 0,
+    getPollByMessageId,
+    onVotePoll,
+    onClosePoll,
+    canClosePoll = false,
     onLoadOlder,
     onRetryMessage,
     onReplyToMessage,
@@ -345,6 +353,10 @@ export const MessageFeed = React.forwardRef<
                     isHighlighted={highlightedMessageId === msg.id}
                     isStarred={starredMessageIds?.has(msg.id)}
                     isPinned={msg.isPinned}
+                    poll={getPollByMessageId ? getPollByMessageId(msg.id) : undefined}
+                    onVotePoll={onVotePoll}
+                    onClosePoll={onClosePoll}
+                    canClosePoll={canClosePoll}
                     onRetry={onRetryMessage}
                     onReply={onReplyToMessage}
                     onToggleReaction={onToggleReaction}

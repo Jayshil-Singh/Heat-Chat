@@ -68,7 +68,9 @@ export interface ConversationMemberWithProfile {
   profile: Profile;
 }
 
-export interface ConversationWithDetails extends Conversation {
+export interface ConversationWithDetails extends Omit<Conversation, "permissions" | "privacy"> {
+  privacy?: "public" | "private" | string | null;
+  permissions?: GroupPermissions | any;
   otherMember?: Profile | null;
   members?: Profile[];
   memberDetails?: ConversationMemberWithProfile[];
@@ -278,4 +280,66 @@ export interface GlobalSearchResult {
 // Re-export for convenience
 export type { ReactionType, ConversationType, FriendshipStatus, MemberRole };
 
+// ── Phase 6 Group Administration & Poll Types ────────────────────────────────
+export interface GroupPermissions {
+  who_can_add_members?: "anyone" | "admin_only";
+  who_can_send_messages?: "anyone" | "admin_only";
+  who_can_pin_messages?: "anyone" | "admin_only";
+  who_can_create_polls?: "anyone" | "admin_only";
+  who_can_invite?: "anyone" | "admin_only";
+}
 
+export interface PollOptionDto {
+  id: string;
+  pollId: string;
+  optionText: string;
+  position: number;
+  voteCount: number;
+  voterUserIds?: string[];
+  isVotedByMe: boolean;
+}
+
+export interface PollDto {
+  id: string;
+  conversationId: string;
+  messageId?: string | null;
+  question: string;
+  isMultipleChoice: boolean;
+  isAnonymous: boolean;
+  allowVoteChange: boolean;
+  isClosed: boolean;
+  closedAt?: string | null;
+  closedBy?: string | null;
+  createdBy: string;
+  createdAt: string;
+  totalVotes: number;
+  options: PollOptionDto[];
+}
+
+export interface GroupInvitationDto {
+  id: string;
+  conversationId: string;
+  conversationName: string;
+  conversationAvatar?: string | null;
+  inviterId: string;
+  inviterName: string;
+  inviterUsername: string;
+  inviterAvatar?: string | null;
+  inviteeId: string;
+  status: "pending" | "accepted" | "declined" | "cancelled" | "expired";
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface GroupInviteLinkDto {
+  id: string;
+  conversationId: string;
+  token: string;
+  inviteUrl: string;
+  createdBy: string;
+  maxUses?: number | null;
+  usesCount: number;
+  isRevoked: boolean;
+  expiresAt?: string | null;
+  createdAt: string;
+}

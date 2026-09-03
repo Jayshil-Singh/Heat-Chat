@@ -7,8 +7,8 @@ export type Json =
   | Json[];
 
 export type ConversationType = "direct" | "group";
-export type MemberRole = "owner" | "admin" | "member";
-export type MessageType = "text" | "image" | "video" | "audio" | "voice" | "file";
+export type MemberRole = "owner" | "admin" | "moderator" | "member";
+export type MessageType = "text" | "image" | "video" | "audio" | "voice" | "file" | "poll";
 export type ReactionType = "❤️" | "😂" | "👍" | "😮" | "😢" | "🔥" | "😡" | "👏";
 export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked" | "cancelled" | "expired";
 export type FriendshipState = "NONE" | "PENDING_OUTGOING" | "PENDING_INCOMING" | "FRIENDS" | "SELF";
@@ -111,6 +111,9 @@ export interface Database {
           name: string | null;
           description: string | null;
           avatar_url: string | null;
+          cover_url: string | null;
+          privacy: string | null;
+          permissions: Json | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -121,6 +124,9 @@ export interface Database {
           name?: string | null;
           description?: string | null;
           avatar_url?: string | null;
+          cover_url?: string | null;
+          privacy?: string | null;
+          permissions?: Json | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -131,6 +137,9 @@ export interface Database {
           name?: string | null;
           description?: string | null;
           avatar_url?: string | null;
+          cover_url?: string | null;
+          privacy?: string | null;
+          permissions?: Json | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -143,6 +152,168 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      group_invitations: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          inviter_id: string;
+          invitee_id: string;
+          status: string;
+          created_at: string;
+          expires_at: string;
+          responded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          inviter_id: string;
+          invitee_id: string;
+          status?: string;
+          created_at?: string;
+          expires_at?: string;
+          responded_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          inviter_id?: string;
+          invitee_id?: string;
+          status?: string;
+          created_at?: string;
+          expires_at?: string;
+          responded_at?: string | null;
+        };
+        Relationships: [];
+      };
+      group_invite_links: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          token: string;
+          created_by: string;
+          max_uses: number | null;
+          uses_count: number;
+          is_revoked: boolean;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          token: string;
+          created_by: string;
+          max_uses?: number | null;
+          uses_count?: number;
+          is_revoked?: boolean;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          token?: string;
+          created_by?: string;
+          max_uses?: number | null;
+          uses_count?: number;
+          is_revoked?: boolean;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      polls: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          message_id: string | null;
+          question: string;
+          is_multiple_choice: boolean;
+          is_anonymous: boolean;
+          allow_vote_change: boolean;
+          is_closed: boolean;
+          closed_at: string | null;
+          closed_by: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          message_id?: string | null;
+          question: string;
+          is_multiple_choice?: boolean;
+          is_anonymous?: boolean;
+          allow_vote_change?: boolean;
+          is_closed?: boolean;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          message_id?: string | null;
+          question?: string;
+          is_multiple_choice?: boolean;
+          is_anonymous?: boolean;
+          allow_vote_change?: boolean;
+          is_closed?: boolean;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      poll_options: {
+        Row: {
+          id: string;
+          poll_id: string;
+          option_text: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          option_text: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          poll_id?: string;
+          option_text?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      poll_votes: {
+        Row: {
+          id: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          poll_id?: string;
+          option_id?: string;
+          user_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       conversation_members: {
         Row: {
@@ -1377,7 +1548,7 @@ export interface Database {
           conv_id: string;
           target_user_id: string;
         };
-        Returns: void;
+        Returns: Json;
       };
       update_group_member_role: {
         Args: {

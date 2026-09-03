@@ -21,7 +21,8 @@ import { MessageReactions } from "./message-reactions";
 import { ReplyPreview } from "./reply-preview";
 import { MessageAttachment } from "./message-attachment";
 import { MentionText } from "@/components/mentions/mention-text";
-import type { ChatMessage } from "@/types/chat";
+import { PollCard } from "@/components/groups/poll-card";
+import type { ChatMessage, PollDto } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
 interface MessageItemProps {
@@ -33,6 +34,10 @@ interface MessageItemProps {
   isHighlighted?: boolean;
   isStarred?: boolean;
   isPinned?: boolean;
+  poll?: PollDto;
+  onVotePoll?: (pollId: string, optionIds: string[]) => Promise<any>;
+  onClosePoll?: (pollId: string) => Promise<any>;
+  canClosePoll?: boolean;
   onRetry?: (message: ChatMessage) => void;
   onReply?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, reaction: ReactionType) => void;
@@ -72,6 +77,10 @@ export function MessageItem({
   isHighlighted = false,
   isStarred = false,
   isPinned = false,
+  poll,
+  onVotePoll,
+  onClosePoll,
+  canClosePoll = false,
   onRetry,
   onReply,
   onToggleReaction,
@@ -248,8 +257,19 @@ export function MessageItem({
                 />
               )}
 
-              {/* Message content */}
-              {message.content &&
+              {/* Poll Card */}
+              {poll && onVotePoll ? (
+                <div className="my-1">
+                  <PollCard
+                    poll={poll}
+                    onVote={onVotePoll}
+                    onClosePoll={onClosePoll}
+                    canClose={canClosePoll}
+                  />
+                </div>
+              ) : (
+                /* Message content */
+                message.content &&
                 !(
                   message.attachments &&
                   message.attachments.length > 0 &&
@@ -260,7 +280,8 @@ export function MessageItem({
                   <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
                     <MentionText content={message.content} isCurrentUser={isCurrentUser} />
                   </p>
-                )}
+                )
+              )}
             </>
           )}
 
