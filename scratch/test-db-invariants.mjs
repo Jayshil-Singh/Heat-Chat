@@ -62,7 +62,6 @@ async function run() {
       .from("poll_votes")
       .select("user_id, option_id");
 
-    // Must return empty array or RLS rejection; never leak rows to unauthenticated caller
     assert.ok(
       data === null || (Array.isArray(data) && data.length === 0),
       `Leak detected: unauthenticated client received ${data?.length} poll_votes rows!`
@@ -117,10 +116,62 @@ async function run() {
       .limit(5);
 
     assert.strictEqual(error, null);
-    // Public username and display_name are allowed, but check no raw sensitive fields leak
     if (data && data.length > 0) {
       assert.strictEqual(data[0].email, undefined, "Email column must not be returned in public select");
     }
+  });
+
+  // 7. GROUP INVITATIONS ACCESS DEFENSE
+  console.log("\n--- 7. Group Invitations Privacy Verification ---");
+  await test("Unauthenticated direct query to group_invitations is completely blocked by RLS", async () => {
+    const { data, error } = await supabase
+      .from("group_invitations")
+      .select("*");
+
+    assert.ok(
+      data === null || (Array.isArray(data) && data.length === 0),
+      `Leak detected: unauthenticated client received ${data?.length} group_invitations rows!`
+    );
+  });
+
+  // 8. GROUP INVITE LINKS ACCESS DEFENSE
+  console.log("\n--- 8. Group Invite Links Privacy Verification ---");
+  await test("Unauthenticated direct query to group_invite_links is completely blocked by RLS", async () => {
+    const { data, error } = await supabase
+      .from("group_invite_links")
+      .select("*");
+
+    assert.ok(
+      data === null || (Array.isArray(data) && data.length === 0),
+      `Leak detected: unauthenticated client received ${data?.length} group_invite_links rows!`
+    );
+  });
+
+  // 9. POLLS ACCESS DEFENSE
+  console.log("\n--- 9. Polls Privacy Verification ---");
+  await test("Unauthenticated direct query to polls is completely blocked by RLS", async () => {
+    const { data, error } = await supabase
+      .from("polls")
+      .select("*");
+
+    assert.ok(
+      data === null || (Array.isArray(data) && data.length === 0),
+      `Leak detected: unauthenticated client received ${data?.length} polls rows!`
+    );
+  });
+
+  // 10. GET_CONVERSATION_POLLS RPC GATE
+  console.log("\n--- 10. get_conversation_polls RPC Authorization Verification ---");
+  await test("Unauthenticated call to get_conversation_polls is blocked", async () => {
+    const { data, error } = await supabase.rpc("get_conversation_polls", {
+      p_conversation_id: "00000000-0000-0000-0000-000000000000"
+    });
+
+    assert.ok(
+      error !== null,
+      "Expected get_conversation_polls to reject unauthenticated call, but succeeded!"
+    );
+    assert.strictEqual(error.message, "Authentication required");
   });
 
   console.log(`\n==============================================`);

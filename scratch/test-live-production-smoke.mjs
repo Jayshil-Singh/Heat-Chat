@@ -35,9 +35,9 @@ async function runSmokeTests() {
   // ── 2. GROUP MEMBER REMOVAL TESTS ──────────────────────────────────────────
   console.log("\n--- 2. Live Group Member Removal Tests (/api/groups/[id]/members/[memberId]) ---");
 
-  // Unauthorized removal
+  // Unauthorized removal with valid UUID
   const testConvId = "451ed7e8-1f8e-40d0-8575-470720acf809";
-  const testMemberId = "00000000-0000-0000-0000-000000000000";
+  const testMemberId = "c3a8e244-672c-4b68-8094-bf8342795811";
   const resDelUnauth = await fetch(`${PROD_URL}/api/groups/${testConvId}/members/${testMemberId}`, {
     method: "DELETE",
   });
@@ -45,6 +45,12 @@ async function runSmokeTests() {
   assert(resDelUnauth.status === 401, `DELETE /api/groups/... (unauthenticated) returns 401 (got ${resDelUnauth.status})`);
   assert(jsonDelUnauth?.error?.code === "UNAUTHORIZED", "Error code is UNAUTHORIZED");
   assert(resDelUnauth.status !== 404, "Route is active and mounted on production Vercel (not 404)");
+
+  // Nil UUID rejection test
+  const resDelNil = await fetch(`${PROD_URL}/api/groups/${testConvId}/members/00000000-0000-0000-0000-000000000000`, {
+    method: "DELETE",
+  });
+  assert(resDelNil.status === 400, `DELETE /api/groups/... with NIL_UUID returns 400 Bad Request (got ${resDelNil.status})`);
 
   // ── 3. LIVE SUPABASE RPC TEST ──────────────────────────────────────────────
   console.log("\n--- 3. Live Supabase RPC Audit (rmvpdcftfdeizitnrvkw.supabase.co) ---");
