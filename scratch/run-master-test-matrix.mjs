@@ -15,6 +15,7 @@ const suites = [
   { name: "DB Schema Simulation (Clean & Partial)", cmd: "node scratch/simulate-db-migrations.mjs", category: "Database Tests" },
   { name: "API Integration Tests", cmd: "node scratch/test-real-api-integration.mjs", category: "API Integration Tests" },
   { name: "Live Production Smoke Tests", cmd: "node scratch/test-live-production-smoke.mjs", category: "Live Smoke Tests" },
+  { name: "Phase 7 Master Verification (D92, D96-D103)", cmd: "npx tsx scratch/run-phase7-master-tests.mjs", category: "Phase 7 Tests" },
 ];
 
 console.log("==================================================================");

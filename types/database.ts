@@ -2001,6 +2001,103 @@ export interface Database {
         };
         Returns: Json;
       };
+      register_push_subscription: {
+        Args: {
+          p_endpoint: string;
+          p_p256dh: string;
+          p_auth: string;
+          p_user_agent?: string | null;
+          p_device_type?: string;
+        };
+        Returns: string;
+      };
+      revoke_push_subscription: {
+        Args: {
+          p_subscription_id: string;
+        };
+        Returns: boolean;
+      };
+      get_user_push_subscriptions: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          device_type: string;
+          user_agent: string | null;
+          created_at: string;
+          last_seen_at: string;
+          failure_count: number;
+        }[];
+      };
+      claim_notification_deliveries: {
+        Args: {
+          p_batch_size?: number;
+          p_lease_seconds?: number;
+        };
+        Returns: {
+          delivery_id: string;
+          claim_token: string;
+          notification_id: string;
+          subscription_id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          title: string;
+          body: string;
+          data: Json;
+          event_type: string;
+        }[];
+      };
+      complete_notification_delivery: {
+        Args: {
+          p_delivery_id: string;
+          p_claim_token: string;
+          p_success: boolean;
+          p_error?: string | null;
+          p_permanent_failure?: boolean;
+          p_retry_delay_seconds?: number;
+        };
+        Returns: boolean;
+      };
+      soft_delete_notification: {
+        Args: {
+          p_notification_id: string;
+        };
+        Returns: boolean;
+      };
+      soft_delete_all_notifications: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      get_notification_unread_count: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      get_user_notifications: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_category?: string;
+        };
+        Returns: {
+          id: string;
+          actor_id: string | null;
+          conversation_id: string | null;
+          event_type: string;
+          title: string;
+          body: string;
+          data: Json;
+          read_at: string | null;
+          created_at: string;
+        }[];
+      };
+      cleanup_stale_notifications: {
+        Args: {
+          p_retention_days?: number;
+          p_deliveries_retention_days?: number;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;

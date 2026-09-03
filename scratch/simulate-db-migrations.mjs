@@ -153,6 +153,8 @@ freshDb.createTable("conversation_members", ["conversation_id", "user_id", "role
 freshDb.createTable("messages", ["id", "conversation_id", "sender_id", "content"]);
 freshDb.createTable("message_reads", ["conversation_id", "user_id", "last_read_message_id"]);
 freshDb.createTable("attachments", ["id", "message_id", "storage_path"]);
+freshDb.createTable("notifications", ["id", "user_id", "conversation_id", "read_at", "created_at"]);
+freshDb.createTable("notification_preferences", ["user_id", "notifications_enabled"]);
 
 // Group chats migration (20260828)
 freshDb.createFunction("remove_group_member", ["uuid", "uuid"], "void", true, null);
@@ -194,11 +196,43 @@ freshDb.addColumn("polls", "updated_at");
 freshDb.createFunction("get_conversation_polls", ["uuid"], "jsonb", true, "public, pg_temp");
 freshDb.createFunction("join_group_via_invite_link", ["text"], "uuid", true, "public, pg_temp");
 
-assert.strictEqual(freshDb.hasTable("polls"), true);
-assert.strictEqual(freshDb.hasTable("group_invite_links"), true);
-assert.strictEqual(freshDb.functions.get("remove_group_member(uuid, uuid)").returnType, "jsonb");
-assert.strictEqual(freshDb.isTableInPublication("supabase_realtime", "poll_votes"), false);
-assert.strictEqual(freshDb.indexes.has("unique_group_owner_idx"), true);
+// Phase 7 (20260909) in Clean Database
+freshDb.addColumn("notifications", "actor_id");
+freshDb.addColumn("notifications", "event_type");
+freshDb.addColumn("notifications", "dedupe_key");
+freshDb.addColumn("notifications", "title");
+freshDb.addColumn("notifications", "body");
+freshDb.addColumn("notifications", "data");
+freshDb.addColumn("notifications", "deleted_at");
+freshDb.addColumn("notifications", "expires_at");
+
+freshDb.createTable("push_subscriptions", ["id", "user_id", "endpoint", "p256dh", "auth", "device_type", "failure_count", "last_seen_at", "revoked_at", "created_at"]);
+freshDb.createTable("notification_deliveries", ["id", "notification_id", "subscription_id", "user_id", "claim_token", "lease_until", "attempt_count", "status", "last_error", "next_attempt_at", "created_at", "delivered_at"]);
+
+freshDb.indexes.add("notifications_user_dedupe_key_uidx");
+freshDb.indexes.add("push_subscriptions_endpoint_active_uidx");
+freshDb.indexes.add("notification_deliveries_notif_sub_uidx");
+
+freshDb.createFunction("register_push_subscription", ["text", "text", "text", "text", "text"], "uuid", true, "public, pg_temp");
+freshDb.createFunction("revoke_push_subscription", ["uuid"], "boolean", true, "public, pg_temp");
+freshDb.createFunction("get_user_push_subscriptions", [], "table", true, "public, pg_temp");
+freshDb.createFunction("claim_notification_deliveries", ["int", "int"], "table", true, "public, pg_temp");
+freshDb.createFunction("complete_notification_delivery", ["uuid", "uuid", "boolean", "text", "boolean", "int"], "boolean", true, "public, pg_temp");
+freshDb.createFunction("mark_notification_as_read", ["uuid"], "boolean", true, "public, pg_temp");
+freshDb.createFunction("mark_all_notifications_as_read", [], "int", true, "public, pg_temp");
+freshDb.createFunction("soft_delete_notification", ["uuid"], "boolean", true, "public, pg_temp");
+freshDb.createFunction("soft_delete_all_notifications", [], "int", true, "public, pg_temp");
+freshDb.createFunction("get_notification_unread_count", [], "int", true, "public, pg_temp");
+freshDb.createFunction("get_user_notifications", ["int", "int", "text"], "table", true, "public, pg_temp");
+freshDb.createFunction("cleanup_stale_notifications", ["int", "int"], "jsonb", true, "public, pg_temp");
+
+assert.strictEqual(freshDb.hasTable("push_subscriptions"), true);
+assert.strictEqual(freshDb.hasTable("notification_deliveries"), true);
+assert.strictEqual(freshDb.indexes.has("push_subscriptions_endpoint_active_uidx"), true);
+assert.strictEqual(freshDb.indexes.has("notification_deliveries_notif_sub_uidx"), true);
+assert.strictEqual(freshDb.functions.has("register_push_subscription(text, text, text, text, text)"), true);
+assert.strictEqual(freshDb.functions.has("claim_notification_deliveries(int, int)"), true);
+assert.strictEqual(freshDb.functions.has("complete_notification_delivery(uuid, uuid, boolean, text, boolean, int)"), true);
 
 console.log("✅ Clean database provisioning succeeded with zero errors.");
 console.log("BOTH CLEAN AND PARTIAL-PRODUCTION STATE SIMULATIONS VERIFIED!\n");

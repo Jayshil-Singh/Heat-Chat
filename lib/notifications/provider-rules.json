@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "exactHosts": [
+    "android.googleapis.com",
+    "fcm.googleapis.com",
+    "notify.windows.com",
+    "updates.push.services.mozilla.com",
+    "web.push.apple.com"
+  ],
+  "wildcardSuffixes": [
+    "fcm.googleapis.com",
+    "notify.windows.com",
+    "push.apple.com",
+    "push.services.mozilla.com"
+  ],
+  "wildcardLabel": {
+    "minLength": 1,
+    "maxLength": 63,
+    "firstCharacter": "ascii-alphanumeric",
+    "lastCharacter": "ascii-alphanumeric",
+    "interiorCharacters": "ascii-alphanumeric-or-hyphen",
+    "singleLevelOnly": true,
+    "allowUnderscore": false,
+    "allowLeadingHyphen": false,
+    "allowTrailingHyphen": false
+  },
+  "portPolicy": {
+    "implicitHttps": true,
+    "allowedExplicitPorts": [443],
+    "canonicalPort": "strip-443"
+  }
+}

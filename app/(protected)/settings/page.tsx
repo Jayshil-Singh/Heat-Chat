@@ -14,7 +14,11 @@ import {
   Laptop,
   CheckCircle2,
   AlertCircle,
-  VolumeX,
+  Smartphone,
+  Send,
+  Trash2,
+  Clock,
+  Globe,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,13 +28,58 @@ import { useNotificationContext } from "@/components/notifications/notification-
 import { useNotificationPermission } from "@/hooks/use-notification-permission";
 import { playTestSound } from "@/lib/audio/sound-cue";
 
+interface RegisteredDevice {
+  id: string;
+  device_type: string;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
+  failure_count: number;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const { preferences, updatePreferences } = useNotificationContext();
-  const { permission, isSupported, requestPermission } = useNotificationPermission();
+  const {
+    permission,
+    isSupported,
+    isPushSupported,
+    isPushSubscribed,
+    isPushLoading,
+    requestPermission,
+    subscribeToPush,
+    unsubscribeFromPush,
+    sendTestNotification,
+  } = useNotificationPermission();
+
   const [isPlayingTestSound, setIsPlayingTestSound] = React.useState(false);
+  const [isSendingTestPush, setIsSendingTestPush] = React.useState(false);
+  const [testPushFeedback, setTestPushFeedback] = React.useState<string | null>(null);
+  const [registeredDevices, setRegisteredDevices] = React.useState<RegisteredDevice[]>([]);
+  const [isLoadingDevices, setIsLoadingDevices] = React.useState(false);
+
+  const fetchRegisteredDevices = React.useCallback(async () => {
+    setIsLoadingDevices(true);
+    try {
+      const res = await fetch("/api/notifications/push/subscriptions");
+      if (res.ok) {
+        const json = await res.json();
+        setRegisteredDevices(json.subscriptions || []);
+      }
+    } catch {
+      // Ignore network errors in fetching device list
+    } finally {
+      setIsLoadingDevices(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (user?.id) {
+      fetchRegisteredDevices();
+    }
+  }, [user?.id, fetchRegisteredDevices]);
 
   const handleTestSound = async () => {
     setIsPlayingTestSound(true);
@@ -38,10 +87,47 @@ export default function SettingsPage() {
     setTimeout(() => setIsPlayingTestSound(false), 500);
   };
 
-  const handleRequestDesktopPermission = async () => {
-    const result = await requestPermission();
-    if (result === "granted") {
-      await updatePreferences({ desktop_notifications_enabled: true });
+  const handleToggleWebPush = async () => {
+    if (isPushSubscribed) {
+      await unsubscribeFromPush();
+      await updatePreferences({ push_enabled: false } as any);
+      fetchRegisteredDevices();
+    } else {
+      const res = await subscribeToPush();
+      if (res.success) {
+        await updatePreferences({ push_enabled: true } as any);
+        fetchRegisteredDevices();
+      } else {
+        alert(res.error || "Failed to subscribe to push notifications");
+      }
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    setIsSendingTestPush(true);
+    setTestPushFeedback(null);
+    const res = await sendTestNotification();
+    setIsSendingTestPush(false);
+    if (res.success) {
+      setTestPushFeedback("Test notification dispatched! Check your device notifications.");
+    } else {
+      setTestPushFeedback(res.error || "Failed to dispatch test notification");
+    }
+    setTimeout(() => setTestPushFeedback(null), 5000);
+  };
+
+  const handleRevokeDevice = async (subId: string) => {
+    try {
+      const res = await fetch("/api/notifications/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: subId }),
+      });
+      if (res.ok) {
+        setRegisteredDevices((prev) => prev.filter((d) => d.id !== subId));
+      }
+    } catch {
+      alert("Failed to revoke device");
     }
   };
 
@@ -62,7 +148,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
               <Bell className="h-4 w-4 text-heat-500" />
-              Notifications & Sound
+              Notifications & Alerts
             </h2>
             <span
               className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${
@@ -86,7 +172,7 @@ export default function SettingsPage() {
                   Enable Notifications
                 </label>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Receive alerts when friends message you or add you to groups
+                  Receive in-app alerts when friends message you or add you to groups
                 </p>
               </div>
               <input
@@ -100,7 +186,74 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* 2. Sound Effects Toggle + Test Sound */}
+            {/* 2. Web Push PWA Notifications */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-3.5 w-3.5 text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">
+                    Web Push (PWA & Background Alerts)
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                      isPushSubscribed
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
+                        : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    }`}
+                  >
+                    {isPushSubscribed ? (
+                      <>
+                        <CheckCircle2 className="h-2.5 w-2.5" />
+                        Subscribed on this device
+                      </>
+                    ) : (
+                      "Not Registered"
+                    )}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Receive background push notifications even when Heat Chat is closed
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isPushSubscribed && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendTestPush}
+                    disabled={isSendingTestPush}
+                    className="h-8 text-xs gap-1.5"
+                  >
+                    <Send className="h-3 w-3 text-heat-500" />
+                    <span>{isSendingTestPush ? "Sending..." : "Test Push"}</span>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant={isPushSubscribed ? "outline" : "default"}
+                  size="sm"
+                  onClick={handleToggleWebPush}
+                  disabled={isPushLoading || !isPushSupported}
+                  className="h-8 text-xs shrink-0"
+                >
+                  {isPushLoading
+                    ? "Updating..."
+                    : isPushSubscribed
+                    ? "Unsubscribe Device"
+                    : "Subscribe This Device"}
+                </Button>
+              </div>
+            </div>
+
+            {testPushFeedback && (
+              <div className="p-2.5 rounded-lg text-xs bg-heat-50 border border-heat-200 text-heat-800 dark:bg-heat-950/50 dark:border-heat-900 dark:text-heat-300">
+                {testPushFeedback}
+              </div>
+            )}
+
+            {/* 3. Sound Effects Toggle */}
             <div className="flex items-center justify-between pt-4">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
@@ -146,7 +299,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* 3. Message Preview Toggle */}
+            {/* 4. Message Previews Toggle */}
             <div className="flex items-center justify-between pt-4">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
@@ -172,69 +325,55 @@ export default function SettingsPage() {
                 className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
               />
             </div>
-
-            {/* 4. Desktop Notifications */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <Laptop className="h-3.5 w-3.5 text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">
-                    Desktop Notifications
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                      permission === "granted"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
-                        : permission === "denied"
-                        ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
-                        : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
-                    }`}
-                  >
-                    {permission === "granted" ? (
-                      <>
-                        <CheckCircle2 className="h-2.5 w-2.5" />
-                        Enabled
-                      </>
-                    ) : permission === "denied" ? (
-                      <>
-                        <AlertCircle className="h-2.5 w-2.5" />
-                        Blocked
-                      </>
-                    ) : isSupported ? (
-                      "Not Enabled"
-                    ) : (
-                      "Unsupported"
-                    )}
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Receive browser notifications even when tab is backgrounded
-                </p>
-              </div>
-
-              {permission !== "granted" && isSupported ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRequestDesktopPermission}
-                  className="h-8 text-xs shrink-0"
-                >
-                  Enable Desktop Notifications
-                </Button>
-              ) : permission === "granted" ? (
-                <input
-                  id="toggle-desktop"
-                  type="checkbox"
-                  checked={preferences.desktop_notifications_enabled}
-                  onChange={(e) =>
-                    updatePreferences({ desktop_notifications_enabled: e.target.checked })
-                  }
-                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
-                />
-              ) : null}
-            </div>
           </div>
+        </div>
+
+        {/* Registered Devices Section */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+              <Laptop className="h-4 w-4 text-heat-500" />
+              Registered Push Devices
+            </h2>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {registeredDevices.length} {registeredDevices.length === 1 ? "device" : "devices"}
+            </span>
+          </div>
+
+          {isLoadingDevices ? (
+            <div className="py-4 text-center text-xs text-zinc-500">Loading registered devices...</div>
+          ) : registeredDevices.length === 0 ? (
+            <p className="text-xs text-zinc-500 py-2">
+              No devices currently registered for Web Push notifications.
+            </p>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+              {registeredDevices.map((device) => (
+                <div key={device.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="text-xs font-semibold text-zinc-900 dark:text-white capitalize">
+                      {device.device_type} Device
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-md">
+                      {device.user_agent || "Browser Client"}
+                    </p>
+                    <p className="text-[10px] text-zinc-400">
+                      Last active: {new Date(device.last_seen_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRevokeDevice(device.id)}
+                    className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Revoke</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Account Section */}
@@ -245,21 +384,15 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-2 text-xs text-zinc-600 dark:text-zinc-400">
             <p>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-200">
-                Email:
-              </span>{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-200">Email:</span>{" "}
               {user?.email || "Not signed in"}
             </p>
             <p>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-200">
-                Username:
-              </span>{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-200">Username:</span>{" "}
               @{profile?.username || "pending"}
             </p>
             <p>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-200">
-                User ID:
-              </span>{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-200">User ID:</span>{" "}
               <code className="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">
                 {user?.id || "none"}
               </code>
@@ -298,10 +431,9 @@ export default function SettingsPage() {
                   : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
               }`}
             >
-              <Sun className="h-4 w-4" />
+              <Sun className="h-4 w-4 text-amber-500" />
               <span>Light Mode</span>
             </button>
-
             <button
               onClick={() => setTheme("dark")}
               className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-medium transition-all ${
@@ -310,10 +442,9 @@ export default function SettingsPage() {
                   : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
               }`}
             >
-              <Moon className="h-4 w-4" />
+              <Moon className="h-4 w-4 text-indigo-400" />
               <span>Dark Mode</span>
             </button>
-
             <button
               onClick={() => setTheme("system")}
               className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-medium transition-all ${
@@ -322,7 +453,7 @@ export default function SettingsPage() {
                   : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
               }`}
             >
-              <Monitor className="h-4 w-4" />
+              <Monitor className="h-4 w-4 text-zinc-400" />
               <span>System Default</span>
             </button>
           </div>

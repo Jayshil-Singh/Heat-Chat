@@ -31,8 +31,26 @@ export function NotificationCenter({
   onMarkAllAsRead,
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [selectedCategory, setSelectedCategory] = React.useState<"all" | "messages" | "mentions" | "groups" | "friends">("all");
   const [coords, setCoords] = React.useState<PopoverCoords | null>(null);
   const [mounted, setMounted] = React.useState(false);
+
+  const filteredNotifications = React.useMemo(() => {
+    if (selectedCategory === "all") return notifications;
+    if (selectedCategory === "messages") {
+      return notifications.filter((n) => n.conversationType === "direct" && (n as any).type !== "mention");
+    }
+    if (selectedCategory === "mentions") {
+      return notifications.filter((n) => (n as any).type === "mention");
+    }
+    if (selectedCategory === "groups") {
+      return notifications.filter((n) => n.conversationType === "group");
+    }
+    if (selectedCategory === "friends") {
+      return notifications.filter((n) => (n as any).type?.startsWith("friend"));
+    }
+    return notifications;
+  }, [notifications, selectedCategory]);
 
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const popoverRef = React.useRef<HTMLDivElement>(null);
@@ -204,6 +222,24 @@ export function NotificationCenter({
         )}
       </div>
 
+      {/* Category Filter Pills */}
+      <div className="flex items-center gap-1 overflow-x-auto px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/30 shrink-0 scrollbar-none">
+        {(["all", "messages", "mentions", "groups", "friends"] as const).map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize shrink-0 transition-colors ${
+              selectedCategory === cat
+                ? "bg-heat-500 text-white shadow-xs"
+                : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       {/* List / Empty State Content */}
       <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900 box-border">
         {isLoading ? (
@@ -218,7 +254,7 @@ export function NotificationCenter({
               </div>
             ))}
           </div>
-        ) : notifications.length === 0 ? (
+        ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-6 text-center w-full box-border">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-500 mb-2 shrink-0">
               <Flame className="h-4 w-4" />
@@ -231,7 +267,7 @@ export function NotificationCenter({
             </p>
           </div>
         ) : (
-          notifications.map((notif) => {
+          filteredNotifications.map((notif) => {
             const isUnread = !notif.readAt;
             const isMention = (notif as any).type === "mention";
             const senderName = notif.sender?.display_name || "Friend";
