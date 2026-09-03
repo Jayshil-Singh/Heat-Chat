@@ -617,70 +617,10 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- 15. UPDATED RPC: REMOVE GROUP MEMBER (WITH MODERATOR & ADMIN PROTECTION)
-create or replace function public.remove_group_member(
-  conv_id uuid,
-  target_user_id uuid
-)
-returns void as $$
-declare
-  v_caller_id uuid;
-  v_caller_role text;
-  v_target_role text;
-  v_conv_type text;
-begin
-  v_caller_id := auth.uid();
-  if v_caller_id is null then
-    raise exception 'Authentication required';
-  end if;
-
-  select type into v_conv_type from public.conversations where id = conv_id;
-  if v_conv_type is null or v_conv_type <> 'group' then
-    raise exception 'Group conversation not found';
-  end if;
-
-  select role into v_caller_role from public.conversation_members where conversation_id = conv_id and user_id = v_caller_id;
-  if v_caller_role is null then
-    raise exception 'Caller is not a member of this group';
-  end if;
-
-  select role into v_target_role from public.conversation_members where conversation_id = conv_id and user_id = target_user_id;
-  if v_target_role is null then
-    raise exception 'Target user is not a member of this group';
-  end if;
-
-  -- Self removal
-  if v_caller_id = target_user_id then
-    if v_caller_role = 'owner' then
-      raise exception 'Owner cannot remove themselves. Transfer ownership or use leave_group';
-    end if;
-    delete from public.conversation_members where conversation_id = conv_id and user_id = target_user_id;
-    return;
-  end if;
-
-  -- Role hierarchy checks
-  if v_caller_role = 'owner' then
-    delete from public.conversation_members where conversation_id = conv_id and user_id = target_user_id;
-    return;
-  elsif v_caller_role = 'admin' then
-    if v_target_role in ('owner', 'admin') then
-      raise exception 'Admins cannot remove other admins or the group owner';
-    else
-      delete from public.conversation_members where conversation_id = conv_id and user_id = target_user_id;
-      return;
-    end if;
-  elsif v_caller_role = 'moderator' then
-    if v_target_role in ('owner', 'admin', 'moderator') then
-      raise exception 'Moderators cannot remove admins, owners, or other moderators';
-    else
-      delete from public.conversation_members where conversation_id = conv_id and user_id = target_user_id;
-      return;
-    end if;
-  else
-    raise exception 'Regular members cannot remove other members';
-  end if;
-end;
-$$ language plpgsql security definer;
+-- 15. NOTE ON REMOVE GROUP MEMBER:
+-- The authoritative, hardened JSONB implementation of remove_group_member(conv_id uuid, target_user_id uuid)
+-- is owned and applied in migration 20260907_fix_saved_and_member_removal.sql.
+-- An intermediate RETURNS void definition is omitted here to prevent return-type conflicts (PostgreSQL error 42P13).
 
 -- 16. REALTIME PUBLICATION REGISTRATION
 do $$
@@ -689,11 +629,7 @@ begin
 exception when duplicate_object then null; when others then null;
 end $$;
 
-do $$
-begin
-  alter publication supabase_realtime add table public.poll_votes;
-exception when duplicate_object then null; when others then null;
-end $$;
+-- Note: public.poll_votes is intentionally NOT added to supabase_realtime to protect anonymous voter privacy.
 
 do $$
 begin
