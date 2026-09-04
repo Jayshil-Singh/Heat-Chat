@@ -35,11 +35,18 @@ function formatDuration(seconds: number | null | undefined): string {
 
 /** Classify attachment by MIME type */
 function getAttachmentKind(
-  fileType: string
+  fileType: string,
+  fileName?: string
 ): "image" | "video" | "audio" | "voice" | "file" {
   if (fileType.startsWith("image/")) return "image";
   if (fileType.startsWith("video/")) return "video";
-  if (fileType === "audio/webm" || fileType.startsWith("audio/webm;")) return "voice";
+  if (
+    fileName?.startsWith("voice_message") ||
+    fileType === "audio/webm" ||
+    fileType.startsWith("audio/webm;")
+  ) {
+    return "voice";
+  }
   if (fileType.startsWith("audio/")) return "audio";
   return "file";
 }
@@ -178,6 +185,7 @@ function AudioAttachment({
       </div>
       <audio
         controls
+        src={att.signedUrl}
         preload="metadata"
         className="w-full h-8"
         aria-label={isVoice ? "Voice message" : att.fileName}
@@ -225,10 +233,10 @@ export function MessageAttachment({
 
   // Separate images from other types
   const imageAttachments = attachments.filter(
-    (a) => getAttachmentKind(a.fileType) === "image"
+    (a) => getAttachmentKind(a.fileType, a.fileName) === "image"
   );
   const nonImageAttachments = attachments.filter(
-    (a) => getAttachmentKind(a.fileType) !== "image"
+    (a) => getAttachmentKind(a.fileType, a.fileName) !== "image"
   );
 
   return (
@@ -243,7 +251,7 @@ export function MessageAttachment({
 
       {/* Non-image attachments */}
       {nonImageAttachments.map((att) => {
-        const kind = getAttachmentKind(att.fileType);
+        const kind = getAttachmentKind(att.fileType, att.fileName);
         if (kind === "video") return <VideoAttachment key={att.id} att={att} />;
         if (kind === "voice") return <AudioAttachment key={att.id} att={att} isVoice />;
         if (kind === "audio") return <AudioAttachment key={att.id} att={att} isVoice={false} />;

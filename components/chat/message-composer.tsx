@@ -86,13 +86,24 @@ export function MessageComposer({
 
   const voiceRecorder = useVoiceRecorder();
 
-  // Discard voice recorder when leaving a conversation
-  const voiceDiscard = voiceRecorder.discard;
+  // Discard voice recorder when leaving a conversation or unmounting
+  const conversationIdRef = React.useRef(conversationId);
+  const voiceDiscardRef = React.useRef(voiceRecorder.discard);
+  voiceDiscardRef.current = voiceRecorder.discard;
+
+  React.useEffect(() => {
+    if (conversationIdRef.current !== conversationId) {
+      conversationIdRef.current = conversationId;
+      voiceDiscardRef.current();
+      setShowVoiceRecorder(false);
+    }
+  }, [conversationId]);
+
   React.useEffect(() => {
     return () => {
-      voiceDiscard();
+      voiceDiscardRef.current();
     };
-  }, [voiceDiscard]);
+  }, []);
 
   // Draft storage — preserves the in-progress text when edit mode is entered/left
   const draftRef = React.useRef<string>("");
@@ -380,7 +391,11 @@ export function MessageComposer({
       setVoiceUploadState("uploading");
       setVoiceUploadError(null);
 
-      const ext = mimeType.includes("ogg") ? ".ogg" : ".webm";
+      const ext = mimeType.includes("ogg")
+        ? ".ogg"
+        : mimeType.includes("mp4") || mimeType.includes("m4a")
+        ? ".mp4"
+        : ".webm";
       const voiceFile = new File([blob], `voice_message${ext}`, {
         type: mimeType,
         lastModified: Date.now(),

@@ -666,10 +666,18 @@ export function useMessages(conversationId: string | null) {
     function inferMessageType(
       attachments: PendingAttachment[]
     ): import("@/types/database").MessageType {
-      const mimeType = attachments[0]?.processed?.mimeType || attachments[0]?.originalFile?.type || "";
+      const first = attachments[0];
+      const mimeType = first?.processed?.mimeType || first?.originalFile?.type || "";
       if (mimeType.startsWith("image/")) return "image";
       if (mimeType.startsWith("video/")) return "video";
-      if (mimeType === "audio/webm" || mimeType.startsWith("audio/webm;")) return "voice";
+      if (
+        first?.id?.startsWith("voice_") ||
+        first?.originalFile?.name?.startsWith("voice_message") ||
+        mimeType === "audio/webm" ||
+        mimeType.startsWith("audio/webm;")
+      ) {
+        return "voice";
+      }
       if (mimeType.startsWith("audio/")) return "audio";
       return "file";
     }
