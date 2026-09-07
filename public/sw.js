@@ -1,13 +1,173 @@
 // Heat Chat — Production PWA Service Worker
-// Version: 1.0.0
+// Version: 2.0.0 (PWA Shell Caching + Offline Fallback + Phase 9 Web Push)
 
+const CACHE_NAME = "heat-chat-shell-v2";
+
+const PRECACHE_RESOURCES = [
+  "/offline",
+  "/manifest.webmanifest",
+  "/favicon.ico",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-maskable-512.png",
+  "/icons/apple-touch-icon.png",
+];
+
+// Install: Cache safe static shell resources
 self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => {
+        return cache.addAll(PRECACHE_RESOURCES);
+      })
+      .catch((err) => {
+        // Non-blocking in case of build-time variations
+        console.warn("[SW] Pre-caching completed with notices:", err);
+      })
+  );
   self.skipWaiting();
 });
 
+// Activate: Clean up older cache versions and claim clients
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => {
+        return Promise.all(
+          keys.map((key) => {
+            if (key !== CACHE_NAME) {
+              return caches.delete(key);
+            }
+          })
+        );
+      })
+      .then(() => self.clients.claim())
+  );
 });
+
+/**
+ * Validates whether a request MUST bypass SW caching.
+ * Explicitly protects Supabase, Auth, Storage, Realtime, WebSockets,
+ * API routes, and private user chat data from ever being cached.
+ */
+function shouldBypassCache(request) {
+  // Only cache GET requests
+  if (request.method !== "GET") {
+    return true;
+  }
+
+  const url = new URL(request.url);
+
+  // 1. WebSocket / Realtime protocols
+  if (url.protocol === "ws:" || url.protocol === "wss:") {
+    return true;
+  }
+
+  // 2. Supabase API endpoints & domains
+  if (
+    url.hostname.includes("supabase.co") ||
+    url.pathname.startsWith("/rest/v1") ||
+    url.pathname.startsWith("/auth/v1") ||
+    url.pathname.startsWith("/storage/v1") ||
+    url.pathname.startsWith("/realtime/v1")
+  ) {
+    return true;
+  }
+
+  // 3. Internal Next.js API routes (/api/*)
+  if (url.pathname.startsWith("/api/")) {
+    return true;
+  }
+
+  // 4. Any query parameters containing authentication, tokens, or signatures
+  const search = url.search.toLowerCase();
+  if (
+    search.includes("token=") ||
+    search.includes("apikey=") ||
+    search.includes("signature=") ||
+    search.includes("auth=")
+  ) {
+    return true;
+  }
+
+  // 5. Storage attachments / media buckets
+  if (
+    url.pathname.includes("/chat-attachments/") ||
+    url.pathname.includes("/avatars/")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// Fetch: Secure caching strategy
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+
+  // Immediate bypass for sensitive or non-GET requests
+  if (shouldBypassCache(request)) {
+    return;
+  }
+
+  // Navigation requests (HTML pages): Network-first with /offline fallback
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const offlineResponse = await cache.match("/offline");
+        return offlineResponse || Response.error();
+      })
+    );
+    return;
+  }
+
+  const url = new URL(request.url);
+
+  // Safe static resources: Cache-first
+  // Matches Next.js static chunks, icons, manifest, favicon, and fonts
+  const isStaticAsset =
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/_next/static/") ||
+      url.pathname.startsWith("/icons/") ||
+      url.pathname === "/favicon.ico" ||
+      url.pathname === "/manifest.webmanifest" ||
+      url.pathname === "/manifest.json" ||
+      url.pathname.endsWith(".woff2") ||
+      url.pathname.endsWith(".woff") ||
+      url.pathname.endsWith(".ttf"));
+
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+    return;
+  }
+
+  // Default fallback for safe same-origin GET requests
+  event.respondWith(
+    fetch(request).catch(() => caches.match(request))
+  );
+});
+
+// ============================================================================
+// Phase 9 Web Push Notifications & Click Handling (PRESERVED)
+// ============================================================================
 
 /**
  * Validates target internal route to prevent open redirect attacks

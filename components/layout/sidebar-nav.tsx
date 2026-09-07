@@ -21,6 +21,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/use-auth";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 function SidebarNotificationCenter() {
   const {
@@ -187,6 +188,11 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
         </div>
         <div className="hidden md:flex lg:hidden justify-center w-full">
           <ThemeToggle compact />
+        </div>
+
+        {/* PWA Install Button (conditional) */}
+        <div className="hidden lg:block w-full">
+          <InstallAppButton variant="button" className="w-full" />
         </div>
 
         {/* User profile / Auth status */}

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,12 +19,25 @@ export const metadata: Metadata = {
   description: "A fast, lightweight, and secure private chat application for close friends.",
   applicationName: "Heat Chat",
   authors: [{ name: "Heat Chat Team" }],
-  keywords: ["chat", "private messaging", "friends", "realtime", "heat chat"],
-  manifest: "/manifest.json",
+  keywords: ["chat", "private messaging", "friends", "realtime", "heat chat", "pwa"],
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Heat Chat",
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -65,9 +79,13 @@ export default function RootLayout({
       </head>
       <body className="font-sans min-h-screen bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-50 select-text">
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <ServiceWorkerRegistration />
+            {children}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   );
 }
+

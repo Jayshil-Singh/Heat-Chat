@@ -19,6 +19,7 @@ import {
   Trash2,
   Clock,
   Globe,
+  Download,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import { useNotificationPermission } from "@/hooks/use-notification-permission";
 import { playTestSound } from "@/lib/audio/sound-cue";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 interface RegisteredDevice {
   id: string;
@@ -374,6 +376,25 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* App Installation & PWA Section */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+              <Download className="h-4 w-4 text-heat-500" />
+              App Installation & PWA
+            </h2>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Installable Web App
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Install Heat Chat on your device for standalone window mode, faster access, and seamless background notifications.
+          </p>
+          <div className="pt-1">
+            <InstallAppButton variant="card" />
+          </div>
         </div>
 
         {/* Account Section */}
