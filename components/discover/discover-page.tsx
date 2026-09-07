@@ -166,7 +166,7 @@ export function DiscoverPageContent() {
           )}
 
           {/* Results List */}
-          {isPeopleLoading ? (
+          {isPeopleLoading && people.length === 0 ? (
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <PersonCardSkeleton key={i} />

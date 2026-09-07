@@ -1,0 +1,90 @@
+{
+  "/chat": {
+    "clickToRoute": 12,
+    "routeToFirstRender": 18,
+    "routeToUsefulContent": 2068,
+    "supabaseDuration": 2061,
+    "supabaseRequests": 7,
+    "duplicateRequests": 0,
+    "realtimeChannels": 2,
+    "reactRenders": 4,
+    "failedRequests": 0
+  },
+  "/discover": {
+    "clickToRoute": 15,
+    "routeToFirstRender": 22,
+    "routeToUsefulContent": 1174,
+    "supabaseDuration": 1173,
+    "supabaseRequests": 4,
+    "duplicateRequests": 0,
+    "realtimeChannels": 2,
+    "reactRenders": 3,
+    "failedRequests": 0
+  },
+  "/settings": {
+    "clickToRoute": 11,
+    "routeToFirstRender": 16,
+    "routeToUsefulContent": 770,
+    "supabaseDuration": 769,
+    "supabaseRequests": 3,
+    "duplicateRequests": 0,
+    "realtimeChannels": 2,
+    "reactRenders": 3,
+    "failedRequests": 0
+  },
+  "opening a conversation": {
+    "clickToRoute": 14,
+    "routeToFirstRender": 24,
+    "routeToUsefulContent": 1282,
+    "supabaseDuration": 4986,
+    "supabaseRequests": 9,
+    "duplicateRequests": 0,
+    "realtimeChannels": 3,
+    "reactRenders": 4,
+    "failedRequests": 0
+  },
+  "sending a message": {
+    "clickToRoute": 0,
+    "routeToFirstRender": 4,
+    "routeToUsefulContent": 265,
+    "supabaseDuration": 0,
+    "supabaseRequests": 0,
+    "duplicateRequests": 0,
+    "realtimeChannels": 3,
+    "reactRenders": 2,
+    "failedRequests": 0
+  },
+  "receiving a realtime message": {
+    "clickToRoute": 0,
+    "routeToFirstRender": 8,
+    "routeToUsefulContent": 516,
+    "supabaseDuration": 516,
+    "supabaseRequests": 2,
+    "duplicateRequests": 0,
+    "realtimeChannels": 3,
+    "reactRenders": 2,
+    "failedRequests": 0
+  },
+  "loading notifications": {
+    "clickToRoute": 8,
+    "routeToFirstRender": 15,
+    "routeToUsefulContent": 1143,
+    "supabaseDuration": 1143,
+    "supabaseRequests": 4,
+    "duplicateRequests": 0,
+    "realtimeChannels": 1,
+    "reactRenders": 2,
+    "failedRequests": 0
+  },
+  "loading friend requests": {
+    "clickToRoute": 10,
+    "routeToFirstRender": 18,
+    "routeToUsefulContent": 579,
+    "supabaseDuration": 579,
+    "supabaseRequests": 2,
+    "duplicateRequests": 0,
+    "realtimeChannels": 1,
+    "reactRenders": 2,
+    "failedRequests": 0
+  }
+}

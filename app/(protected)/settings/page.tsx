@@ -64,7 +64,7 @@ export default function SettingsPage() {
     isPreferenceLoading: isDiscoverLoading,
     isToggling: isDiscoverToggling,
     toggleDiscoverability,
-  } = useDiscoverPeople();
+  } = useDiscoverPeople({ autoFetch: false });
 
   const [isPlayingTestSound, setIsPlayingTestSound] = React.useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = React.useState(false);

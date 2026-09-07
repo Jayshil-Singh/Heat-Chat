@@ -64,14 +64,16 @@ export function ActiveChat({ conversation, onBack, onRefreshConversation }: Acti
     loadOlderMessages,
   } = useMessages(conversation.id);
 
-  // Automatically mark conversation as read when active
+  // Automatically mark conversation as read when active if unread
   const markReadRef = React.useRef(markConversationRead);
   React.useEffect(() => {
     markReadRef.current = markConversationRead;
   });
   React.useEffect(() => {
-    markReadRef.current();
-  }, [conversation.id, messages.length]);
+    if ((conversation.unreadCount && conversation.unreadCount > 0) || conversation.isMarkedUnread) {
+      markReadRef.current();
+    }
+  }, [conversation.id, conversation.unreadCount, conversation.isMarkedUnread]);
 
   // ── Typing + presence ─────────────────────────────────────────────────────
   const { typingUsers, sendTyping, stopTyping } = useTyping(conversation.id);

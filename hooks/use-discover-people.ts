@@ -5,14 +5,19 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { DiscoverablePerson } from "@/types/chat";
 
-export function useDiscoverPeople() {
+export interface UseDiscoverPeopleOptions {
+  autoFetch?: boolean;
+}
+
+export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
+  const { autoFetch = true } = options;
   const { user } = useAuth();
   const [isDiscoverable, setIsDiscoverable] = React.useState<boolean>(false);
   const [isToggling, setIsToggling] = React.useState<boolean>(false);
   const [people, setPeople] = React.useState<DiscoverablePerson[]>([]);
   const [searchQuery, setSearchQuery] = React.useState<string>("");
   const [debouncedQuery, setDebouncedQuery] = React.useState<string>("");
-  const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  const [isLoading, setIsLoading] = React.useState<boolean>(autoFetch);
   const [isPreferenceLoading, setIsPreferenceLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -97,8 +102,10 @@ export function useDiscoverPeople() {
   }, [fetchDiscoverability]);
 
   React.useEffect(() => {
-    fetchPeople();
-  }, [fetchPeople]);
+    if (autoFetch) {
+      fetchPeople();
+    }
+  }, [autoFetch, fetchPeople]);
 
   // Toggle discoverability
   const toggleDiscoverability = React.useCallback(async () => {

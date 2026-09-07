@@ -1,0 +1,82 @@
+{
+  "/chat": {
+    "Before (ms)": 2068,
+    "After (ms)": 1258,
+    "Saved (ms)": "-810 ms",
+    "Improvement": "39%",
+    "Before Reqs": 7,
+    "After Reqs": 6,
+    "Req Reduction": "-1",
+    "Channels": 2
+  },
+  "/discover": {
+    "Before (ms)": 1174,
+    "After (ms)": 314,
+    "Saved (ms)": "-860 ms",
+    "Improvement": "73%",
+    "Before Reqs": 4,
+    "After Reqs": 3,
+    "Req Reduction": "-1",
+    "Channels": 2
+  },
+  "/settings": {
+    "Before (ms)": 770,
+    "After (ms)": 260,
+    "Saved (ms)": "-510 ms",
+    "Improvement": "66%",
+    "Before Reqs": 3,
+    "After Reqs": 2,
+    "Req Reduction": "-1",
+    "Channels": 2
+  },
+  "opening a conversation": {
+    "Before (ms)": 1282,
+    "After (ms)": 622,
+    "Saved (ms)": "-660 ms",
+    "Improvement": "51%",
+    "Before Reqs": 9,
+    "After Reqs": 7,
+    "Req Reduction": "-2",
+    "Channels": 3
+  },
+  "sending a message": {
+    "Before (ms)": 265,
+    "After (ms)": 264,
+    "Saved (ms)": "-1 ms",
+    "Improvement": "0%",
+    "Before Reqs": 0,
+    "After Reqs": 0,
+    "Req Reduction": "-0",
+    "Channels": 3
+  },
+  "receiving a realtime message": {
+    "Before (ms)": 516,
+    "After (ms)": 253,
+    "Saved (ms)": "-263 ms",
+    "Improvement": "51%",
+    "Before Reqs": 2,
+    "After Reqs": 1,
+    "Req Reduction": "-1",
+    "Channels": 3
+  },
+  "loading notifications": {
+    "Before (ms)": 1143,
+    "After (ms)": 537,
+    "Saved (ms)": "-606 ms",
+    "Improvement": "53%",
+    "Before Reqs": 4,
+    "After Reqs": 3,
+    "Req Reduction": "-1",
+    "Channels": 1
+  },
+  "loading friend requests": {
+    "Before (ms)": 579,
+    "After (ms)": 269,
+    "Saved (ms)": "-310 ms",
+    "Improvement": "54%",
+    "Before Reqs": 2,
+    "After Reqs": 2,
+    "Req Reduction": "-0",
+    "Channels": 1
+  }
+}

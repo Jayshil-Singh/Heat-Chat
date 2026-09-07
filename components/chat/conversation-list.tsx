@@ -101,7 +101,7 @@ export function ConversationList({
     setTimeout(() => setCopiedConvId(null), 2000);
   };
 
-  if (isLoading) {
+  if (isLoading && conversations.length === 0) {
     return (
       <div className="flex h-full flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 p-4 space-y-4">
         <Skeleton className="h-10 w-full rounded-xl" />

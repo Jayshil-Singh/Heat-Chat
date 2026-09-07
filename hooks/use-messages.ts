@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "./use-auth";
 import { useRealtimeChat } from "./use-realtime-chat";
 import { validateMessageContent } from "@/lib/validation/message";
+import { getCachedProfiles, setCachedProfiles } from "@/lib/cache/profile-cache";
 import type {
   Attachment,
   Message,
@@ -53,6 +54,10 @@ export function useMessages(conversationId: string | null) {
   const supabase = React.useMemo(() => createClient(), []);
   const pendingTempIdsRef = React.useRef<Map<string, string>>(new Map());
 
+  // Request cancellation and generation guard
+  const requestGenRef = React.useRef<number>(0);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
   // Keep a ref to the latest messages for use in async callbacks that need
   // current state without stale closures.
   const messagesRef = React.useRef<ChatMessage[]>([]);
@@ -74,9 +79,15 @@ export function useMessages(conversationId: string | null) {
       const nonDeletedIds = rawMessages.filter((m) => !m.deleted_at).map((m) => m.id);
       const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
 
+      // Check in-memory profile cache first
+      const { cached: cachedSenderProfiles, missingIds: missingSenderIds } = getCachedProfiles(senderIds);
+      const profilesMap = new Map<string, Profile>(cachedSenderProfiles);
+
       // Batch-fetch all enrichment data in parallel
       const [profilesRes, readsRes, reactionsRes, attachmentsRes, pinsRes, hiddenRes, deliveriesRes] = await Promise.all([
-        supabase.from("profiles").select("*").in("id", senderIds),
+        missingSenderIds.length > 0
+          ? supabase.from("profiles").select("*").in("id", missingSenderIds)
+          : Promise.resolve({ data: [] }),
         supabase
           .from("message_reads")
           .select("message_id, user_id")
@@ -105,13 +116,13 @@ export function useMessages(conversationId: string | null) {
           .in("message_id", messageIds),
       ]);
 
+      if (profilesRes.data && profilesRes.data.length > 0) {
+        profilesRes.data.forEach((p) => profilesMap.set(p.id, p as Profile));
+        setCachedProfiles(profilesRes.data as Profile[]);
+      }
+
       const hiddenIds = new Set((hiddenRes.data || []).map((h) => h.message_id));
       const pinnedIds = new Set((pinsRes.data || []).map((p) => p.message_id));
-
-      const profilesMap = new Map<string, Profile>();
-      (profilesRes.data || []).forEach((p) =>
-        profilesMap.set(p.id, p as Profile)
-      );
 
       const readsMap = new Map<string, string[]>();
       (readsRes.data || []).forEach((r) => {
@@ -204,15 +215,21 @@ export function useMessages(conversationId: string | null) {
 
         if (parentMsgs && parentMsgs.length > 0) {
           const parentSenderIds = [...new Set(parentMsgs.map((m) => m.sender_id))];
-          const { data: parentProfiles } = await supabase
-            .from("profiles")
-            .select("id, display_name")
-            .in("id", parentSenderIds);
-
+          const { cached: cachedParentProfiles, missingIds: missingParentIds } = getCachedProfiles(parentSenderIds);
           const parentProfileMap = new Map<string, string>();
-          (parentProfiles || []).forEach((p) =>
-            parentProfileMap.set(p.id, p.display_name)
-          );
+          cachedParentProfiles.forEach((p) => parentProfileMap.set(p.id, p.display_name));
+
+          if (missingParentIds.length > 0) {
+            const { data: parentProfiles } = await supabase
+              .from("profiles")
+              .select("id, display_name")
+              .in("id", missingParentIds);
+
+            (parentProfiles || []).forEach((p) => {
+              parentProfileMap.set(p.id, p.display_name);
+            });
+            setCachedProfiles((parentProfiles || []) as Profile[]);
+          }
 
           parentMsgs.forEach((m) => {
             parentMap.set(m.id, {
@@ -274,9 +291,16 @@ export function useMessages(conversationId: string | null) {
     [supabase, user?.id]
   );
 
-  // ─── Fetch initial messages ──────────────────────────────────────────────────
+  // ─── Fetch initial messages with AbortController & Generation Guard ───────────
 
   const fetchMessages = React.useCallback(async () => {
+    const currentGen = ++requestGenRef.current;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
     if (!conversationId || !user?.id) {
       setMessages([]);
       setIsLoading(false);
@@ -294,18 +318,27 @@ export function useMessages(conversationId: string | null) {
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE);
 
+      if (ac.signal.aborted || currentGen !== requestGenRef.current) return;
+
       if (msgError) {
         console.warn("Error fetching messages:", msgError.message);
-        setError(msgError.message);
-        setIsLoading(false);
+        if (!ac.signal.aborted && currentGen === requestGenRef.current) {
+          setError(msgError.message);
+          setIsLoading(false);
+        }
         return;
       }
 
       const count = rawMessages?.length || 0;
-      setHasMore(count === PAGE_SIZE);
+      if (!ac.signal.aborted && currentGen === requestGenRef.current) {
+        setHasMore(count === PAGE_SIZE);
+      }
 
       const chronMessages = (rawMessages || []).reverse();
       const formatted = await enrichMessages(chronMessages);
+
+      if (ac.signal.aborted || currentGen !== requestGenRef.current) return;
+
       setMessages(formatted);
 
       // Mark incoming unread messages as read (batch insert)
@@ -313,7 +346,7 @@ export function useMessages(conversationId: string | null) {
         (m) => m.sender_id !== user.id
       );
 
-      if (unreadIncoming.length > 0) {
+      if (unreadIncoming.length > 0 && !ac.signal.aborted && currentGen === requestGenRef.current) {
         const readsPayload: MessageRead[] = unreadIncoming.map((m) => ({
           message_id: m.id,
           user_id: user.id,
@@ -328,15 +361,24 @@ export function useMessages(conversationId: string | null) {
           });
       }
     } catch (err) {
-      console.error("Failed to load messages:", err);
-      setError("Failed to load messages.");
+      if (!ac.signal.aborted && currentGen === requestGenRef.current) {
+        console.error("Failed to load messages:", err);
+        setError("Failed to load messages.");
+      }
     } finally {
-      setIsLoading(false);
+      if (!ac.signal.aborted && currentGen === requestGenRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [conversationId, user?.id, supabase, enrichMessages]);
 
   React.useEffect(() => {
     fetchMessages();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchMessages]);
 
   // ─── Pagination: Load older messages ─────────────────────────────────────────

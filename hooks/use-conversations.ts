@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "./use-auth";
+import { getCachedProfiles, setCachedProfiles } from "@/lib/cache/profile-cache";
 import type { Profile, Message, MemberRole } from "@/types/database";
 import type { ConversationWithDetails, ConversationMemberWithProfile } from "@/types/chat";
 
@@ -27,6 +28,11 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
   const [error, setError] = React.useState<string | null>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
+
+  // Coalescing and concurrency guards
+  const refreshTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = React.useRef(false);
+  const pendingRefreshRef = React.useRef(false);
 
   const fetchConversations = React.useCallback(async () => {
     if (!user?.id) {
@@ -60,61 +66,72 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
 
       const convIds = memberData.map((m) => m.conversation_id);
 
-      // 2. Fetch conversation records
-      const { data: convData, error: convError } = await supabase
-        .from("conversations")
-        .select("*")
-        .in("id", convIds)
-        .order("updated_at", { ascending: false });
+      // 2. Stage 1: Concurrently fetch conversations, members, and user states
+      const [convRes, membersRes, userStatesRes] = await Promise.all([
+        supabase
+          .from("conversations")
+          .select("*")
+          .in("id", convIds)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("conversation_members")
+          .select("conversation_id, user_id, role, joined_at")
+          .in("conversation_id", convIds),
+        supabase
+          .from("conversation_user_states")
+          .select("conversation_id, unread_count, is_marked_unread")
+          .eq("user_id", user.id)
+          .in("conversation_id", convIds),
+      ]);
 
-      if (convError) {
-        console.warn("Error fetching conversations:", convError.message);
-        setError(convError.message);
+      if (convRes.error) {
+        console.warn("Error fetching conversations:", convRes.error.message);
+        setError(convRes.error.message);
         setIsLoading(false);
         return;
       }
 
-      // 3. Batch-fetch all members for these conversations
-      const { data: allMembers } = await supabase
-        .from("conversation_members")
-        .select("conversation_id, user_id, role, joined_at")
-        .in("conversation_id", convIds);
+      const convData = convRes.data;
+      const allMembers = membersRes.data;
+      const userStates = userStatesRes.data;
 
-      // Fetch profiles of all members
+      // 3. Stage 2: Concurrently resolve missing profiles and latest messages
       const allUserIds = Array.from(new Set((allMembers || []).map((m: any) => m.user_id)));
-      
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("id", allUserIds.length > 0 ? allUserIds : [user.id]);
+      const { cached: cachedProfiles, missingIds } = getCachedProfiles(allUserIds);
+      const profilesMap = new Map<string, Profile>(cachedProfiles);
 
-      const profilesMap = new Map<string, Profile>();
-      (profilesData || []).forEach((p) => profilesMap.set(p.id, p as Profile));
-
-      // 4. Batch-fetch latest message for each conversation
       const lastMessagesMap = new Map<string, Message>();
-      for (const convId of convIds) {
-        const { data: latestMsg } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("conversation_id", convId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      await Promise.all([
+        missingIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select("*")
+              .in("id", missingIds)
+              .then(({ data }) => {
+                (data || []).forEach((p) => {
+                  profilesMap.set(p.id, p as Profile);
+                });
+                setCachedProfiles((data || []) as Profile[]);
+              })
+          : Promise.resolve(),
+        Promise.all(
+          convIds.map(async (convId) => {
+            const { data: latestMsg } = await supabase
+              .from("messages")
+              .select("id, conversation_id, sender_id, content, created_at, message_type, deleted_at")
+              .eq("conversation_id", convId)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-        if (latestMsg) {
-          lastMessagesMap.set(convId, latestMsg as Message);
-        }
-      }
+            if (latestMsg) {
+              lastMessagesMap.set(convId, latestMsg as Message);
+            }
+          })
+        ),
+      ]);
 
-      // 5. Batch-fetch conversation_user_states for unread indicators
       const userStatesMap = new Map<string, { unreadCount: number; isMarkedUnread: boolean }>();
-      const { data: userStates } = await supabase
-        .from("conversation_user_states")
-        .select("conversation_id, unread_count, is_marked_unread")
-        .eq("user_id", user.id)
-        .in("conversation_id", convIds);
-
       (userStates || []).forEach((s: any) => {
         userStatesMap.set(s.conversation_id, {
           unreadCount: s.unread_count || 0,
@@ -177,11 +194,37 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
     }
   }, [user?.id, supabase]);
 
+  // Coalescing debounce for realtime events: 150ms window
+  const coalescedRefresh = React.useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = setTimeout(async () => {
+      refreshTimerRef.current = null;
+      if (isRefreshingRef.current) {
+        pendingRefreshRef.current = true;
+        return;
+      }
+
+      isRefreshingRef.current = true;
+      try {
+        await fetchConversations();
+      } finally {
+        isRefreshingRef.current = false;
+        if (pendingRefreshRef.current) {
+          pendingRefreshRef.current = false;
+          coalescedRefresh();
+        }
+      }
+    }, 150);
+  }, [fetchConversations]);
+
   React.useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Single-owner Realtime subscription for conversations, members, and user_states
+  // Single-owner Realtime subscription with coalesced refresh
   React.useEffect(() => {
     if (!user?.id) return;
 
@@ -197,7 +240,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
           table: "conversations",
         },
         () => {
-          fetchConversations();
+          coalescedRefresh();
         }
       )
       .on(
@@ -208,7 +251,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
           table: "conversation_members",
         },
         () => {
-          fetchConversations();
+          coalescedRefresh();
         }
       )
       .on(
@@ -220,15 +263,19 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          fetchConversations();
+          coalescedRefresh();
         }
       )
       .subscribe();
 
     return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
-  }, [user?.id, supabase, fetchConversations]);
+  }, [user?.id, supabase, coalescedRefresh]);
 
   const markConversationUnread = React.useCallback(
     async (conversationId: string) => {

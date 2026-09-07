@@ -6,6 +6,7 @@ import { useAuth } from "./use-auth";
 import { useNotificationPreferences } from "./use-notification-preferences";
 import { useNotificationPermission } from "./use-notification-permission";
 import { playNotificationSound } from "@/lib/audio/sound-cue";
+import { getCachedProfiles, setCachedProfiles, getCachedProfile, setCachedProfile } from "@/lib/cache/profile-cache";
 import type { Notification, Profile, Conversation, Message } from "@/types/database";
 import type { NotificationWithDetails } from "@/types/chat";
 
@@ -58,15 +59,20 @@ export function useNotifications(currentActiveConversationId?: string | null) {
       // Track fetched IDs
       rawNotifs.forEach((n) => processedNotifIds.current.add(n.id));
 
-      // 2. Batch-fetch sender profiles
+      // 2. Batch-fetch sender profiles using in-memory cache
       const senderIds = Array.from(new Set(rawNotifs.map((n) => n.sender_id)));
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("id", senderIds);
+      const { cached: cachedSenderProfiles, missingIds: missingSenderIds } = getCachedProfiles(senderIds);
+      const profileMap = new Map<string, Profile>(cachedSenderProfiles);
 
-      const profileMap = new Map<string, Profile>();
-      (profiles || []).forEach((p) => profileMap.set(p.id, p as Profile));
+      if (missingSenderIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("*")
+          .in("id", missingSenderIds);
+
+        (profiles || []).forEach((p) => profileMap.set(p.id, p as Profile));
+        setCachedProfiles((profiles || []) as Profile[]);
+      }
 
       // 3. Batch-fetch conversations
       const convIds = Array.from(new Set(rawNotifs.map((n) => n.conversation_id)));
@@ -149,12 +155,19 @@ export function useNotifications(currentActiveConversationId?: string | null) {
       }
       processedNotifIds.current.add(rawNotif.id);
 
-      // 2. Fetch sender profile
-      const { data: sender } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", rawNotif.sender_id)
-        .maybeSingle();
+      // 2. Fetch sender profile with cache
+      let sender = getCachedProfile(rawNotif.sender_id);
+      if (!sender) {
+        const { data: senderData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", rawNotif.sender_id)
+          .maybeSingle();
+        if (senderData) {
+          sender = senderData as Profile;
+          setCachedProfile(sender);
+        }
+      }
 
       // 3. Fetch conversation
       const { data: conv } = await supabase
