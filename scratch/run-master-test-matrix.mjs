@@ -18,6 +18,7 @@ const suites = [
   { name: "Phase 7 Master Verification (D92, D96-D103)", cmd: "npx tsx scratch/run-phase7-master-tests.mjs", category: "Phase 7 Tests" },
   { name: "Responsive Viewports & Menu Collision", cmd: "node scratch/test-responsive-viewports.mjs", category: "Responsive Tests" },
   { name: "Voice Composer UI Verification", cmd: "node scratch/test-voice-composer-ui.mjs", category: "Voice UI Tests" },
+  { name: "Phase 11 Discover People Verification", cmd: "node scratch/phase11-discover-people-verification.mjs", category: "Social Discovery Tests" },
 ];
 
 console.log("==================================================================");

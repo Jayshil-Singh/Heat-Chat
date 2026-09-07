@@ -9,7 +9,7 @@ import type { NotificationWithDetails } from "@/types/chat";
 interface NotificationToastProps {
   toasts: NotificationWithDetails[];
   onDismiss: (id: string) => void;
-  onNavigate?: (conversationId: string) => void;
+  onNavigate?: (conversationId?: string | null) => void;
 }
 
 export function NotificationToast({
@@ -34,10 +34,14 @@ export function NotificationToast({
           onDismiss={() => onDismiss(toast.id)}
           onClick={() => {
             onDismiss(toast.id);
-            if (onNavigate) {
+            if (toast.type?.startsWith("friend")) {
+              router.push("/discover");
+            } else if (onNavigate && toast.conversationId) {
               onNavigate(toast.conversationId);
-            } else {
+            } else if (toast.conversationId) {
               router.push(`/chat/${toast.conversationId}`);
+            } else {
+              router.push("/chat");
             }
           }}
         />

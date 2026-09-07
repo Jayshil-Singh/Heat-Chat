@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Search,
   MessageSquare,
   Users,
   AlertCircle,
+  Compass,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
@@ -82,6 +84,21 @@ export function FindFriendsTab({
 
   return (
     <div className="space-y-6">
+      {/* Discover People Banner */}
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-heat-200/80 bg-heat-50/70 p-3.5 text-xs text-heat-900 dark:border-heat-900/40 dark:bg-heat-950/20 dark:text-heat-300">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Compass className="h-4 w-4 text-heat-500 shrink-0" />
+          <span className="truncate">Looking for people open to connecting? Check out <strong>Discover People</strong>.</span>
+        </div>
+        <Link
+          href="/discover"
+          className="inline-flex items-center gap-1 rounded-xl bg-heat-500 hover:bg-heat-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs shrink-0"
+        >
+          <span>Discover</span>
+          <span>&rarr;</span>
+        </Link>
+      </div>
+
       {/* Search Input Box */}
       <div className="relative">
         <Input

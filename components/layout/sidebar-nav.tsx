@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   MessageSquare,
   Users,
+  Compass,
   Settings,
   Flame,
   User,
@@ -59,6 +60,11 @@ const navItems: NavItem[] = [
     label: "Friends",
     href: "/friends",
     icon: Users,
+  },
+  {
+    label: "Discover",
+    href: "/discover",
+    icon: Compass,
   },
   {
     label: "Saved",

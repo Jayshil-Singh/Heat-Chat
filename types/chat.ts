@@ -126,7 +126,7 @@ export interface PresenceUser {
 export interface NotificationWithDetails {
   id: string;
   userId: string;
-  conversationId: string;
+  conversationId?: string | null;
   messageId: string | null;
   senderId: string;
   type: string;
@@ -138,6 +138,39 @@ export interface NotificationWithDetails {
   /** Safe message preview text ("This message was deleted" if soft-deleted) */
   preview: string;
   isDeleted: boolean;
+}
+
+export type RelationshipStatus = "none" | "outgoing_pending" | "incoming_pending" | "friends";
+
+export interface DiscoverablePerson {
+  user_id: string;
+  display_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  mutual_friend_count: number;
+  relationship_status: RelationshipStatus;
+  pending_request_id?: string | null;
+}
+
+export interface FriendRequestWithProfile {
+  requestId: string;
+  createdAt: string;
+  status: string;
+  sender?: {
+    id: string;
+    displayName: string;
+    username: string;
+    avatarUrl: string | null;
+    bio: string | null;
+  };
+  recipient?: {
+    id: string;
+    displayName: string;
+    username: string;
+    avatarUrl: string | null;
+    bio: string | null;
+  };
 }
 
 export interface StarredMessageWithDetails {

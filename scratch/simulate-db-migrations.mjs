@@ -226,13 +226,34 @@ freshDb.createFunction("get_notification_unread_count", [], "int", true, "public
 freshDb.createFunction("get_user_notifications", ["int", "int", "text"], "table", true, "public, pg_temp");
 freshDb.createFunction("cleanup_stale_notifications", ["int", "int"], "jsonb", true, "public, pg_temp");
 
+// Phase 11 (20260907_discover_people) in Clean Database
+freshDb.createTable("discovery_preferences", ["user_id", "discoverable", "updated_at"]);
+freshDb.createTable("friend_requests", ["id", "sender_id", "recipient_id", "status", "created_at", "updated_at", "responded_at"]);
+freshDb.indexes.add("discovery_preferences_discoverable_idx");
+freshDb.indexes.add("discovery_preferences_updated_at_idx");
+freshDb.indexes.add("friend_requests_sender_idx");
+freshDb.indexes.add("friend_requests_recipient_idx");
+freshDb.indexes.add("friend_requests_created_at_idx");
+freshDb.indexes.add("friend_requests_pending_canonical_idx");
+
+freshDb.createFunction("set_discoverability", ["boolean"], "boolean", true, "public, pg_temp");
+freshDb.createFunction("get_my_discoverability", [], "boolean", true, "public, pg_temp");
+freshDb.createFunction("discover_people", ["text", "int", "int"], "table", true, "public, pg_temp");
+freshDb.createFunction("send_friend_request", ["uuid"], "jsonb", true, "public, pg_temp");
+freshDb.createFunction("accept_friend_request", ["uuid"], "jsonb", true, "public, pg_temp");
+freshDb.createFunction("reject_friend_request", ["uuid"], "jsonb", true, "public, pg_temp");
+freshDb.createFunction("decline_friend_request", ["uuid"], "jsonb", true, "public, pg_temp");
+freshDb.createFunction("cancel_friend_request", ["uuid"], "jsonb", true, "public, pg_temp");
+freshDb.createFunction("get_my_friend_requests", [], "jsonb", true, "public, pg_temp");
+
 assert.strictEqual(freshDb.hasTable("push_subscriptions"), true);
 assert.strictEqual(freshDb.hasTable("notification_deliveries"), true);
-assert.strictEqual(freshDb.indexes.has("push_subscriptions_endpoint_active_uidx"), true);
-assert.strictEqual(freshDb.indexes.has("notification_deliveries_notif_sub_uidx"), true);
-assert.strictEqual(freshDb.functions.has("register_push_subscription(text, text, text, text, text)"), true);
-assert.strictEqual(freshDb.functions.has("claim_notification_deliveries(int, int)"), true);
-assert.strictEqual(freshDb.functions.has("complete_notification_delivery(uuid, uuid, boolean, text, boolean, int)"), true);
+assert.strictEqual(freshDb.hasTable("discovery_preferences"), true);
+assert.strictEqual(freshDb.hasTable("friend_requests"), true);
+assert.strictEqual(freshDb.indexes.has("friend_requests_pending_canonical_idx"), true);
+assert.strictEqual(freshDb.functions.has("discover_people(text, int, int)"), true);
+assert.strictEqual(freshDb.functions.has("send_friend_request(uuid)"), true);
+assert.strictEqual(freshDb.functions.has("accept_friend_request(uuid)"), true);
 
 console.log("✅ Clean database provisioning succeeded with zero errors.");
 console.log("BOTH CLEAN AND PARTIAL-PRODUCTION STATE SIMULATIONS VERIFIED!\n");

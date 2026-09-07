@@ -1489,6 +1489,54 @@ export interface Database {
         };
         Relationships: [];
       };
+      discovery_preferences: {
+        Row: {
+          user_id: string;
+          discoverable: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          discoverable?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          discoverable?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      friend_requests: {
+        Row: {
+          id: string;
+          sender_id: string;
+          recipient_id: string;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          responded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          recipient_id: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+          responded_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          recipient_id?: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+          responded_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1854,25 +1902,29 @@ export interface Database {
       };
       send_friend_request: {
         Args: {
-          p_recipient_id: string;
+          p_recipient_id?: string;
+          target_user_id?: string;
         };
         Returns: Json;
       };
       accept_friend_request: {
         Args: {
-          p_friendship_id: string;
+          p_friendship_id?: string;
+          request_id?: string;
         };
         Returns: Json;
       };
       decline_friend_request: {
         Args: {
-          p_friendship_id: string;
+          p_friendship_id?: string;
+          request_id?: string;
         };
         Returns: Json;
       };
       cancel_friend_request: {
         Args: {
-          p_friendship_id: string;
+          p_friendship_id?: string;
+          request_id?: string;
         };
         Returns: Json;
       };
@@ -2098,6 +2150,44 @@ export interface Database {
         };
         Returns: Json;
       };
+      set_discoverability: {
+        Args: {
+          enabled: boolean;
+        };
+        Returns: boolean;
+      };
+      get_my_discoverability: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      discover_people: {
+        Args: {
+          search_query?: string | null;
+          result_limit?: number;
+          result_offset?: number;
+        };
+        Returns: {
+          user_id: string;
+          display_name: string;
+          username: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          mutual_friend_count: number;
+          relationship_status: "none" | "outgoing_pending" | "incoming_pending" | "friends";
+          pending_request_id: string | null;
+        }[];
+      };
+      reject_friend_request: {
+        Args: {
+          request_id?: string;
+          p_friendship_id?: string;
+        };
+        Returns: Json;
+      };
+      get_my_friend_requests: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -2123,6 +2213,21 @@ export type StarredMessage = Database["public"]["Tables"]["starred_messages"]["R
 export type MessageMention = Database["public"]["Tables"]["message_mentions"]["Row"];
 export type UserPrivacySettings = Database["public"]["Tables"]["user_privacy_settings"]["Row"];
 export type BlockedUser = Database["public"]["Tables"]["blocked_users"]["Row"];
+export type FriendRequestStatus = "pending" | "accepted" | "rejected" | "declined" | "cancelled";
+export type DiscoveryPreference = {
+  user_id: string;
+  discoverable: boolean;
+  updated_at: string;
+};
+export type FriendRequest = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  status: FriendRequestStatus;
+  created_at: string;
+  updated_at: string;
+  responded_at: string | null;
+};
 
 export interface PublicProfileDto {
   id: string;

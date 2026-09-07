@@ -46,6 +46,7 @@ export const MIGRATION_DEPENDENCY_ORDER = [
   "20260907_fix_saved_and_member_removal.sql",
   "20260908_remediate_security_definer_and_invariants.sql",
   "20260909_phase7_notifications_and_push.sql",
+  "20260907_discover_people.sql",
 ];
 
 export function getOrderedMigrationFiles(migrationsDir = "supabase/migrations") {

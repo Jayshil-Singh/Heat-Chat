@@ -175,10 +175,18 @@ export function NotificationCenter({
       onMarkAsRead(notif.id);
     }
     setIsOpen(false);
-    const targetUrl = notif.messageId
-      ? `/chat/${notif.conversationId}?msgId=${notif.messageId}`
-      : `/chat/${notif.conversationId}`;
-    router.push(targetUrl);
+    if (notif.type?.startsWith("friend")) {
+      router.push("/discover");
+      return;
+    }
+    if (notif.conversationId) {
+      const targetUrl = notif.messageId
+        ? `/chat/${notif.conversationId}?msgId=${notif.messageId}`
+        : `/chat/${notif.conversationId}`;
+      router.push(targetUrl);
+    } else {
+      router.push("/chat");
+    }
   };
 
   const popoverContent = isOpen && coords && (

@@ -96,15 +96,19 @@ export function useNotifications(currentActiveConversationId?: string | null) {
 
         const isDeleted = !!msg?.deleted_at;
         let preview = "";
-        if (isDeleted) {
+        if (n.type === "friend_request" || n.type === "friend_accepted") {
+          preview = (n as any).body || "sent you a friend request";
+        } else if (n.type === "friend_request_accepted") {
+          preview = (n as any).body || "accepted your friend request";
+        } else if (isDeleted) {
           preview = "This message was deleted";
         } else if (msg?.message_type === "image" && !msg?.content?.trim()) {
           preview = "📷 Photo";
         } else {
-          preview = msg?.content || "New notification";
+          preview = msg?.content || (n as any).body || "New notification";
         }
 
-        const convName = conv?.name || sender?.display_name || "Conversation";
+        const convName = conv?.name || sender?.display_name || (n.type?.startsWith("friend") ? "Friend Request" : "Conversation");
 
         return {
           id: n.id,
@@ -163,7 +167,11 @@ export function useNotifications(currentActiveConversationId?: string | null) {
       let preview = "New message";
       let isDeleted = false;
 
-      if (rawNotif.message_id) {
+      if (rawNotif.type === "friend_request" || rawNotif.type === "friend_accepted") {
+        preview = (rawNotif as any).body || "sent you a friend request";
+      } else if (rawNotif.type === "friend_request_accepted") {
+        preview = (rawNotif as any).body || "accepted your friend request";
+      } else if (rawNotif.message_id) {
         const { data: msg } = await supabase
           .from("messages")
           .select("content, message_type, deleted_at")
@@ -182,7 +190,7 @@ export function useNotifications(currentActiveConversationId?: string | null) {
         }
       }
 
-      const convName = conv?.name || sender?.display_name || "Conversation";
+      const convName = conv?.name || sender?.display_name || (rawNotif.type?.startsWith("friend") ? "Friend Request" : "Conversation");
 
       const item: NotificationWithDetails = {
         id: rawNotif.id,

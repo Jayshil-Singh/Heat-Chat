@@ -20,13 +20,16 @@ import {
   Clock,
   Globe,
   Download,
+  Compass,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
 import { useNotificationPermission } from "@/hooks/use-notification-permission";
+import { useDiscoverPeople } from "@/hooks/use-discover-people";
 import { playTestSound } from "@/lib/audio/sound-cue";
 import { InstallAppButton } from "@/components/pwa/install-app-button";
 
@@ -55,6 +58,13 @@ export default function SettingsPage() {
     unsubscribeFromPush,
     sendTestNotification,
   } = useNotificationPermission();
+
+  const {
+    isDiscoverable,
+    isPreferenceLoading: isDiscoverLoading,
+    isToggling: isDiscoverToggling,
+    toggleDiscoverability,
+  } = useDiscoverPeople();
 
   const [isPlayingTestSound, setIsPlayingTestSound] = React.useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = React.useState(false);
@@ -327,6 +337,60 @@ export default function SettingsPage() {
                 className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Discover People Privacy Section */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+              <Compass className="h-4 w-4 text-heat-500" />
+              Discover People
+            </h2>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                isDiscoverable
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400"
+                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+              }`}
+            >
+              Discoverability: {isDiscoverable ? "On" : "Off"}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <div className="space-y-0.5 max-w-md">
+              <label
+                htmlFor="toggle-discoverability"
+                className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer"
+              >
+                Allow people to discover me
+              </label>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                When enabled, your public profile can appear in Discover People so other users can find you and connect.
+              </p>
+            </div>
+            <input
+              id="toggle-discoverability"
+              type="checkbox"
+              checked={isDiscoverable}
+              disabled={isDiscoverLoading || isDiscoverToggling}
+              onChange={toggleDiscoverability}
+              className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </div>
+
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Browse discoverable users or review incoming requests.
+            </span>
+            <Link
+              href="/discover"
+              className="text-xs font-semibold text-heat-500 hover:text-heat-600 dark:text-heat-400 flex items-center gap-1"
+            >
+              <span>Manage Discover People</span>
+              <span>&rarr;</span>
+            </Link>
           </div>
         </div>
 
