@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Bookmark, Pin, Images } from "lucide-react";
+import { ArrowLeft, User, Users, Info, WifiOff, Bell, BellOff, Search, Star, Bookmark, Pin, Images, MoreVertical } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
@@ -45,6 +45,39 @@ export function ChatHeader({
   const [showProfileModal, setShowProfileModal] = React.useState(false);
   const [showGroupModal, setShowGroupModal] = React.useState(false);
   const [showMediaGallery, setShowMediaGallery] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const mobileMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close mobile menu on outside click
+  React.useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(e.target as Node) &&
+        mobileMenuTriggerRef.current &&
+        !mobileMenuTriggerRef.current.contains(e.target as Node)
+      ) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [mobileMenuOpen]);
+
+  // Escape to close
+  React.useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileMenuOpen(false);
+        mobileMenuTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileMenuOpen]);
 
   if (!conversation) return null;
 
@@ -88,12 +121,12 @@ export function ChatHeader({
 
   return (
     <>
-      <header className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 shrink-0 select-none">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white/95 px-2.5 sm:px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 shrink-0 select-none w-full min-w-0 max-w-full gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {/* Mobile Back Button */}
           <button
             onClick={handleBackClick}
-            className="md:hidden rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+            className="md:hidden rounded-lg p-1.5 sm:p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
             aria-label="Back to conversations list"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -102,29 +135,30 @@ export function ChatHeader({
           {/* User / Chat Info */}
           <div
             onClick={handleHeaderClick}
-            className="flex items-center gap-3 min-w-0 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 cursor-pointer group"
           >
             <Avatar
               src={avatarUrl}
               name={displayName}
               size="default"
               status={isGroup ? undefined : isOnline ? "online" : computedStatus}
+              className="shrink-0"
             />
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <h3 className="truncate text-sm font-bold text-zinc-900 group-hover:text-heat-600 dark:text-white dark:group-hover:text-heat-400 transition-colors">
                   {displayName}
                 </h3>
                 {isGroup && (
-                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.2 text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
+                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.2 text-[9px] font-bold text-zinc-600 dark:text-zinc-300 shrink-0">
                     Group
                   </span>
                 )}
                 {connectionStatus === "reconnecting" && (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.2 text-[10px] font-medium text-amber-600 dark:bg-amber-950/50">
+                  <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.2 text-[10px] font-medium text-amber-600 dark:bg-amber-950/50 shrink-0">
                     <WifiOff className="h-2.5 w-2.5" />
-                    <span>Reconnecting</span>
+                    <span className="hidden xs:inline">Reconnecting</span>
                   </span>
                 )}
               </div>
@@ -153,8 +187,148 @@ export function ChatHeader({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1">
+        {/* Mobile Actions: Media Gallery + More overflow menu */}
+        <div className="flex sm:hidden items-center gap-0.5 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setShowMediaGallery(true)}
+            title="Shared media, audio & files"
+            aria-label="View shared media gallery"
+            className="h-8 w-8 text-zinc-500 hover:text-heat-500"
+          >
+            <Images className="h-4 w-4" />
+          </Button>
+
+          <div className="relative">
+            <Button
+              ref={mobileMenuTriggerRef}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              title="More actions"
+              aria-label="More conversation actions"
+              aria-expanded={mobileMenuOpen}
+              aria-haspopup="menu"
+              className="h-8 w-8 text-zinc-500 relative"
+            >
+              <MoreVertical className="h-4 w-4" />
+              {pinnedCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-zinc-950" />
+              )}
+            </Button>
+
+            {mobileMenuOpen && (
+              <div
+                ref={mobileMenuRef}
+                role="menu"
+                aria-orientation="vertical"
+                className="absolute right-0 top-10 z-50 w-48 rounded-2xl border border-zinc-200 bg-white py-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-850 dark:shadow-black/50 animate-in fade-in zoom-in-95 duration-100"
+              >
+                {onToggleSearch && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onToggleSearch();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <Search className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Search in chat</span>
+                  </button>
+                )}
+
+                {onTogglePinned && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onTogglePinned();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Pin className={`h-3.5 w-3.5 ${pinnedCount > 0 ? "text-amber-500 fill-amber-500" : "text-zinc-400"}`} />
+                      <span>Pinned messages</span>
+                    </div>
+                    {pinnedCount > 0 && (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        {pinnedCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {onOpenStarred && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onOpenStarred();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <Bookmark className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Saved messages</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={async (e) => {
+                    await handleToggleMute(e);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                >
+                  {isMuted ? (
+                    <>
+                      <Bell className="h-3.5 w-3.5 text-zinc-400" />
+                      <span>Unmute notifications</span>
+                    </>
+                  ) : (
+                    <>
+                      <BellOff className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Mute notifications</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    handleHeaderClick();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                >
+                  {isGroup ? (
+                    <>
+                      <Users className="h-3.5 w-3.5 text-zinc-400" />
+                      <span>Group details</span>
+                    </>
+                  ) : (
+                    <>
+                      <User className="h-3.5 w-3.5 text-zinc-400" />
+                      <span>View profile</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Actions */}
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
           {onToggleSearch && (
             <Button
               variant="ghost"

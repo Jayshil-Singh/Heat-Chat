@@ -82,11 +82,100 @@ export function MessageActionsMenu({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const reactBtnRef = React.useRef<HTMLButtonElement>(null);
 
-  // Close on outside click for desktop menu
+  const [menuCoords, setMenuCoords] = React.useState<{ top: number; left: number } | null>(null);
+  const [pickerCoords, setPickerCoords] = React.useState<{ top: number; left: number } | null>(null);
+
+  // Dynamic collision-aware calculation for menu positioning
+  const updateMenuPosition = React.useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    const menuWidth = Math.min(208, viewportWidth - 16);
+    // Estimated height based on whether delete choices are displayed
+    const menuHeight = showDeleteChoices ? 160 : 310;
+
+    const idealLeft = isCurrentUser ? rect.right - menuWidth : rect.left;
+    // Strictly clamp horizontal position with 8px margin
+    const left = Math.max(8, Math.min(viewportWidth - menuWidth - 8, idealLeft));
+
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+
+    let top: number;
+    if (spaceAbove >= menuHeight + 12) {
+      top = rect.top - menuHeight - 6;
+    } else if (spaceBelow >= menuHeight + 12) {
+      top = rect.bottom + 6;
+    } else if (spaceAbove >= spaceBelow) {
+      top = Math.max(8, rect.top - menuHeight - 6);
+    } else {
+      top = Math.min(viewportHeight - menuHeight - 8, rect.bottom + 6);
+    }
+
+    setMenuCoords({ top, left });
+  }, [isCurrentUser, showDeleteChoices]);
+
+  // Dynamic collision-aware calculation for ReactionPicker
+  const updatePickerPosition = React.useCallback(() => {
+    if (!reactBtnRef.current) return;
+    const rect = reactBtnRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    const pickerWidth = Math.min(246, viewportWidth - 16);
+    const pickerHeight = 48;
+
+    const idealLeft = isCurrentUser ? rect.right - pickerWidth : rect.left;
+    const left = Math.max(8, Math.min(viewportWidth - pickerWidth - 8, idealLeft));
+
+    let top: number;
+    if (rect.top >= pickerHeight + 12) {
+      top = rect.top - pickerHeight - 8;
+    } else {
+      top = Math.min(viewportHeight - pickerHeight - 8, rect.bottom + 8);
+    }
+
+    setPickerCoords({ top, left });
+  }, [isCurrentUser]);
+
+  React.useEffect(() => {
+    if (menuOpen) {
+      updateMenuPosition();
+      const handleReposition = () => updateMenuPosition();
+      window.addEventListener("resize", handleReposition, { passive: true });
+      window.addEventListener("scroll", handleReposition, { passive: true });
+      return () => {
+        window.removeEventListener("resize", handleReposition);
+        window.removeEventListener("scroll", handleReposition);
+      };
+    }
+  }, [menuOpen, updateMenuPosition]);
+
+  React.useEffect(() => {
+    if (showReactionPicker) {
+      updatePickerPosition();
+      const handleReposition = () => updatePickerPosition();
+      window.addEventListener("resize", handleReposition, { passive: true });
+      window.addEventListener("scroll", handleReposition, { passive: true });
+      return () => {
+        window.removeEventListener("resize", handleReposition);
+        window.removeEventListener("scroll", handleReposition);
+      };
+    }
+  }, [showReactionPicker, updatePickerPosition]);
+
+  // Close on outside click
   React.useEffect(() => {
     if (!menuOpen) return;
     const handleOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
         setMenuOpen(false);
         setShowDeleteChoices(false);
       }
@@ -95,30 +184,61 @@ export function MessageActionsMenu({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [menuOpen]);
 
-  // Keyboard accessibility: Escape to close
+  // Keyboard accessibility: Escape to close and focus restoration
   React.useEffect(() => {
     if (!menuOpen && !showReactionPicker && !isMobileSheetOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        setMenuOpen(false);
-        setShowDeleteChoices(false);
-        setShowReactionPicker(false);
+        if (menuOpen) {
+          setMenuOpen(false);
+          setShowDeleteChoices(false);
+          triggerRef.current?.focus();
+        }
+        if (showReactionPicker) {
+          setShowReactionPicker(false);
+          reactBtnRef.current?.focus();
+        }
         if (isMobileSheetOpen && onMobileSheetClose) {
           onMobileSheetClose();
         }
-        triggerRef.current?.focus();
       }
     };
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [menuOpen, showReactionPicker, isMobileSheetOpen, onMobileSheetClose]);
 
+  // Arrow key navigation inside menu
+  React.useEffect(() => {
+    if (!menuOpen || !menuRef.current) return;
+    const handleMenuKeys = (e: KeyboardEvent) => {
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLElement>('button[role="menuitem"], button') || []
+      );
+      if (items.length === 0) return;
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const nextIndex = (currentIndex + 1) % items.length;
+        items[nextIndex]?.focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const prevIndex = (currentIndex - 1 + items.length) % items.length;
+        items[prevIndex]?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleMenuKeys);
+    return () => document.removeEventListener("keydown", handleMenuKeys);
+  }, [menuOpen]);
+
   const handleCopyText = () => {
     if (!isDeleted) {
       navigator.clipboard.writeText(content);
       setCopySuccess(true);
       setMenuOpen(false);
+      triggerRef.current?.focus();
       if (onMobileSheetClose) onMobileSheetClose();
       setTimeout(() => setCopySuccess(false), 2000);
     }
@@ -130,17 +250,18 @@ export function MessageActionsMenu({
     navigator.clipboard.writeText(url.toString());
     setLinkCopied(true);
     setMenuOpen(false);
+    triggerRef.current?.focus();
     if (onMobileSheetClose) onMobileSheetClose();
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
   return (
     <>
-      {/* ── DESKTOP HOVER TOOLBAR & DROPDOWN ────────────────────────────────────── */}
+      {/* ── ACTION TOOLBAR ────────────────────────────────────── */}
       <div className="flex shrink-0 items-center gap-0.5" role="toolbar" aria-label="Message actions">
-        {/* Quick Reaction button */}
+        {/* Quick Reaction button — visible on sm+, on mobile accessible via ... menu */}
         {!isDeleted && (
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <button
               ref={reactBtnRef}
               type="button"
@@ -152,33 +273,41 @@ export function MessageActionsMenu({
                 setShowReactionPicker((v) => !v);
                 setMenuOpen(false);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-xs transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
             >
               <Smile className="h-3.5 w-3.5" />
             </button>
-            {showReactionPicker && (
-              <div
-                className={`absolute bottom-9 z-50 ${
-                  isCurrentUser ? "right-0" : "left-0"
-                }`}
-              >
-                <ReactionPicker
-                  activeReactions={currentUserReactions}
-                  onReact={(r) => {
-                    onReact(r);
-                    setShowReactionPicker(false);
-                  }}
-                  onClose={() => {
-                    setShowReactionPicker(false);
-                    reactBtnRef.current?.focus();
-                  }}
-                />
-              </div>
-            )}
           </div>
         )}
 
-        {/* Reply Quick Button */}
+        {/* Portal-rendered ReactionPicker */}
+        {mounted && showReactionPicker && pickerCoords && createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: `${pickerCoords.top}px`,
+              left: `${pickerCoords.left}px`,
+              maxWidth: "calc(100vw - 16px)",
+            }}
+            className="z-50 animate-in fade-in zoom-in-95 duration-100"
+          >
+            <ReactionPicker
+              activeReactions={currentUserReactions}
+              onReact={(r) => {
+                onReact(r);
+                setShowReactionPicker(false);
+                reactBtnRef.current?.focus();
+              }}
+              onClose={() => {
+                setShowReactionPicker(false);
+                reactBtnRef.current?.focus();
+              }}
+            />
+          </div>,
+          document.body
+        )}
+
+        {/* Reply Quick Button — visible on sm+ */}
         {!isDeleted && (
           <button
             type="button"
@@ -187,249 +316,288 @@ export function MessageActionsMenu({
               e.stopPropagation();
               onReply();
             }}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+            className="hidden sm:flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-xs transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
           >
             <Reply className="h-3.5 w-3.5" />
           </button>
         )}
 
-        {/* More actions dropdown menu */}
-        <div className="relative" ref={menuRef}>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-label="More message actions"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((v) => !v);
-              setShowDeleteChoices(false);
-              setShowReactionPicker(false);
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
+        {/* More actions dropdown trigger */}
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label="More message actions"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+            setShowDeleteChoices(false);
+            setShowReactionPicker(false);
+          }}
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-xs transition-colors hover:border-zinc-300 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
 
-          {menuOpen && (
-            <div
-              role="menu"
-              aria-orientation="vertical"
-              className={`absolute bottom-9 z-50 w-52 rounded-2xl border border-zinc-200 bg-white py-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-850 dark:shadow-black/50 ${
-                isCurrentUser ? "right-0" : "left-0"
-              }`}
-            >
-              {showDeleteChoices ? (
-                <div className="p-2 space-y-1">
-                  <p className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                    Delete Message
-                  </p>
+        {/* Portal-rendered collision-aware dropdown menu */}
+        {mounted && menuOpen && menuCoords && createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-orientation="vertical"
+            style={{
+              position: "fixed",
+              top: `${menuCoords.top}px`,
+              left: `${menuCoords.left}px`,
+              maxWidth: "calc(100vw - 16px)",
+            }}
+            className="z-50 w-52 rounded-2xl border border-zinc-200 bg-white py-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-850 dark:shadow-black/50 animate-in fade-in zoom-in-95 duration-100"
+          >
+            {/* Quick Reactions bar inside menu on mobile */}
+            {!isDeleted && !showDeleteChoices && (
+              <div className="flex sm:hidden items-center justify-around px-2 py-1.5 border-b border-zinc-100 dark:border-zinc-800">
+                {QUICK_REACTIONS.slice(0, 5).map((emoji) => {
+                  const isActive = currentUserReactions.includes(emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => {
+                        onReact(emoji);
+                        setMenuOpen(false);
+                        triggerRef.current?.focus();
+                      }}
+                      className={`text-lg p-1 rounded-lg transition-transform active:scale-125 hover:scale-110 ${
+                        isActive ? "bg-heat-100 dark:bg-heat-950/50" : ""
+                      }`}
+                      aria-label={`React with ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {showDeleteChoices ? (
+              <div className="p-2 space-y-1">
+                <p className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  Delete Message
+                </p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onDeleteForMe();
+                    setMenuOpen(false);
+                    setShowDeleteChoices(false);
+                    triggerRef.current?.focus();
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors text-left"
+                >
+                  <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                  <span>Delete for me</span>
+                </button>
+
+                {isCurrentUser && onDeleteForEveryone && !isDeleted && (
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => {
-                      onDeleteForMe();
+                      onDeleteForEveryone();
                       setMenuOpen(false);
                       setShowDeleteChoices(false);
+                      triggerRef.current?.focus();
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors text-left"
+                    className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition-colors text-left font-medium"
                   >
-                    <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
-                    <span>Delete for me</span>
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    <span>Delete for everyone</span>
                   </button>
+                )}
 
-                  {isCurrentUser && onDeleteForEveryone && !isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onDeleteForEveryone();
-                        setMenuOpen(false);
-                        setShowDeleteChoices(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition-colors text-left font-medium"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                      <span>Delete for everyone</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteChoices(false)}
-                    className="w-full text-center py-1 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {!isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onReply();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      <Reply className="h-3.5 w-3.5 text-zinc-400" />
-                      <span>Reply</span>
-                    </button>
-                  )}
-
-                  {!isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onForward();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      <Share2 className="h-3.5 w-3.5 text-zinc-400" />
-                      <span>Forward</span>
-                    </button>
-                  )}
-
-                  {!isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onTogglePin();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      {isPinned ? (
-                        <>
-                          <PinOff className="h-3.5 w-3.5 text-amber-500" />
-                          <span>Unpin message</span>
-                        </>
-                      ) : (
-                        <>
-                          <Pin className="h-3.5 w-3.5 text-zinc-400" />
-                          <span>Pin message</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {onToggleStar && !isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onToggleStar();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      <Bookmark
-                        className={`h-3.5 w-3.5 ${
-                          isStarred
-                            ? "fill-amber-400 text-amber-400"
-                            : "text-zinc-400"
-                        }`}
-                      />
-                      <span>{isStarred ? "Remove from saved" : "Save message"}</span>
-                    </button>
-                  )}
-
-                  {!isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleCopyText}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      {copySuccess ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-emerald-500" />
-                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                            Copied!
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5 text-zinc-400" />
-                          <span>Copy text</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteChoices(false)}
+                  className="w-full text-center py-1 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                {!isDeleted && (
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={handleCopyLink}
+                    onClick={() => {
+                      onReply();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
                     className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
                   >
-                    {linkCopied ? (
+                    <Reply className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Reply</span>
+                  </button>
+                )}
+
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onForward();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Forward</span>
+                  </button>
+                )}
+
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onTogglePin();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    {isPinned ? (
+                      <>
+                        <PinOff className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Unpin message</span>
+                      </>
+                    ) : (
+                      <>
+                        <Pin className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Pin message</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {onToggleStar && !isDeleted && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onToggleStar();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <Bookmark
+                      className={`h-3.5 w-3.5 ${
+                        isStarred
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-zinc-400"
+                      }`}
+                    />
+                    <span>{isStarred ? "Remove from saved" : "Save message"}</span>
+                  </button>
+                )}
+
+                {!isDeleted && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleCopyText}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    {copySuccess ? (
                       <>
                         <Check className="h-3.5 w-3.5 text-emerald-500" />
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                          Link copied!
+                          Copied!
                         </span>
                       </>
                     ) : (
                       <>
-                        <LinkIcon className="h-3.5 w-3.5 text-zinc-400" />
-                        <span>Copy link</span>
+                        <Copy className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Copy text</span>
                       </>
                     )}
                   </button>
+                )}
 
-                  {isCurrentUser && !isDeleted && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onEdit();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-zinc-400" />
-                      <span>Edit message</span>
-                    </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleCopyLink}
+                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                >
+                  {linkCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        Link copied!
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon className="h-3.5 w-3.5 text-zinc-400" />
+                      <span>Copy link</span>
+                    </>
                   )}
+                </button>
 
-                  <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
-
-                  {!isCurrentUser && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onReport();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
-                    >
-                      <Flag className="h-3.5 w-3.5 text-zinc-400" />
-                      <span>Report message</span>
-                    </button>
-                  )}
-
+                {isCurrentUser && !isDeleted && (
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => setShowDeleteChoices(true)}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition-colors"
+                    onClick={() => {
+                      onEdit();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                    <span>Delete...</span>
+                    <Pencil className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Edit message</span>
                   </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                )}
+
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+
+                {!isCurrentUser && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onReport();
+                      setMenuOpen(false);
+                      triggerRef.current?.focus();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <Flag className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Report message</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setShowDeleteChoices(true)}
+                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                  <span>Delete...</span>
+                </button>
+              </>
+            )}
+          </div>,
+          document.body
+        )}
       </div>
 
       {/* ── MOBILE LONG-PRESS BOTTOM SHEET (PORTAL) ─────────────────────────────── */}

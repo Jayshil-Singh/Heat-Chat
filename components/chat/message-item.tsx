@@ -177,7 +177,7 @@ export function MessageItem({
 
       {/* Bubble row: avatar + bubble + actions */}
       <div
-        className={`group flex w-full items-end gap-2 px-3 ${
+        className={`group flex w-full items-end gap-1.5 sm:gap-2 px-2 sm:px-3 min-w-0 ${
           isCurrentUser ? "flex-row-reverse" : "flex-row"
         }`}
       >
@@ -204,7 +204,7 @@ export function MessageItem({
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchEnd}
           onContextMenu={handleContextMenu}
-          className={`relative flex max-w-[78%] sm:max-w-[68%] md:max-w-[62%] flex-col rounded-2xl px-4 py-2.5 shadow-sm text-sm select-none sm:select-text cursor-pointer sm:cursor-default ${
+          className={`relative flex max-w-[84%] sm:max-w-[70%] md:max-w-[62%] min-w-0 flex-col rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 shadow-xs text-sm select-none sm:select-text cursor-pointer sm:cursor-default break-words [overflow-wrap:anywhere] ${
             isCurrentUser
               ? "bg-heat-500 text-white rounded-br-sm"
               : "bg-white text-zinc-900 border border-zinc-200/80 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-100 rounded-bl-sm"
@@ -259,7 +259,7 @@ export function MessageItem({
 
               {/* Poll Card */}
               {poll && onVotePoll ? (
-                <div className="my-1">
+                <div className="my-1 w-full min-w-0">
                   <PollCard
                     poll={poll}
                     onVote={onVotePoll}
@@ -277,7 +277,7 @@ export function MessageItem({
                     message.content === "[Image]" ||
                     message.content === "📷 Photo")
                 ) && (
-                  <p className="whitespace-pre-wrap break-words leading-relaxed select-text">
+                  <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-w-0 leading-relaxed select-text">
                     <MentionText content={message.content} isCurrentUser={isCurrentUser} />
                   </p>
                 )
@@ -355,7 +355,7 @@ export function MessageItem({
         {/* Message action buttons */}
         {!isTemp && (
           <div
-            className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 sm:opacity-0 max-sm:opacity-60 max-sm:group-focus-within:opacity-100"
+            className="shrink-0 opacity-80 sm:opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
             aria-label="Message actions"
           >
             <MessageActionsMenu

@@ -43,7 +43,7 @@ const WAVEFORM_BARS = 38;
 // ─── Shared button base classes ───────────────────────────────────────────────
 
 const iconBtn =
-  "h-11 w-11 shrink-0 flex items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 disabled:opacity-40 disabled:cursor-not-allowed";
+  "h-9 w-9 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 disabled:opacity-40 disabled:cursor-not-allowed";
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ export function VoiceRecorderBar({
       : frozenDuration.current || durationSeconds
     : durationSeconds;
 
-  // ── Send handler ────────────────────────────────────────────────────────────
+  // ── Send handler ────────────────────────────────────────────────────
   const handleSend = () => {
     if (blob && isStopped) {
       onSend(blob, mimeType, Math.round(frozenDuration.current || durationSeconds));
@@ -153,7 +153,7 @@ export function VoiceRecorderBar({
       />
 
       <div
-        className="flex items-center gap-1.5 px-3 w-full min-w-0"
+        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 w-full min-w-0 max-w-full"
         style={{ paddingTop: "0.5rem", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         {/* ── LEFT: Discard ───────────────────────────────────────────────── */}
@@ -164,11 +164,11 @@ export function VoiceRecorderBar({
           aria-label="Discard recording"
           className={`${iconBtn} text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30`}
         >
-          <Trash2 className="h-5 w-5" />
+          <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
 
         {/* ── CENTER: Status + Timer + Waveform ───────────────────────────── */}
-        <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+        <div className="flex-1 min-w-0 flex items-center gap-1 sm:gap-2 overflow-hidden">
 
           {/* REQUESTING: spinner + label */}
           {isRequesting && (
@@ -263,7 +263,7 @@ export function VoiceRecorderBar({
 
               {/* Waveform — flex-1, min-w-0, overflow-hidden so it never pushes buttons off */}
               <div
-                className="flex items-center gap-px h-7 flex-1 min-w-0 overflow-hidden"
+                className="flex items-center gap-px h-6 sm:h-7 flex-1 min-w-0 overflow-hidden"
                 aria-hidden="true"
               >
                 {displayPeaks.map((peak, i) => (
@@ -304,7 +304,7 @@ export function VoiceRecorderBar({
               aria-label="Retry recording"
               className={`${iconBtn} text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800`}
             >
-              <RotateCcw className="h-5 w-5" />
+              <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           )}
 
@@ -315,7 +315,7 @@ export function VoiceRecorderBar({
               onClick={onRetry}
               disabled={disabled}
               aria-label="Retry sending voice message"
-              className="h-11 px-3 shrink-0 flex items-center justify-center rounded-full text-sm font-medium text-heat-600 dark:text-heat-400 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+              className="h-9 sm:h-10 px-2.5 sm:px-3 shrink-0 flex items-center justify-center rounded-full text-xs sm:text-sm font-medium text-heat-600 dark:text-heat-400 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
             >
               Retry
             </button>
@@ -330,7 +330,7 @@ export function VoiceRecorderBar({
               aria-label="Pause recording"
               className={`${iconBtn} text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800`}
             >
-              <Pause className="h-5 w-5" />
+              <Pause className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           )}
 
@@ -343,7 +343,7 @@ export function VoiceRecorderBar({
               aria-label="Resume recording"
               className={`${iconBtn} text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800`}
             >
-              <Play className="h-5 w-5 fill-current translate-x-px" />
+              <Play className="h-4 w-4 sm:h-5 sm:w-5 fill-current translate-x-px" />
             </button>
           )}
 
@@ -354,9 +354,9 @@ export function VoiceRecorderBar({
               onClick={recorder.stop}
               disabled={disabled}
               aria-label="Stop recording"
-              className={`${iconBtn} bg-red-500 hover:bg-red-600 text-white shadow-sm`}
+              className={`${iconBtn} bg-red-500 hover:bg-red-600 text-white shadow-xs`}
             >
-              <Square className="h-4 w-4 fill-current" />
+              <Square className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-current" />
             </button>
           )}
 
@@ -367,9 +367,9 @@ export function VoiceRecorderBar({
               onClick={handleSend}
               disabled={disabled || !blob}
               aria-label="Send voice message"
-              className={`${iconBtn} bg-heat-500 hover:bg-heat-600 text-white shadow-sm`}
+              className={`${iconBtn} bg-heat-500 hover:bg-heat-600 text-white shadow-xs`}
             >
-              <Send className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} />
+              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           )}
         </div>

@@ -240,7 +240,7 @@ export function ActiveChat({ conversation, onBack, onRefreshConversation }: Acti
   const handleCancelEdit = () => setEditingMessage(null);
 
   return (
-    <div className="flex flex-1 flex-col h-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950">
+    <div className="flex flex-1 flex-col h-full w-full min-w-0 max-w-full overflow-hidden bg-zinc-50/50 dark:bg-zinc-950">
       {/* Header */}
       <ChatHeader
         conversation={conversation}

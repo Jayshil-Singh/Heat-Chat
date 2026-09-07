@@ -51,12 +51,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <NotificationProvider>
       <PresenceProvider>
-        <div className="flex h-screen w-screen overflow-hidden bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-50">
+        <div className="flex h-screen w-full max-w-full min-w-0 overflow-hidden bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-50">
           {/* Desktop Sidebar */}
           <SidebarNav onOpenCommandPalette={() => setIsSearchOpen(true)} />
 
           {/* Main Area */}
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex flex-1 flex-col overflow-hidden min-w-0 w-full">
             {/* Mobile Header */}
             <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden shrink-0 pt-[env(safe-area-inset-top)]">
               <Link href="/chat" className="flex items-center gap-2.5">
@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </header>
 
             {/* Dynamic Content Container */}
-            <main className="flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0 min-w-0 w-full">
               {children}
             </main>
 

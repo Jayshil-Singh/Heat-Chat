@@ -122,29 +122,30 @@ export function ConversationList({
 
   return (
     <>
-      <div className="flex h-full flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex h-full flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 w-full min-w-0 max-w-full">
         {/* Search & Actions Header */}
-        <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 space-y-2.5">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">
+        <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 space-y-2.5 w-full min-w-0">
+          <div className="flex items-center justify-between px-1 gap-1.5 min-w-0">
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 dark:text-white truncate">
               Messages
             </h2>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsCreateGroupOpen(true)}
-                className="gap-1 text-xs h-7 px-2.5"
+                className="gap-1 text-xs h-7 px-2"
                 title="Create a new group chat"
               >
                 <Users className="h-3.5 w-3.5" />
-                <span>New Group</span>
+                <span className="hidden sm:inline">New Group</span>
+                <span className="sm:hidden">Group</span>
               </Button>
               <Link href="/friends">
                 <Button
                   variant="heat"
                   size="sm"
-                  className="gap-1 text-xs h-7 px-2.5"
+                  className="gap-1 text-xs h-7 px-2"
                   title="Start a new direct chat"
                 >
                   <Plus className="h-3.5 w-3.5" />

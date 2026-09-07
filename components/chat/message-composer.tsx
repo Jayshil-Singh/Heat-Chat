@@ -471,7 +471,7 @@ export function MessageComposer({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative shrink-0 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 safe-bottom transition-colors ${
+      className={`relative shrink-0 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 safe-bottom transition-colors w-full min-w-0 max-w-full ${
         isEditing ? "border-t-2 border-heat-400 dark:border-heat-600" : ""
       } ${isDraggingOver ? "bg-heat-50/60 dark:bg-heat-950/40 ring-2 ring-inset ring-heat-500" : ""}`}
     >
@@ -567,12 +567,12 @@ export function MessageComposer({
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="flex items-end gap-2 p-3"
+          className="flex items-end gap-1.5 sm:gap-2 p-2 sm:p-3 w-full min-w-0 max-w-full"
           aria-label={isEditing ? "Edit message form" : "Send message form"}
         >
           {/* Attachment picker trigger button */}
           {!isEditing && (
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 shrink-0">
               <Button
                 type="button"
                 variant="ghost"
@@ -581,12 +581,12 @@ export function MessageComposer({
                 disabled={disabled || isSubmitting || isMediaProcessing}
                 title="Attach files"
                 aria-label="Attach files"
-                className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
+                className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
               >
                 {isMediaProcessing ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-heat-500" />
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-heat-500" />
                 ) : (
-                  <ImagePlus className="h-5 w-5" />
+                  <ImagePlus className="h-4 w-4 sm:h-5 sm:w-5" />
                 )}
               </Button>
 
@@ -599,15 +599,15 @@ export function MessageComposer({
                   disabled={disabled || isSubmitting}
                   title="Create a poll"
                   aria-label="Create a poll"
-                  className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors hidden sm:flex"
+                  className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors hidden sm:flex"
                 >
-                  <BarChart2 className="h-5 w-5" />
+                  <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               )}
             </div>
           )}
 
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             {/* Mention Autocomplete popover */}
             <MentionAutocomplete
               isOpen={mentions.isOpen}
@@ -644,7 +644,7 @@ export function MessageComposer({
               disabled={disabled}
               aria-label={isEditing ? "Edit message text" : "Message text"}
               aria-multiline="true"
-              className="flex w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:border-heat-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-heat-500 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-500 max-h-36 overflow-y-auto"
+              className="flex w-full resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-3 sm:px-4 py-2 sm:py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:border-heat-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-heat-500 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:placeholder:text-zinc-500 max-h-36 overflow-y-auto"
             />
             {isNearLength && (
               <span
@@ -660,12 +660,12 @@ export function MessageComposer({
 
           {/* Edit mode: Cancel + Save buttons */}
           {isEditing ? (
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               <button
                 type="button"
                 onClick={onCancelEdit}
                 aria-label="Cancel editing"
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="rounded-xl border border-zinc-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               >
                 Cancel
               </button>
@@ -675,7 +675,7 @@ export function MessageComposer({
                 size="icon"
                 disabled={!content.trim() || isSubmitting || disabled || isOverLength}
                 aria-label="Save edit"
-                className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
+                className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-2xl shadow-xs"
               >
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -698,9 +698,9 @@ export function MessageComposer({
                   }}
                   disabled={disabled || isSubmitting}
                   aria-label="Record voice message"
-                  className="h-10 w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
+                  className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-2xl text-zinc-500 hover:text-heat-600 hover:bg-heat-50 dark:hover:bg-zinc-800 transition-colors"
                 >
-                  <Mic className="h-5 w-5" />
+                  <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               )}
               {/* Send button — shown when there is text or attachments */}
@@ -711,7 +711,7 @@ export function MessageComposer({
                   size="icon"
                   disabled={!hasValidInput || isSubmitting || disabled || isOverLength || isMediaProcessing}
                   aria-label="Send message"
-                  className="h-10 w-10 shrink-0 rounded-2xl shadow-sm"
+                  className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-2xl shadow-xs"
                 >
                   {isSubmitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

@@ -5,14 +5,12 @@ import {
   Loader2,
   ImageOff,
   Eye,
-  PlayCircle,
   FileText,
-  Music,
-  Mic,
   Film,
   Download,
 } from "lucide-react";
 import { ImageViewer } from "./image-viewer";
+import { VoiceMessagePlayer } from "./voice-message-player";
 import type { AttachmentWithUrl } from "@/types/chat";
 
 interface MessageAttachmentProps {
@@ -67,10 +65,10 @@ function ImageGrid({ attachments, onOpenViewer }: ImageGridProps) {
 
   return (
     <div
-      className={`mt-1.5 overflow-hidden rounded-xl ${
+      className={`mt-1.5 overflow-hidden rounded-xl w-full max-w-full min-w-0 ${
         isSingle
-          ? "max-w-[280px] sm:max-w-[340px]"
-          : "grid grid-cols-2 gap-1.5 max-w-[280px] sm:max-w-[340px]"
+          ? ""
+          : "grid grid-cols-2 gap-1.5"
       }`}
     >
       {attachments.map((att, index) => {
@@ -90,8 +88,8 @@ function ImageGrid({ attachments, onOpenViewer }: ImageGridProps) {
             tabIndex={isError ? -1 : 0}
             role="button"
             aria-label={`View full image: ${att.fileName}`}
-            className={`group relative overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 ${
-              isSingle ? "aspect-auto max-h-[360px]" : "aspect-square"
+            className={`group relative overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 w-full max-w-full min-w-0 ${
+              isSingle ? "aspect-auto max-h-[340px]" : "aspect-square"
             }`}
           >
             {!isLoaded && !isError && (
@@ -112,8 +110,8 @@ function ImageGrid({ attachments, onOpenViewer }: ImageGridProps) {
                 alt={att.fileName || "Chat attachment"}
                 onLoad={() => setLoadedMap((prev) => ({ ...prev, [att.id]: true }))}
                 onError={() => setErrorMap((prev) => ({ ...prev, [att.id]: true }))}
-                className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
-                  isSingle ? "max-h-[360px] object-contain bg-black/5 dark:bg-black/20" : "h-full"
+                className={`w-full max-w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                  isSingle ? "max-h-[340px] object-contain bg-black/5 dark:bg-black/20" : "h-full"
                 } ${!isLoaded ? "opacity-0" : "opacity-100"}`}
                 loading="lazy"
               />
@@ -136,13 +134,13 @@ function ImageGrid({ attachments, onOpenViewer }: ImageGridProps) {
 
 function VideoAttachment({ att }: { att: AttachmentWithUrl }) {
   return (
-    <div className="mt-1.5 overflow-hidden rounded-xl max-w-[280px] sm:max-w-[340px] bg-black">
+    <div className="mt-1.5 overflow-hidden rounded-xl w-full max-w-full min-w-0 bg-black">
       <video
         src={att.signedUrl}
         controls
         preload="metadata"
         poster={att.thumbnailSignedUrl || undefined}
-        className="w-full max-h-[320px] rounded-xl"
+        className="w-full max-w-full max-h-[320px] rounded-xl"
         aria-label={att.fileName || "Video attachment"}
       >
         <source src={att.signedUrl} type={att.fileType} />
@@ -159,44 +157,6 @@ function VideoAttachment({ att }: { att: AttachmentWithUrl }) {
   );
 }
 
-// ── Audio / Voice renderer ────────────────────────────────────────────────────
-
-function AudioAttachment({
-  att,
-  isVoice,
-}: {
-  att: AttachmentWithUrl;
-  isVoice: boolean;
-}) {
-  return (
-    <div className="mt-1.5 flex flex-col gap-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 p-3 max-w-[280px] sm:max-w-[320px]">
-      <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-        {isVoice ? (
-          <Mic className="h-4 w-4 text-heat-500 shrink-0" />
-        ) : (
-          <Music className="h-4 w-4 text-heat-500 shrink-0" />
-        )}
-        <span className="truncate">{isVoice ? "Voice message" : att.fileName}</span>
-        {att.durationSeconds ? (
-          <span className="ml-auto text-xs text-zinc-400 shrink-0">
-            {formatDuration(att.durationSeconds)}
-          </span>
-        ) : null}
-      </div>
-      <audio
-        controls
-        src={att.signedUrl}
-        preload="metadata"
-        className="w-full h-8"
-        aria-label={isVoice ? "Voice message" : att.fileName}
-      >
-        <source src={att.signedUrl} type={att.fileType} />
-        Your browser does not support audio playback.
-      </audio>
-    </div>
-  );
-}
-
 // ── Generic file renderer ─────────────────────────────────────────────────────
 
 function FileAttachment({ att }: { att: AttachmentWithUrl }) {
@@ -206,15 +166,15 @@ function FileAttachment({ att }: { att: AttachmentWithUrl }) {
       download={att.fileName}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1.5 flex items-center gap-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3 max-w-[280px] sm:max-w-[320px] hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors group"
+      className="mt-1.5 flex items-center gap-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 px-3.5 py-2.5 sm:px-4 sm:py-3 w-full max-w-full min-w-0 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors group"
       aria-label={`Download ${att.fileName}`}
     >
-      <FileText className="h-8 w-8 text-heat-500 shrink-0" />
+      <FileText className="h-7 w-7 sm:h-8 sm:w-8 text-heat-500 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100 truncate">
+        <p className="text-xs sm:text-sm font-medium text-zinc-800 dark:text-zinc-100 truncate">
           {att.fileName}
         </p>
-        <p className="text-xs text-zinc-400">{formatFileSize(att.fileSize)}</p>
+        <p className="text-[10px] sm:text-xs text-zinc-400">{formatFileSize(att.fileSize)}</p>
       </div>
       <Download className="h-4 w-4 text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-colors shrink-0" />
     </a>
@@ -253,8 +213,18 @@ export function MessageAttachment({
       {nonImageAttachments.map((att) => {
         const kind = getAttachmentKind(att.fileType, att.fileName);
         if (kind === "video") return <VideoAttachment key={att.id} att={att} />;
-        if (kind === "voice") return <AudioAttachment key={att.id} att={att} isVoice />;
-        if (kind === "audio") return <AudioAttachment key={att.id} att={att} isVoice={false} />;
+        if (kind === "voice" || kind === "audio") {
+          return (
+            <VoiceMessagePlayer
+              key={att.id}
+              src={att.signedUrl}
+              durationSeconds={att.durationSeconds}
+              fileName={att.fileName}
+              isVoice={kind === "voice"}
+              isCurrentUser={isCurrentUser}
+            />
+          );
+        }
         return <FileAttachment key={att.id} att={att} />;
       })}
 

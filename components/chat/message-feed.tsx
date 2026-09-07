@@ -306,11 +306,11 @@ export const MessageFeed = React.forwardRef<
   }
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden w-full min-w-0 max-w-full">
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto pt-4 pb-2"
+        className="flex-1 overflow-y-auto overflow-x-hidden pt-4 pb-2 w-full min-w-0"
         role="log"
         aria-label="Message history"
         aria-live="polite"
@@ -327,7 +327,7 @@ export const MessageFeed = React.forwardRef<
 
         {/* Message groups with date separators */}
         {groupedMessages.map((group) => (
-          <div key={group.date}>
+          <div key={group.date} className="w-full min-w-0">
             <div className="my-4 flex items-center justify-center">
               <span className="rounded-full bg-zinc-100 px-3 py-1 text-[11px] font-semibold text-zinc-500 shadow-2xs dark:bg-zinc-800 dark:text-zinc-400">
                 {formatDateSeparator(group.items[0].created_at)}
