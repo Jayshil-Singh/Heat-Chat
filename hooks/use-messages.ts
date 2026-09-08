@@ -6,6 +6,8 @@ import { useAuth } from "./use-auth";
 import { useRealtimeChat } from "./use-realtime-chat";
 import { validateMessageContent } from "@/lib/validation/message";
 import { getCachedProfiles, setCachedProfiles } from "@/lib/cache/profile-cache";
+import { getCachedConversationMessages, setCachedConversationMessages } from "@/lib/cache/conversation-cache";
+import { ConversationsContext } from "./use-conversations";
 import type {
   Attachment,
   Message,
@@ -45,8 +47,16 @@ function buildReactionsMap(
 
 export function useMessages(conversationId: string | null) {
   const { user } = useAuth();
-  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const conversationsContext = React.useContext(ConversationsContext);
+  const updateConversationPreview = conversationsContext?.updateConversationPreview;
+
+  // Initialize from in-memory cache if available for instant opening
+  const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
+    return conversationId ? getCachedConversationMessages(conversationId) || [] : [];
+  });
+  const [isLoading, setIsLoading] = React.useState<boolean>(() => {
+    return conversationId ? !getCachedConversationMessages(conversationId) : true;
+  });
   const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
   const [hasMore, setHasMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -57,6 +67,24 @@ export function useMessages(conversationId: string | null) {
   // Request cancellation and generation guard
   const requestGenRef = React.useRef<number>(0);
   const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Synchronize state immediately when switching conversations (never show stale messages from previous chat)
+  React.useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const cached = getCachedConversationMessages(conversationId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setIsLoading(false);
+    } else {
+      setMessages([]);
+      setIsLoading(true);
+    }
+  }, [conversationId]);
 
   // Keep a ref to the latest messages for use in async callbacks that need
   // current state without stale closures.
@@ -307,7 +335,10 @@ export function useMessages(conversationId: string | null) {
       return;
     }
 
-    setIsLoading(true);
+    const hasCached = (getCachedConversationMessages(conversationId) || []).length > 0;
+    if (!hasCached) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -339,6 +370,7 @@ export function useMessages(conversationId: string | null) {
 
       if (ac.signal.aborted || currentGen !== requestGenRef.current) return;
 
+      setCachedConversationMessages(conversationId, formatted);
       setMessages(formatted);
 
       // Mark incoming unread messages as read (batch insert)
@@ -453,9 +485,10 @@ export function useMessages(conversationId: string | null) {
         // Dedup: already in list
         if (prev.some((m) => m.id === newMsg.id)) return prev;
 
+        let nextMessages: ChatMessage[];
         // Replace optimistic temp message
         if (tempId && prev.some((m) => m.tempId === tempId)) {
-          return prev.map((m) =>
+          nextMessages = prev.map((m) =>
             m.tempId === tempId
               ? {
                   ...enriched,
@@ -465,18 +498,32 @@ export function useMessages(conversationId: string | null) {
                 }
               : m
           );
+        } else {
+          // New message from another user or self
+          nextMessages = [
+            ...prev,
+            {
+              ...enriched,
+              status:
+                newMsg.sender_id === user?.id ? ("sent" as const) : undefined,
+            },
+          ];
         }
 
-        // New message from another user or self
-        return [
-          ...prev,
-          {
-            ...enriched,
-            status:
-              newMsg.sender_id === user?.id ? ("sent" as const) : undefined,
-          },
-        ];
+        if (conversationId) {
+          setCachedConversationMessages(conversationId, nextMessages);
+        }
+        return nextMessages;
       });
+
+      if (conversationId) {
+        updateConversationPreview?.(conversationId, {
+          content: newMsg.content || (newMsg.message_type === "voice" ? "Voice message" : "Attachment"),
+          sender_id: newMsg.sender_id,
+          created_at: newMsg.created_at,
+          message_type: newMsg.message_type,
+        });
+      }
 
       // Record delivered & read for recipient
       if (newMsg.sender_id !== user?.id && user?.id) {
@@ -502,7 +549,7 @@ export function useMessages(conversationId: string | null) {
         } catch {}
       }
     },
-    [conversationId, user?.id, enrichMessages, supabase]
+    [conversationId, user?.id, enrichMessages, supabase, updateConversationPreview]
   );
 
   const handleRealtimeMessageUpdate = React.useCallback(
@@ -766,7 +813,22 @@ export function useMessages(conversationId: string | null) {
     };
 
     pendingTempIdsRef.current.set(trimmedContent || tempId, tempId);
-    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessages((prev) => {
+      const next = [...prev, optimisticMessage];
+      if (conversationId) {
+        setCachedConversationMessages(conversationId, next);
+      }
+      return next;
+    });
+
+    if (conversationId) {
+      updateConversationPreview?.(conversationId, {
+        content: trimmedContent || (derivedType === "voice" ? "Voice message" : "Attachment"),
+        sender_id: user.id,
+        created_at: optimisticMessage.created_at,
+        message_type: derivedType,
+      });
+    }
 
     const createdStoragePaths: string[] = [];
     let createdMessageId: string | null = null;
@@ -804,11 +866,15 @@ export function useMessages(conversationId: string | null) {
         .single();
 
       if (insertError || !insertedMsg) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.tempId === tempId ? { ...m, status: "failed" } : m
-          )
-        );
+        setMessages((prev) => {
+          const next = prev.map((m) =>
+            m.tempId === tempId ? { ...m, status: "failed" as const } : m
+          );
+          if (conversationId) {
+            setCachedConversationMessages(conversationId, next);
+          }
+          return next;
+        });
         pendingTempIdsRef.current.delete(trimmedContent || tempId);
         const rawErr = insertError?.message || "";
         let friendlyErr = "Failed to send message.";
@@ -894,20 +960,24 @@ export function useMessages(conversationId: string | null) {
         }
       }
 
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.tempId === tempId
             ? {
                 ...insertedMsg,
-                status: "sent",
+                status: "sent" as const,
                 readBy: [],
                 reactions: [],
                 replyPreview: null,
                 attachments: finalAttachments,
               }
             : m
-        )
-      );
+        );
+        if (conversationId) {
+          setCachedConversationMessages(conversationId, next);
+        }
+        return next;
+      });
 
       // Record message mentions asynchronously if any
       const mentionedUsernames = extractMentions(trimmedContent);
@@ -935,11 +1005,15 @@ export function useMessages(conversationId: string | null) {
         } catch {}
       }
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.tempId === tempId ? { ...m, status: "failed" } : m
-        )
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) =>
+          m.tempId === tempId ? { ...m, status: "failed" as const } : m
+        );
+        if (conversationId) {
+          setCachedConversationMessages(conversationId, next);
+        }
+        return next;
+      });
       const catchErr = err?.message || "";
       let friendlyCatchErr = "Failed to send message.";
       if (catchErr.includes("message_content_length") || catchErr.includes("MESSAGE_TOO_LONG")) {

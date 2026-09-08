@@ -14,6 +14,15 @@ export interface ConversationsContextValue {
   refreshConversations: () => Promise<void>;
   markConversationUnread: (conversationId: string) => Promise<void>;
   markConversationRead: (conversationId: string) => Promise<void>;
+  updateConversationPreview: (
+    conversationId: string,
+    preview: {
+      content: string;
+      sender_id: string;
+      created_at: string;
+      message_type: string;
+    }
+  ) => void;
   getOrCreateDirectChat: (targetUserId: string) => Promise<{ conversationId?: string; error?: string }>;
   createGroup: (groupName: string, friendIds: string[], avatarUrl?: string) => Promise<{ conversationId?: string; error?: string }>;
   leaveGroup: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
@@ -325,6 +334,39 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
     [user?.id]
   );
 
+  const updateConversationPreview = React.useCallback(
+    (
+      conversationId: string,
+      preview: {
+        content: string;
+        sender_id: string;
+        created_at: string;
+        message_type: string;
+      }
+    ) => {
+      setConversations((prev) => {
+        const target = prev.find((c) => c.id === conversationId);
+        if (!target) return prev;
+
+        const updatedTarget: ConversationWithDetails = {
+          ...target,
+          lastMessage: {
+            content: preview.content,
+            sender_id: preview.sender_id,
+            created_at: preview.created_at,
+            message_type: preview.message_type as any,
+          },
+          updated_at: preview.created_at,
+        };
+
+        // Move updated conversation to the top
+        const remaining = prev.filter((c) => c.id !== conversationId);
+        return [updatedTarget, ...remaining];
+      });
+    },
+    []
+  );
+
   const getOrCreateDirectChat = async (targetUserId: string): Promise<{ conversationId?: string; error?: string }> => {
     if (!user?.id) return { error: "Not authenticated" };
     if (user.id === targetUserId) return { error: "Cannot start a chat with yourself" };
@@ -407,6 +449,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
       refreshConversations: fetchConversations,
       markConversationUnread,
       markConversationRead,
+      updateConversationPreview,
       getOrCreateDirectChat,
       createGroup,
       leaveGroup,
@@ -418,6 +461,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
       fetchConversations,
       markConversationUnread,
       markConversationRead,
+      updateConversationPreview,
       getOrCreateDirectChat,
       createGroup,
       leaveGroup,
@@ -440,6 +484,7 @@ export function useConversations(): ConversationsContextValue {
       refreshConversations: async () => {},
       markConversationUnread: async () => {},
       markConversationRead: async () => {},
+      updateConversationPreview: () => {},
       getOrCreateDirectChat: async () => ({ error: "Not inside ConversationsProvider" }),
       createGroup: async () => ({ error: "Not inside ConversationsProvider" }),
       leaveGroup: async () => ({ success: false, error: "Not inside ConversationsProvider" }),

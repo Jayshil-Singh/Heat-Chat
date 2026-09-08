@@ -149,8 +149,8 @@ export function useNotifications(currentActiveConversationId?: string | null) {
   // Handle incoming notification
   const handleIncomingNotification = React.useCallback(
     async (rawNotif: Notification) => {
-      // 1. Deduplication check
-      if (processedNotifIds.current.has(rawNotif.id)) {
+      // 1. Deduplication & sender self-suppression check
+      if (rawNotif.sender_id === user?.id || processedNotifIds.current.has(rawNotif.id)) {
         return;
       }
       processedNotifIds.current.add(rawNotif.id);

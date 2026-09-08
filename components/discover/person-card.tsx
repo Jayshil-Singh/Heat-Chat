@@ -26,35 +26,48 @@ export function PersonCard({
 }: PersonCardProps) {
   const [isPending, setIsPending] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [optimisticStatus, setOptimisticStatus] = React.useState<DiscoverablePerson["relationship_status"] | null>(null);
+
+  const effectiveStatus = optimisticStatus ?? person.relationship_status;
+
+  React.useEffect(() => {
+    setOptimisticStatus(null);
+  }, [person.relationship_status, person.pending_request_id]);
 
   const handleSend = async () => {
+    setOptimisticStatus("outgoing_pending");
     setIsPending(true);
     setActionError(null);
     const res = await onSendRequest(person.user_id);
-    if (!res.success && res.error) {
-      setActionError(res.error);
+    if (!res.success) {
+      setOptimisticStatus(null);
+      if (res.error) setActionError(res.error);
     }
     setIsPending(false);
   };
 
   const handleCancel = async () => {
     if (!person.pending_request_id) return;
+    setOptimisticStatus("none");
     setIsPending(true);
     setActionError(null);
     const res = await onCancelRequest(person.pending_request_id, person.user_id);
-    if (!res.success && res.error) {
-      setActionError(res.error);
+    if (!res.success) {
+      setOptimisticStatus(null);
+      if (res.error) setActionError(res.error);
     }
     setIsPending(false);
   };
 
   const handleAccept = async () => {
     if (!person.pending_request_id) return;
+    setOptimisticStatus("friends");
     setIsPending(true);
     setActionError(null);
     const res = await onAcceptRequest(person.pending_request_id, person.user_id);
-    if (!res.success && res.error) {
-      setActionError(res.error);
+    if (!res.success) {
+      setOptimisticStatus(null);
+      if (res.error) setActionError(res.error);
     }
     setIsPending(false);
   };
@@ -115,7 +128,7 @@ export function PersonCard({
 
       {/* Action buttons section */}
       <div className="flex items-center gap-2 self-end sm:self-center shrink-0 pt-2 sm:pt-0 w-full sm:w-auto justify-end">
-        {person.relationship_status === "none" && (
+        {effectiveStatus === "none" && (
           <Button
             size="sm"
             onClick={handleSend}
@@ -132,7 +145,7 @@ export function PersonCard({
           </Button>
         )}
 
-        {person.relationship_status === "outgoing_pending" && (
+        {effectiveStatus === "outgoing_pending" && (
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <span className="inline-flex items-center gap-1 rounded-xl bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40">
               <Clock className="h-3.5 w-3.5" />
@@ -154,7 +167,7 @@ export function PersonCard({
           </div>
         )}
 
-        {person.relationship_status === "incoming_pending" && (
+        {effectiveStatus === "incoming_pending" && (
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <Button
               size="sm"
@@ -173,7 +186,7 @@ export function PersonCard({
           </div>
         )}
 
-        {person.relationship_status === "friends" && (
+        {effectiveStatus === "friends" && (
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40">
               <UserCheck className="h-3.5 w-3.5" />

@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { CreateGroupDialog } from "./create-group-dialog";
+import { setCachedProfile } from "@/lib/cache/profile-cache";
 import type { ConversationWithDetails } from "@/types/chat";
 
 interface ConversationListProps {
@@ -227,6 +228,16 @@ export function ConversationList({
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setActiveMenuConvId(conv.id);
+                  }}
+                  onMouseEnter={() => {
+                    if (conv.otherMember) {
+                      setCachedProfile(conv.otherMember);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (conv.otherMember) {
+                      setCachedProfile(conv.otherMember);
+                    }
                   }}
                   className={`group relative flex items-center gap-3 rounded-2xl p-3 cursor-pointer transition-all ${
                     isSelected

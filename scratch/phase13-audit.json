@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-09-08T11:51:00Z",
+  "phase12Baseline": {
+    "commit": "566d37c",
+    "productionUrl": "https://heat-chat-beta.vercel.app",
+    "timings": {
+      "/chat": 1258,
+      "/discover": 314,
+      "/settings": 260,
+      "openingConversation": 622,
+      "sendingMessage": 264,
+      "receivingRealtimeMessage": 253,
+      "loadingNotifications": 537,
+      "loadingFriendRequests": 269
+    }
+  },
+  "currentQueryCounts": {
+    "/chat": 6,
+    "/discover": 3,
+    "/settings": 2,
+    "openingConversation": 7,
+    "sendingMessage": 0,
+    "receivingRealtimeMessage": 1,
+    "loadingNotifications": 3,
+    "loadingFriendRequests": 2
+  },
+  "currentRealtimeChannels": {
+    "globalPresence": "global:presence",
+    "userConversations": "user-conversations-${user.id}",
+    "activeChat": "chat:${conversationId} (mounted on demand)",
+    "typing": "typing:${conversationId} (mounted on demand)",
+    "leakedChannels": 0,
+    "invariants": "Strictly 2 global channels when idle, exactly 1 chat channel per active chat"
+  },
+  "currentNavigationBehavior": {
+    "routeShell": "Renders fast with Next.js client-side navigation",
+    "conversationSwitching": "Cleans up previous channel and aborts in-flight request, but re-fetches messages from scratch without in-memory conversation message cache"
+  },
+  "currentLoadingStates": {
+    "conversationList": "SWR-friendly (skeleton only on initial empty load)",
+    "discoverPeople": "SWR-friendly (skeleton only on initial empty load)",
+    "messageFeed": "Currently checks isLoading unconditionally on conversation switch, causing brief loader flash even if messages were previously loaded in session"
+  },
+  "currentCacheBehavior": {
+    "profileCache": "In-memory Map with 5-minute TTL, bounded to 500 entries, LRU-style eviction, zero persistence",
+    "conversationMessageCache": "Not yet implemented; messages are re-queried on every conversation switch"
+  },
+  "currentRequestCancellationBehavior": {
+    "useMessages": "Implemented with requestGenRef atomic counter and abortControllerRef; stale responses from earlier conversations are safely discarded"
+  },
+  "currentServiceWorkerBehavior": {
+    "file": "public/sw.js",
+    "cachingRules": "Strict bypass for Supabase REST, Auth, Storage, Realtime, WebSockets, /api/*, tokens, signatures, attachments",
+    "cachedAssets": "Only static assets (/offline, /manifest.webmanifest, icons, favicon)",
+    "privateDataExposure": "Zero private conversation data in SW or Cache Storage"
+  },
+  "currentProductionBottlenecks": [
+    "Uncached conversation switching causes unnecessary useful-content delay (622ms)",
+    "MessageFeed displays loading spinner whenever isLoading is true instead of keeping cached messages visible",
+    "Conversation list last message preview and ordering does not update optimistically on message send",
+    "Friend request buttons (Add Friend, Cancel, Accept) wait for network RPC resolution before updating visual UI",
+    "No subtle visual indicator for network disconnect/reconnecting/reconnected states",
+    "Reconnection after network drop needs explicit deduplicated sync to avoid missed messages"
+  ],
+  "recommendedPhase13Changes": [
+    "Implement lib/cache/conversation-cache.ts for bounded in-memory message caching with TTL and LRU eviction",
+    "Enable instant conversation switching by pre-populating useMessages state from in-memory cache",
+    "Update MessageFeed to only display loader when messages.length === 0",
+    "Implement optimistic conversation list preview updates on sendMessage / sendReply",
+    "Implement optimistic friend request state transitions with automatic rollback on error",
+    "Add subtle, non-intrusive ConnectionStatusIndicator in app shell with automatic reconnect handling",
+    "Harden realtime reconnect convergence to guarantee single fetch on reconnect and zero duplicate messages",
+    "Verify zero private data persistence across localStorage, sessionStorage, IndexedDB, and Service Worker"
+  ]
+}

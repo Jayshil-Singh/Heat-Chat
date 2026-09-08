@@ -12,6 +12,7 @@ import { NotificationCenter } from "@/components/notifications/notification-cent
 import { SearchDialog } from "@/components/search/search-dialog";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConnectionStatusIndicator } from "@/components/ui/connection-status-indicator";
 
 function MobileNotificationCenter() {
   const {
@@ -51,6 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <NotificationProvider>
       <PresenceProvider>
+        <ConnectionStatusIndicator />
         <div className="flex h-screen w-full max-w-full min-w-0 overflow-hidden bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-50">
           {/* Desktop Sidebar */}
           <SidebarNav onOpenCommandPalette={() => setIsSearchOpen(true)} />

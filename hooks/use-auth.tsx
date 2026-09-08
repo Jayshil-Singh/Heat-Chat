@@ -3,6 +3,8 @@
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getCallbackUrl } from "@/lib/utils/site-url";
+import { clearConversationCache } from "@/lib/cache/conversation-cache";
+import { clearProfileCache } from "@/lib/cache/profile-cache";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Profile } from "@/types/database";
 
@@ -190,6 +192,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === "SIGNED_OUT" || !newSession?.user) {
+        clearConversationCache();
+        clearProfileCache();
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -220,6 +224,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("Sign out error:", err);
     } finally {
+      clearConversationCache();
+      clearProfileCache();
       setUser(null);
       setProfile(null);
       setSession(null);

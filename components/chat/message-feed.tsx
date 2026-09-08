@@ -277,7 +277,7 @@ export const MessageFeed = React.forwardRef<
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading && messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-heat-500" />
