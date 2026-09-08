@@ -109,7 +109,7 @@ function ToastItem({
         </p>
       </div>
 
-      <button
+      <button type="button"
         onClick={(e) => {
           e.stopPropagation();
           onDismiss();

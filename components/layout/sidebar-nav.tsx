@@ -133,7 +133,7 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
 
         {/* Quick Search Button */}
         {user && onOpenCommandPalette && (
-          <button
+          <button type="button"
             onClick={onOpenCommandPalette}
             className="flex w-full items-center justify-center lg:justify-between gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2.5 lg:px-3 lg:py-2 text-xs text-zinc-500 transition-all hover:border-zinc-300 hover:bg-white hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200 box-border overflow-hidden"
             aria-label="Quick search (Cmd+K / Ctrl+K)"
@@ -225,7 +225,7 @@ export function SidebarNav({ onOpenCommandPalette }: SidebarNavProps) {
                 </p>
               </div>
             </Link>
-            <button
+            <button type="button"
               onClick={handleSignOut}
               className="hidden lg:block rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-500 dark:hover:bg-zinc-800 dark:hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
               title="Log out"

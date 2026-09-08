@@ -508,7 +508,7 @@ export default function SettingsPage() {
             Theme & Appearance
           </h2>
           <div className="flex flex-wrap gap-3">
-            <button
+            <button type="button"
               onClick={() => setTheme("light")}
               className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-medium transition-all ${
                 theme === "light"
@@ -519,7 +519,7 @@ export default function SettingsPage() {
               <Sun className="h-4 w-4 text-amber-500" />
               <span>Light Mode</span>
             </button>
-            <button
+            <button type="button"
               onClick={() => setTheme("dark")}
               className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-medium transition-all ${
                 theme === "dark"
@@ -530,7 +530,7 @@ export default function SettingsPage() {
               <Moon className="h-4 w-4 text-indigo-400" />
               <span>Dark Mode</span>
             </button>
-            <button
+            <button type="button"
               onClick={() => setTheme("system")}
               className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-medium transition-all ${
                 theme === "system"

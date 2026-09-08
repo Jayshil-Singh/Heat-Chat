@@ -38,9 +38,13 @@ export function CreatePollDialog({
   const [allowVoteChange, setAllowVoteChange] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setQuestion("");
       setOptions(["", ""]);
       setIsMultipleChoice(false);
@@ -48,6 +52,8 @@ export function CreatePollDialog({
       setAllowVoteChange(true);
       setErrorMessage(null);
       setIsSubmitting(false);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
   }, [isOpen]);
 
@@ -117,12 +123,12 @@ export function CreatePollDialog({
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isSubmitting) {
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
+  }, [isOpen, isSubmitting]);
 
   if (!isOpen) return null;
 
@@ -158,7 +164,7 @@ export function CreatePollDialog({
               </p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             disabled={isSubmitting}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"

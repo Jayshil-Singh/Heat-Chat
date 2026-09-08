@@ -30,29 +30,36 @@ export function CreateGroupDialog({
   const [selectedFriendIds, setSelectedFriendIds] = React.useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Reset form when opened
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setGroupName("");
       setAvatarUrl("");
       setSearchQuery("");
       setSelectedFriendIds([]);
       setErrorMessage(null);
       setIsSubmitting(false);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
   }, [isOpen]);
 
   // Handle ESC key
   React.useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !isSubmitting) {
-        onClose();
+      if (e.key === "Escape" && !isSubmitting) {
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
+  }, [isOpen, isSubmitting]);
 
   const filteredFriends = React.useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -142,7 +149,7 @@ export function CreateGroupDialog({
               </p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             disabled={isSubmitting}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"

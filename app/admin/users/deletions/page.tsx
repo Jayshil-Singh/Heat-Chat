@@ -222,7 +222,7 @@ export default function AdminDeletionOperationsPage() {
           }`}
         >
           <span>{actionMessage.text}</span>
-          <button onClick={() => setActionMessage(null)} className="opacity-70 hover:opacity-100">
+          <button type="button" onClick={() => setActionMessage(null)} className="opacity-70 hover:opacity-100">
             ✕
           </button>
         </div>

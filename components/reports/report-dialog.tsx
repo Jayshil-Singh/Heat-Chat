@@ -47,13 +47,18 @@ export function ReportDialog({
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
+  const wasOpenRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setSelectedCategory("SPAM");
       setDescription("");
       setErrorMessage(null);
       setSuccessMessage(null);
       setIsSubmitting(false);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
   }, [isOpen]);
 

@@ -494,7 +494,7 @@ export default function AdminReportDetailPage() {
                     }
                   }}
                 />
-                <button
+                <button type="button"
                   onClick={handleAddNote}
                   disabled={isAddingNote || !newNote.trim()}
                   className="self-end rounded-xl bg-amber-500 p-2.5 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
@@ -526,7 +526,7 @@ export default function AdminReportDetailPage() {
 
             <div className="space-y-3">
               {STATUS_OPTIONS.map((opt) => (
-                <button
+                <button type="button"
                   key={opt.value}
                   onClick={() => setSelectedStatus(opt.value)}
                   className={`w-full rounded-2xl border px-4 py-2.5 text-left text-xs font-semibold transition-all ${

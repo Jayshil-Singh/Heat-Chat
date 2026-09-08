@@ -29,49 +29,84 @@ export function Dialog({
 }: DialogProps) {
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const previousActiveElement = React.useRef<HTMLElement | null>(null);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const wasOpenRef = React.useRef(false);
 
   // Focus management & body scroll locking
   React.useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    const isFirstOpen = !wasOpenRef.current;
+    wasOpenRef.current = true;
+
+    // Capture element that had focus before dialog opened
+    if (isFirstOpen && typeof document !== "undefined") {
       previousActiveElement.current = document.activeElement as HTMLElement | null;
+    }
 
-      // Lock body scroll safely
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+    // Lock body scroll safely
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-      // Focus the dialog container or first interactive element
-      const timer = setTimeout(() => {
-        if (dialogRef.current) {
-          const focusable = dialogRef.current.querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          );
-          if (focusable) {
-            focusable.focus();
-          } else {
-            dialogRef.current.focus();
-          }
+    // Initial focus routine: ONLY runs on initial transition from closed to open
+    let timer: NodeJS.Timeout | undefined;
+    if (isFirstOpen) {
+      timer = setTimeout(() => {
+        if (!dialogRef.current) return;
+
+        // If an element inside the dialog already has focus, NEVER steal it
+        if (
+          document.activeElement &&
+          dialogRef.current.contains(document.activeElement) &&
+          document.activeElement !== dialogRef.current
+        ) {
+          return;
+        }
+
+        // Prefer elements explicitly marked with autofocus
+        const autoFocusTarget = dialogRef.current.querySelector<HTMLElement>(
+          '[data-autofocus], [autofocus]'
+        );
+        if (autoFocusTarget && typeof autoFocusTarget.focus === "function") {
+          autoFocusTarget.focus();
+        } else {
+          // WCAG standard: focus the dialog container itself (tabIndex={-1})
+          // so focus is inside the dialog without popping keyboard or highlighting the X button
+          dialogRef.current.focus();
         }
       }, 50);
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onClose();
-        }
-      };
-
-      window.addEventListener("keydown", handleKeyDown);
-
-      return () => {
-        clearTimeout(timer);
-        document.body.style.overflow = originalOverflow;
-        window.removeEventListener("keydown", handleKeyDown);
-        if (previousActiveElement.current && typeof previousActiveElement.current.focus === "function") {
-          previousActiveElement.current.focus();
-        }
-      };
     }
-  }, [isOpen, onClose]);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+
+      // Restore focus to opener element safely
+      const prevEl = previousActiveElement.current;
+      if (prevEl && prevEl.isConnected && typeof prevEl.focus === "function") {
+        try {
+          prevEl.focus();
+        } catch {
+          // Ignore if previous element cannot receive focus
+        }
+      }
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

@@ -125,16 +125,19 @@ export function GroupInviteDialog({
     }
   };
 
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   React.useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isLoadingLinks && !isGenerating) {
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isLoadingLinks, isGenerating, onClose]);
+  }, [isOpen, isLoadingLinks, isGenerating]);
 
   const eligibleFriends = React.useMemo(() => {
     return friends.filter((f) => !existingMemberIds.includes(f.friendId));
@@ -176,7 +179,7 @@ export function GroupInviteDialog({
               </p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
             aria-label="Close dialog"

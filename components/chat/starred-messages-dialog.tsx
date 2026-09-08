@@ -28,31 +28,32 @@ export function StarredMessagesDialog({
   const [filterMode, setFilterMode] = React.useState<"current" | "all">("current");
   const dialogRef = React.useRef<HTMLDivElement>(null);
 
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Close on Escape key
   React.useEffect(() => {
+    if (!isOpen) return;
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
+      if (e.key === "Escape") {
+        onCloseRef.current();
       }
     }
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Click outside to close
   React.useEffect(() => {
+    if (!isOpen) return;
     function handleClickOutside(e: MouseEvent) {
       if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     }
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -106,7 +107,7 @@ export function StarredMessagesDialog({
         {/* Filter Toggle */}
         {activeConversationId && (
           <div className="flex border-b border-zinc-100 px-5 py-2.5 bg-zinc-50/50 dark:border-zinc-800/60 dark:bg-zinc-900/30 shrink-0 gap-2">
-            <button
+            <button type="button"
               onClick={() => setFilterMode("current")}
               className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
                 filterMode === "current"
@@ -116,7 +117,7 @@ export function StarredMessagesDialog({
             >
               This Conversation
             </button>
-            <button
+            <button type="button"
               onClick={() => setFilterMode("all")}
               className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
                 filterMode === "all"
@@ -200,7 +201,7 @@ export function StarredMessagesDialog({
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
+                    <button type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onUnstar(item.message.id);

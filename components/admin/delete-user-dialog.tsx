@@ -28,12 +28,18 @@ export function DeleteUserDialog({
 
   const targetIdentifier = userEmail || user.username || user.id;
   const expectedPhrase = `DELETE ${targetIdentifier}`;
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setConfirmationInput("");
       setReason("");
       setError(null);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
   }, [isOpen]);
 
@@ -41,12 +47,12 @@ export function DeleteUserDialog({
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isSubmitting) {
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
+  }, [isOpen, isSubmitting]);
 
   if (!isOpen) return null;
 
@@ -122,7 +128,7 @@ export function DeleteUserDialog({
               </p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             className="rounded-xl p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
             aria-label="Close dialog"

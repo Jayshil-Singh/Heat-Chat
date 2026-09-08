@@ -126,15 +126,18 @@ export function MediaGalleryDialog({
     fetchItems(category, nextCursor, false);
   };
 
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Keyboard close
   React.useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -171,7 +174,7 @@ export function MediaGalleryDialog({
         {/* Category tabs */}
         <div className="flex gap-1 px-4 py-2 border-b border-zinc-100 dark:border-zinc-800">
           {CATEGORIES.map(({ id, label, Icon }) => (
-            <button
+            <button type="button"
               key={id}
               onClick={() => setCategory(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-xl transition-colors ${
@@ -217,7 +220,7 @@ export function MediaGalleryDialog({
               {items.map((item) => {
                 const isVideo = item.messageType === "video";
                 return (
-                  <button
+                  <button type="button"
                     key={item.attachmentId}
                     onClick={() =>
                       setLightboxItem({
@@ -279,7 +282,7 @@ export function MediaGalleryDialog({
                       </span>
                     )}
                     {onJumpToMessage && (
-                      <button
+                      <button type="button"
                         onClick={() => onJumpToMessage(item.messageId)}
                         className="ml-1 text-zinc-400 hover:text-heat-500 transition-colors"
                         aria-label="Jump to message"
@@ -320,7 +323,7 @@ export function MediaGalleryDialog({
                     </p>
                   </div>
                   {onJumpToMessage && (
-                    <button
+                    <button type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         onJumpToMessage(item.messageId);

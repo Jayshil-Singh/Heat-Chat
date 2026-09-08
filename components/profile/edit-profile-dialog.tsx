@@ -93,20 +93,33 @@ export function EditProfileDialog({
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
 
-  // Sync state when dialog opens or profile changes
+  const wasOpenRef = React.useRef(false);
+  const prevProfileIdRef = React.useRef<string | null>(null);
+  const profileRef = React.useRef(profile);
+  profileRef.current = profile;
+  const profileId = profile?.id;
+
+  // Sync state only when dialog transitions to open or target profile id changes
   React.useEffect(() => {
-    if (isOpen) {
+    const isOpening = isOpen && !wasOpenRef.current;
+    const isNewProfile = !!profileId && profileId !== prevProfileIdRef.current;
+
+    if (isOpen && (isOpening || isNewProfile)) {
+      wasOpenRef.current = true;
+      prevProfileIdRef.current = profileId || null;
+      const p = profileRef.current;
+
       const initial = {
-        displayName: profile?.display_name || "",
-        username: profile?.username || "",
-        bio: profile?.bio || "",
-        statusEmoji: profile?.status_emoji || null,
-        statusMessage: profile?.status_message || "",
-        presenceStatus: ((profile?.presence_status as PresenceStatus) || "ONLINE"),
-        timezone: profile?.timezone || "UTC",
-        language: profile?.language || "en",
-        avatarUrl: profile?.avatar_url || null,
-        coverUrl: profile?.cover_url || null,
+        displayName: p?.display_name || "",
+        username: p?.username || "",
+        bio: p?.bio || "",
+        statusEmoji: p?.status_emoji || null,
+        statusMessage: p?.status_message || "",
+        presenceStatus: ((p?.presence_status as PresenceStatus) || "ONLINE"),
+        timezone: p?.timezone || "UTC",
+        language: p?.language || "en",
+        avatarUrl: p?.avatar_url || null,
+        coverUrl: p?.cover_url || null,
       };
 
       initialStateRef.current = initial;
@@ -125,8 +138,10 @@ export function EditProfileDialog({
       setUsernameStatus("idle");
       setSuccessMessage(null);
       setShowDiscardConfirm(false);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
-  }, [profile, isOpen]);
+  }, [isOpen, profileId]);
 
   // Compute dirty state
   const isDirty = React.useMemo(() => {

@@ -149,7 +149,7 @@ export function FriendsTab({
               <span>Profile</span>
             </Button>
 
-            <button
+            <button type="button"
               onClick={() => setSelectedFriendForRemoval(friend)}
               className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
               title="Remove friend"

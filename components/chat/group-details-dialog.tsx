@@ -88,32 +88,51 @@ export function GroupDetailsDialog({
   const isAdmin = currentRole === "admin" || isOwner;
   const isModerator = currentRole === "moderator" || isAdmin;
 
+  const wasOpenRef = React.useRef(false);
+  const prevConvIdRef = React.useRef<string | null>(null);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const conversationRef = React.useRef(conversation);
+  conversationRef.current = conversation;
+  const conversationId = conversation?.id;
+
   React.useEffect(() => {
-    if (isOpen) {
+    const isOpening = isOpen && !wasOpenRef.current;
+    const isNewConv = !!conversationId && conversationId !== prevConvIdRef.current;
+
+    if (isOpen && (isOpening || isNewConv)) {
+      wasOpenRef.current = true;
+      prevConvIdRef.current = conversationId || null;
+      const conv = conversationRef.current;
+
       setActiveTab("overview");
       setIsEditingOverview(false);
-      setEditedName(conversation.name || "");
-      setEditedDescription(conversation.description || "");
-      setEditedAvatar(conversation.avatar_url || "");
-      setEditedCover(conversation.cover_url || "");
-      setEditedPrivacy(conversation.privacy === "public" ? "public" : "private");
+      setEditedName(conv?.name || "");
+      setEditedDescription(conv?.description || "");
+      setEditedAvatar(conv?.avatar_url || "");
+      setEditedCover(conv?.cover_url || "");
+      setEditedPrivacy(conv?.privacy === "public" ? "public" : "private");
       setMemberSearchQuery("");
       setIsAddMemberOpen(false);
       setSelectedFriendIds([]);
       setErrorMessage(null);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
-  }, [isOpen, conversation]);
+  }, [isOpen, conversationId]);
 
   // Handle ESC
   React.useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !isActionLoading) {
-        onClose();
+      if (e.key === "Escape" && !isActionLoading) {
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isActionLoading, onClose]);
+  }, [isOpen, isActionLoading]);
 
   // Friends who are not already in this group
   const eligibleFriends = React.useMemo(() => {
@@ -287,7 +306,7 @@ export function GroupDetailsDialog({
                 </div>
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
               aria-label="Close dialog"
@@ -305,7 +324,7 @@ export function GroupDetailsDialog({
               { id: "invites", label: "Invites" },
               { id: "danger", label: "Danger Zone" },
             ].map((tab) => (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={`py-3 px-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${

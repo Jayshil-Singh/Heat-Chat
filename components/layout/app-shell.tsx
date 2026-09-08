@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </span>
               </Link>
               <div className="flex items-center gap-2">
-                <button
+                <button type="button"
                   onClick={() => setIsSearchOpen(true)}
                   className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Search Heat Chat"

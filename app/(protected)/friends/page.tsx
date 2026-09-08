@@ -59,7 +59,7 @@ export default function FriendsPage() {
 
       {/* Tabs Switcher */}
       <div className="flex items-center gap-1 rounded-2xl bg-zinc-100 p-1.5 dark:bg-zinc-900/80 border border-zinc-200/80 dark:border-zinc-800">
-        <button
+        <button type="button"
           onClick={() => setActiveTab("friends")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 ${
             activeTab === "friends"
@@ -76,7 +76,7 @@ export default function FriendsPage() {
           )}
         </button>
 
-        <button
+        <button type="button"
           onClick={() => setActiveTab("requests")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 relative ${
             activeTab === "requests"
@@ -93,7 +93,7 @@ export default function FriendsPage() {
           )}
         </button>
 
-        <button
+        <button type="button"
           onClick={() => setActiveTab("find")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 ${
             activeTab === "find"

@@ -83,12 +83,18 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     return items;
   }, [matchingConversations, matchingFriends, globalResults]);
 
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Autofocus when opened
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setTimeout(() => inputRef.current?.focus(), 50);
       setSelectedIndex(0);
-    } else {
+    } else if (!isOpen && wasOpenRef.current) {
+      wasOpenRef.current = false;
       clearGlobalSearch();
     }
   }, [isOpen, clearGlobalSearch]);
@@ -118,7 +124,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       if (!isOpen) return;
 
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) =>
@@ -171,7 +177,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
           {isGlobalSearching && (
             <Loader2 className="h-4 w-4 animate-spin text-heat-500 mr-2" />
           )}
-          <button
+          <button type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
             aria-label="Close command palette"

@@ -35,13 +35,19 @@ export function ImageViewer({
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const modalRef = React.useRef<HTMLDivElement>(null);
 
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Store active element when opening to restore focus on close
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       triggerRef.current = document.activeElement as HTMLElement;
       setCurrentIndex(Math.max(0, Math.min(initialIndex, attachments.length - 1)));
       setScale(1);
-    } else {
+    } else if (!isOpen && wasOpenRef.current) {
+      wasOpenRef.current = false;
       setScale(1);
       if (triggerRef.current) {
         triggerRef.current.focus();
@@ -80,7 +86,7 @@ export function ImageViewer({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         handlePrev();
@@ -101,7 +107,7 @@ export function ImageViewer({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, handlePrev, handleNext, onClose]);
+  }, [isOpen, handlePrev, handleNext]);
 
   // Secure Download Handler using authorized signed URL
   const handleDownload = async () => {
@@ -247,7 +253,7 @@ export function ImageViewer({
       {attachments.length > 1 && (
         <>
           {hasPrev && (
-            <button
+            <button type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handlePrev();
@@ -261,7 +267,7 @@ export function ImageViewer({
           )}
 
           {hasNext && (
-            <button
+            <button type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handleNext();

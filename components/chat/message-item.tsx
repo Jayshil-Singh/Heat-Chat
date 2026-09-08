@@ -404,7 +404,7 @@ export function MessageItem({
 
       {/* Failed message retry prompt */}
       {isCurrentUser && isFailed && (
-        <button
+        <button type="button"
           onClick={() => onRetry && onRetry(message)}
           className="mt-1 flex items-center gap-1 px-4 text-[11px] font-medium text-red-600 hover:text-red-700 dark:text-red-400"
         >

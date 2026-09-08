@@ -124,7 +124,7 @@ export function ChatHeader({
       <header className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white/95 px-2.5 sm:px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 shrink-0 select-none w-full min-w-0 max-w-full gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {/* Mobile Back Button */}
-          <button
+          <button type="button"
             onClick={handleBackClick}
             className="md:hidden rounded-lg p-1.5 sm:p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
             aria-label="Back to conversations list"

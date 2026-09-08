@@ -380,7 +380,7 @@ export const MessageFeed = React.forwardRef<
 
       {/* Floating scroll-to-bottom pill */}
       {showScrollBottom && (
-        <button
+        <button type="button"
           onClick={scrollToBottom}
           className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-full bg-heat-500 px-3.5 py-2 text-xs font-semibold text-white shadow-lg transition-transform hover:bg-heat-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 animate-in fade-in slide-in-from-bottom-2"
           aria-label="Scroll to newest message"

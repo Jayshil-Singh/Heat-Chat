@@ -54,7 +54,7 @@ export function DropdownMenu({
           aria-orientation="vertical"
         >
           {items.map((item, index) => (
-            <button
+            <button type="button"
               key={index}
               disabled={item.disabled}
               onClick={() => {

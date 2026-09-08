@@ -29,26 +29,31 @@ export function InChatSearch({
   onClose,
 }: InChatSearchProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const wasOpenRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Autofocus when opened
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setTimeout(() => inputRef.current?.focus(), 50);
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
     }
   }, [isOpen]);
 
   // Keyboard shortcut: Escape to close
   React.useEffect(() => {
+    if (!isOpen) return;
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
+      if (e.key === "Escape") {
+        onCloseRef.current();
       }
     }
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -78,7 +83,7 @@ export function InChatSearch({
           className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-9 pr-8 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-heat-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-heat-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:focus:border-heat-500"
         />
         {query && (
-          <button
+          <button type="button"
             onClick={() => onSearch("")}
             className="absolute right-2.5 rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
             aria-label="Clear search query"
