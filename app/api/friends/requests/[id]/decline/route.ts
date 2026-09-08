@@ -18,7 +18,7 @@ export async function POST(
     }
 
     const { data, error } = await supabase.rpc("decline_friend_request", {
-      p_friendship_id: requestId,
+      request_id: requestId,
     });
 
     if (error) {

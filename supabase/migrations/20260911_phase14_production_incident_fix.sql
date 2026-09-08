@@ -310,6 +310,9 @@ grant execute on function public.discover_people(text, integer, integer) to auth
 
 -- 6. SEND FRIEND REQUEST RPC
 -- ------------------------------------------------------------------------------
+-- DROP required: production DB has send_friend_request(p_recipient_id uuid) from Phase 1.
+-- PostgreSQL 42P13 forbids renaming parameters via CREATE OR REPLACE.
+drop function if exists public.send_friend_request(uuid);
 create or replace function public.send_friend_request(target_user_id uuid)
 returns jsonb
 language plpgsql
@@ -497,6 +500,8 @@ grant execute on function public.send_friend_request(uuid) to authenticated;
 
 -- 7. ACCEPT FRIEND REQUEST RPC
 -- ------------------------------------------------------------------------------
+-- DROP required: production DB has accept_friend_request(p_friendship_id uuid) from Phase 1.
+drop function if exists public.accept_friend_request(uuid);
 create or replace function public.accept_friend_request(request_id uuid)
 returns jsonb
 language plpgsql
@@ -655,6 +660,8 @@ revoke all on function public.reject_friend_request(uuid) from public;
 grant execute on function public.reject_friend_request(uuid) to authenticated;
 
 -- Decline alias for compatibility
+-- DROP required: production DB has decline_friend_request(p_friendship_id uuid) from Phase 1.
+drop function if exists public.decline_friend_request(uuid);
 create or replace function public.decline_friend_request(request_id uuid)
 returns jsonb
 language plpgsql
@@ -671,6 +678,8 @@ grant execute on function public.decline_friend_request(uuid) to authenticated;
 
 -- 9. CANCEL FRIEND REQUEST RPC
 -- ------------------------------------------------------------------------------
+-- DROP required: production DB has cancel_friend_request(p_friendship_id uuid) from Phase 1.
+drop function if exists public.cancel_friend_request(uuid);
 create or replace function public.cancel_friend_request(request_id uuid)
 returns jsonb
 language plpgsql
