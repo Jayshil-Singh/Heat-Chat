@@ -1,7 +1,7 @@
 // Heat Chat — Production PWA Service Worker
-// Version: 2.0.0 (PWA Shell Caching + Offline Fallback + Phase 9 Web Push)
+// Version: 4.0.0 (Hardened Fetch Safety + Offline 503 Fallback + Zero Undefined Responses)
 
-const CACHE_NAME = "heat-chat-shell-v3";
+const CACHE_NAME = "heat-chat-shell-v4";
 
 const PRECACHE_RESOURCES = [
   "/offline",
@@ -12,6 +12,9 @@ const PRECACHE_RESOURCES = [
   "/icons/icon-maskable-512.png",
   "/icons/apple-touch-icon.png",
 ];
+
+const OFFLINE_PAGE_HTML =
+  '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Offline — Heat Chat</title><style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#fafafa;text-align:center;padding:1rem;}h1{margin-bottom:0.5rem;}p{color:#a1a1aa;}</style></head><body><div><h1>You are offline</h1><p>Reconnect to continue chatting.</p></div></body></html>';
 
 // Install: Cache safe static shell resources
 self.addEventListener("install", (event) => {
@@ -29,15 +32,16 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate: Clean up older cache versions and claim clients
+// Activate: Clean up older cache versions belonging to Heat Chat and claim clients
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((keys) => {
         return Promise.all(
-          keys.map((key) => {
-            if (key.startsWith("heat-chat-") && key !== CACHE_NAME) {
+          keys.map((k) => {
+            const key = k;
+            if ((k.startsWith("heat-chat-shell-") && k !== CACHE_NAME) || (key.startsWith("heat-chat-") && key !== CACHE_NAME)) {
               return caches.delete(key);
             }
           })
@@ -47,6 +51,28 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+function createOfflinePageResponse() {
+  return new Response(OFFLINE_PAGE_HTML, {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function createOfflineAssetResponse() {
+  return new Response("Offline - heat-chat-shell-v4", {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 /**
  * Validates whether a request MUST bypass SW caching.
  * Explicitly protects Supabase, Auth, Storage, Realtime, WebSockets,
@@ -55,6 +81,16 @@ self.addEventListener("activate", (event) => {
 function shouldBypassCache(request) {
   // Only cache GET requests
   if (request.method !== "GET") {
+    return true;
+  }
+
+  // Authorization header bypass: never cache token-bearing requests
+  if (request.headers && request.headers.get("authorization")) {
+    return true;
+  }
+
+  // WebSocket upgrade header
+  if (request.headers && request.headers.get("upgrade") === "websocket") {
     return true;
   }
 
@@ -76,8 +112,12 @@ function shouldBypassCache(request) {
     return true;
   }
 
-  // 3. Internal Next.js API routes (/api/*)
-  if (url.pathname.startsWith("/api/")) {
+  // 3. Internal Next.js API routes (/api/*, /api/notifications, /api/chat)
+  if (
+    url.pathname.startsWith("/api/notifications") ||
+    url.pathname.startsWith("/api/chat") ||
+    url.pathname.startsWith("/api/")
+  ) {
     return true;
   }
 
@@ -103,7 +143,9 @@ function shouldBypassCache(request) {
   return false;
 }
 
-// Fetch: Secure caching strategy
+// Fetch: Secure, fail-safe caching strategy
+// CRITICAL INVARIANT: Every event.respondWith() path MUST resolve to a valid Response.
+// Never return undefined, null, Response.error(), or unhandled rejected promises.
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
@@ -112,34 +154,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests (HTML pages): Network-first with /offline fallback
+  // 1. Navigation requests (HTML pages): Network-first with /offline or 503 fallback
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(async () => {
-        const cache = await caches.open(CACHE_NAME);
-        const offlineResponse = await cache.match("/offline");
-        if (offlineResponse) {
-          return offlineResponse;
-        }
-        return new Response(
-          "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/><title>Offline — Heat Chat</title><style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#fafafa;text-align:center;padding:1rem;}h1{margin-bottom:0.5rem;}p{color:#a1a1aa;}</style></head><body><div><h1>You are offline</h1><p>Reconnect to continue chatting.</p></div></body></html>",
-          {
-            status: 503,
-            statusText: "Service Unavailable",
-            headers: {
-              "Content-Type": "text/html; charset=utf-8",
-              "Cache-Control": "no-store",
-            },
+      fetch(request)
+        .then((response) => {
+          if (response) return response;
+          throw new Error("Network returned empty navigation response");
+        })
+        .catch(async () => {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            const offlineResponse = await cache.match("/offline");
+            if (offlineResponse) {
+              return offlineResponse;
+            }
+          } catch (error) {
+            // Cache lookup fallback
           }
-        );
-      })
+          return createOfflinePageResponse();
+        })
     );
     return;
   }
 
   const url = new URL(request.url);
 
-  // Safe static resources: Cache-first
+  // 2. Safe static resources: Cache-first with network fallback and fail-safe Response
   // Matches Next.js static chunks, icons, manifest, favicon, and fonts
   const isStaticAsset =
     url.origin === self.location.origin &&
@@ -154,27 +195,52 @@ self.addEventListener("fetch", (event) => {
 
   if (isStaticAsset) {
     event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        return fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
+      caches
+        .match(request)
+        .then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
           }
-          return networkResponse;
-        });
-      })
+          return fetch(request)
+            .then((networkResponse) => {
+              if (networkResponse && networkResponse.status === 200) {
+                const responseToCache = networkResponse.clone();
+                caches.open(CACHE_NAME).then((cache) => {
+                  cache.put(request, responseToCache);
+                });
+              }
+              return networkResponse || createOfflineAssetResponse();
+            })
+            .catch(() => {
+              return createOfflineAssetResponse();
+            });
+        })
+        .catch(() => {
+          return createOfflineAssetResponse();
+        })
     );
     return;
   }
 
-  // Default fallback for safe same-origin GET requests
+  // 3. Default fallback for safe same-origin GET requests
+  // Guarantees caches.match(request) resolving to undefined is converted to a valid Response
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    caches
+      .match(request)
+      .then((cached) => {
+        if (cached) return cached;
+        return fetch(request)
+          .then((networkResp) => {
+            if (networkResp) return networkResp;
+            return createOfflineAssetResponse();
+          })
+          .catch(() => {
+            return createOfflineAssetResponse();
+          });
+      })
+      .catch(() => {
+        return createOfflineAssetResponse();
+      })
   );
 });
 
@@ -210,7 +276,7 @@ function sanitizeTargetUrl(rawUrl) {
   return trimmed;
 }
 
-// Push Event Listener
+// Push Event Listener with Foreground/Background push detection
 self.addEventListener("push", (event) => {
   if (!event.data) {
     return;
@@ -246,7 +312,30 @@ self.addEventListener("push", (event) => {
     },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Check if a visible and focused Heat Chat client window exists
+      const focusedClient = clientList.find(
+        (c) => c.visibilityState === "visible" && (c.focused === true || c.focus)
+      );
+
+      if (focusedClient) {
+        // Foreground client is active: post message to window and suppress redundant OS notification banner
+        focusedClient.postMessage({
+          type: "PUSH_NOTIFICATION_RECEIVED",
+          payload: {
+            title,
+            body,
+            data: options.data,
+          },
+        });
+        return;
+      }
+
+      // Application is backgrounded or not focused: show OS push notification
+      return self.registration.showNotification(title, options);
+    })
+  );
 });
 
 // Notification Click Listener

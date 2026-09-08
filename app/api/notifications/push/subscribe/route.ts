@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { endpoint, p256dh, auth, device_type } = body;
+  const { endpoint, p256dh, auth, device_type, device_id, installation_id } = body;
 
   if (!endpoint || !p256dh || !auth) {
     return NextResponse.json(
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     canonicalEndpoint = canonicalizePushEndpoint(endpoint);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    return NextResponse.json({ error: err.message || "Invalid push endpoint" }, { status: 400 });
   }
 
   const userAgent = req.headers.get("user-agent") || null;
@@ -41,10 +41,12 @@ export async function POST(req: NextRequest) {
     p_auth: auth,
     p_user_agent: userAgent,
     p_device_type: deviceType,
+    p_device_id: device_id || null,
+    p_installation_id: installation_id || null,
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to register push subscription" }, { status: 500 });
   }
 
   return NextResponse.json({

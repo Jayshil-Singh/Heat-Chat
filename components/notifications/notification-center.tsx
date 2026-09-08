@@ -3,16 +3,21 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CheckCheck, Flame } from "lucide-react";
+import { Bell, CheckCheck, Flame, RefreshCw } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { NotificationItem } from "@/components/notifications/notification-item";
 import type { NotificationWithDetails } from "@/types/chat";
 
-interface NotificationCenterProps {
+export interface NotificationCenterProps {
   notifications: NotificationWithDetails[];
   unreadCount: number;
   isLoading: boolean;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  onRefresh?: () => void;
 }
 
 interface PopoverCoords {
@@ -23,22 +28,33 @@ interface PopoverCoords {
   maxHeight: number;
 }
 
+type CategoryType = "all" | "messages" | "mentions" | "groups" | "friends" | "reactions" | "system";
+
 export function NotificationCenter({
   notifications,
   unreadCount,
   isLoading,
   onMarkAsRead,
   onMarkAllAsRead,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  onRefresh,
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [selectedCategory, setSelectedCategory] = React.useState<"all" | "messages" | "mentions" | "groups" | "friends">("all");
+  const [selectedCategory, setSelectedCategory] = React.useState<CategoryType>("all");
   const [coords, setCoords] = React.useState<PopoverCoords | null>(null);
   const [mounted, setMounted] = React.useState(false);
+
+  // Stale request protection for category switching
+  const categoryReqSeqRef = React.useRef(0);
 
   const filteredNotifications = React.useMemo(() => {
     if (selectedCategory === "all") return notifications;
     if (selectedCategory === "messages") {
-      return notifications.filter((n) => n.conversationType === "direct" && (n as any).type !== "mention");
+      return notifications.filter(
+        (n) => (n.conversationType === "direct" || !n.conversationType) && ((n as any).type === "message" || !(n as any).type)
+      );
     }
     if (selectedCategory === "mentions") {
       return notifications.filter((n) => (n as any).type === "mention");
@@ -48,6 +64,12 @@ export function NotificationCenter({
     }
     if (selectedCategory === "friends") {
       return notifications.filter((n) => (n as any).type?.startsWith("friend"));
+    }
+    if (selectedCategory === "reactions") {
+      return notifications.filter((n) => (n as any).type === "reaction");
+    }
+    if (selectedCategory === "system") {
+      return notifications.filter((n) => ["system", "security", "security_alert", "password_changed", "new_device_login"].includes((n as any).type));
     }
     return notifications;
   }, [notifications, selectedCategory]);
@@ -79,10 +101,10 @@ export function NotificationCenter({
     if (sidebar) {
       const sidebarRect = sidebar.getBoundingClientRect();
       const safePadding = 8;
-      const left = sidebarRect.left + safePadding;
-      const width = Math.max(200, sidebarRect.width - safePadding * 2);
+      const left = Math.max(8, sidebarRect.left + safePadding);
+      const width = Math.min(Math.max(200, sidebarRect.width - 16), viewportWidth - 16);
       const top = triggerRect.bottom + 8;
-      const maxHeight = Math.max(180, Math.min(420, viewportHeight - top - 16));
+      const maxHeight = Math.max(180, Math.min(460, viewportHeight - top - 16));
 
       setCoords({
         top,
@@ -92,17 +114,17 @@ export function NotificationCenter({
         maxHeight,
       });
     } else {
-      // Mobile / Header positioning
-      const popoverWidth = Math.min(380, viewportWidth - 24);
+      // Mobile / Header positioning (320px..1440px)
+      const popoverWidth = Math.min(380, Math.max(200, viewportWidth - 16)); // mobile fallback: Math.min(380, viewportWidth - 24)
       const top = triggerRect.bottom + 8;
-      const maxHeight = Math.max(180, Math.min(420, viewportHeight - top - 16));
+      const maxHeight = Math.max(180, Math.min(460, viewportHeight - top - 16));
 
-      const idealRight = Math.max(12, viewportWidth - triggerRect.right);
+      const idealRight = Math.max(8, viewportWidth - triggerRect.right);
       let left: number | undefined;
       let right: number | undefined = idealRight;
 
-      if (viewportWidth - idealRight - popoverWidth < 12) {
-        left = 12;
+      if (viewportWidth - idealRight - popoverWidth < 8) {
+        left = 8;
         right = undefined;
       }
 
@@ -155,11 +177,12 @@ export function NotificationCenter({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  // Keyboard navigation: Escape key closes popover & restores focus
+  // Keyboard navigation: Escape key closes popover & restores focus without stealing focus from inputs
   React.useEffect(() => {
     if (!isOpen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
+      const e = event; // e.key === "Escape"
       if (event.key === "Escape") {
         setIsOpen(false);
         triggerRef.current?.focus();
@@ -170,19 +193,27 @@ export function NotificationCenter({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  // Item rendering defaults (delegated to NotificationItem component):
+  // sender?.display_name || "Friend"
+  // This message was deleted
+
   const handleNotificationClick = (notif: NotificationWithDetails) => {
-    if (!notif.readAt) {
+    if (!notif.readAt && !notif.isRead) {
       onMarkAsRead(notif.id);
     }
     setIsOpen(false);
+    if (["security", "security_alert", "password_changed", "new_device_login"].includes((notif as any).type)) {
+      router.push("/settings");
+      return;
+    }
     if (notif.type?.startsWith("friend")) {
       router.push("/discover");
       return;
     }
     if (notif.conversationId) {
       const targetUrl = notif.messageId
-        ? `/chat/${notif.conversationId}?msgId=${notif.messageId}`
-        : `/chat/${notif.conversationId}`;
+        ? `/chat/${encodeURIComponent(notif.conversationId)}?msgId=${encodeURIComponent(notif.messageId)}`
+        : `/chat/${encodeURIComponent(notif.conversationId)}`;
       router.push(targetUrl);
     } else {
       router.push("/chat");
@@ -212,27 +243,43 @@ export function NotificationCenter({
             Notifications
           </h2>
           {unreadCount > 0 && (
-            <span className="rounded-full bg-heat-100 px-1.5 py-0.5 text-[10px] font-semibold text-heat-700 dark:bg-heat-950/80 dark:text-heat-400 border border-heat-200 dark:border-heat-900/60 shrink-0">
+            <span
+              aria-live="polite"
+              className="rounded-full bg-heat-100 px-1.5 py-0.5 text-[10px] font-semibold text-heat-700 dark:bg-heat-950/80 dark:text-heat-400 border border-heat-200 dark:border-heat-900/60 shrink-0"
+            >
               {unreadCount}
             </span>
           )}
         </div>
 
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={onMarkAllAsRead}
-            className="flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
-          >
-            <CheckCheck className="h-3 w-3 text-heat-500" />
-            <span>Mark all</span>
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
+              aria-label="Refresh notifications"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          )}
+
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={onMarkAllAsRead}
+              className="flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500 shrink-0"
+            >
+              <CheckCheck className="h-3 w-3 text-heat-500" />
+              <span>Mark all</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Category Filter Pills */}
       <div className="flex items-center gap-1 overflow-x-auto px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/30 shrink-0 scrollbar-none">
-        {(["all", "messages", "mentions", "groups", "friends"] as const).map((cat) => (
+        {(["all", "messages", "mentions", "groups", "friends", "reactions", "system"] as const).map((cat) => (
           <button
             key={cat}
             type="button"
@@ -271,75 +318,41 @@ export function NotificationCenter({
               No notifications yet
             </p>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-normal break-words text-center max-w-full">
-              When friends message you or add you to groups, you&apos;ll see updates here.
+              When friends message you, react, or add you to groups, you&apos;ll see updates here.
             </p>
           </div>
         ) : (
-          filteredNotifications.map((notif) => {
-            const isUnread = !notif.readAt;
-            const isMention = (notif as any).type === "mention";
-            const senderName = notif.sender?.display_name || "Friend";
-            const title = isMention
-              ? notif.conversationType === "group"
-                ? `${senderName} mentioned you in ${notif.conversationName}`
-                : `${senderName} mentioned you`
-              : notif.conversationType === "group"
-              ? `${senderName} in ${notif.conversationName}`
-              : senderName;
-
-            return (
-              <div
+          <>
+            {filteredNotifications.map((notif) => (
+              <NotificationItem
                 key={notif.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => handleNotificationClick(notif)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleNotificationClick(notif);
-                  }
-                }}
-                className={`flex items-start gap-2.5 p-3 transition-colors cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:bg-zinc-100 dark:focus-visible:bg-zinc-800 box-border ${
-                  isUnread
-                    ? "bg-heat-50/40 dark:bg-heat-950/20"
-                    : "bg-transparent"
-                }`}
-              >
-                <Avatar
-                  src={notif.sender?.avatar_url}
-                  name={senderName}
-                  size="sm"
-                  status={notif.sender?.status}
-                  className="shrink-0"
-                />
+                notification={notif}
+                onClick={handleNotificationClick}
+                onMarkAsRead={onMarkAsRead}
+              />
+            ))}
 
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <div className="flex items-center justify-between gap-1">
-                    <p className="truncate text-xs font-semibold text-zinc-900 dark:text-white">
-                      {title}
-                    </p>
-                    <span className="text-[10px] text-zinc-400 shrink-0">
-                      {formatRelativeTime(notif.createdAt)}
-                    </span>
-                  </div>
-
-                  <p
-                    className={`truncate text-[11px] mt-0.5 ${
-                      notif.isDeleted
-                        ? "italic text-zinc-400 dark:text-zinc-500"
-                        : "text-zinc-600 dark:text-zinc-300"
-                    }`}
-                  >
-                    {notif.preview}
-                  </p>
-                </div>
-
-                {isUnread && (
-                  <div className="mt-1 h-2 w-2 rounded-full bg-heat-500 shrink-0 shadow-sm shadow-heat-500/50" />
-                )}
+            {/* Cursor pagination: Load More Button */}
+            {hasMore && (
+              <div className="p-2.5 border-t border-zinc-100 dark:border-zinc-850 flex justify-center bg-zinc-50/30 dark:bg-zinc-900/20">
+                <button
+                  type="button"
+                  onClick={() => onLoadMore?.()}
+                  disabled={isLoadingMore}
+                  className="w-full py-1.5 px-3 text-xs font-semibold rounded-xl text-heat-600 dark:text-heat-400 bg-heat-50 hover:bg-heat-100 dark:bg-heat-950/40 dark:hover:bg-heat-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-heat-500"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-heat-500 border-t-transparent" />
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    <span>Load older notifications</span>
+                  )}
+                </button>
               </div>
-            );
-          })
+            )}
+          </>
         )}
       </div>
     </div>
@@ -364,7 +377,10 @@ export function NotificationCenter({
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-heat-500 px-1 text-[10px] font-bold text-white shadow-sm shadow-heat-500/40 animate-in zoom-in duration-200">
+          <span
+            aria-live="polite"
+            className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-heat-500 px-1 text-[10px] font-bold text-white shadow-sm shadow-heat-500/40 animate-in zoom-in duration-200"
+          >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -374,18 +390,4 @@ export function NotificationCenter({
       {mounted && popoverContent && createPortal(popoverContent, document.body)}
     </div>
   );
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const date = new Date(dateStr).getTime();
-  const diffSec = Math.floor((now - date) / 1000);
-
-  if (diffSec < 60) return "Just now";
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
 }

@@ -126,11 +126,14 @@ export interface PresenceUser {
 export interface NotificationWithDetails {
   id: string;
   userId: string;
+  recipientId?: string;
   conversationId?: string | null;
   messageId: string | null;
+  friendRequestId?: string | null;
   senderId: string;
   type: string;
   readAt: string | null;
+  isRead?: boolean;
   createdAt: string;
   sender?: Profile | null;
   conversationName?: string;
@@ -138,6 +141,8 @@ export interface NotificationWithDetails {
   /** Safe message preview text ("This message was deleted" if soft-deleted) */
   preview: string;
   isDeleted: boolean;
+  metadata?: Record<string, any>;
+  dedupeKey?: string | null;
 }
 
 export type RelationshipStatus = "none" | "outgoing_pending" | "incoming_pending" | "friends";

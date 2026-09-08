@@ -11,6 +11,9 @@ interface NotificationContextValue {
   notifications: NotificationWithDetails[];
   unreadCount: number;
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
   toasts: NotificationWithDetails[];
   preferences: NotificationPreference;
   activeConversationId: string | null;
@@ -33,6 +36,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     notifications,
     unreadCount,
     isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
     toasts,
     dismissToast,
     markAsRead,
@@ -52,6 +58,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       notifications,
       unreadCount,
       isLoading,
+      isLoadingMore,
+      hasMore,
+      loadMore,
       toasts,
       preferences,
       activeConversationId: activeConvId,
@@ -68,6 +77,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       notifications,
       unreadCount,
       isLoading,
+      isLoadingMore,
+      hasMore,
+      loadMore,
       toasts,
       preferences,
       activeConvId,

@@ -29,8 +29,12 @@ function SidebarNotificationCenter() {
     notifications,
     unreadCount,
     isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
     markAsRead,
     markAllAsRead,
+    refreshNotifications,
   } = useNotificationContext();
 
   return (
@@ -40,6 +44,10 @@ function SidebarNotificationCenter() {
       isLoading={isLoading}
       onMarkAsRead={markAsRead}
       onMarkAllAsRead={markAllAsRead}
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onLoadMore={loadMore}
+      onRefresh={refreshNotifications}
     />
   );
 }

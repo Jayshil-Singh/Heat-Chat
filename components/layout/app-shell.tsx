@@ -19,8 +19,12 @@ function MobileNotificationCenter() {
     notifications,
     unreadCount,
     isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
     markAsRead,
     markAllAsRead,
+    refreshNotifications,
   } = useNotificationContext();
 
   return (
@@ -30,6 +34,10 @@ function MobileNotificationCenter() {
       isLoading={isLoading}
       onMarkAsRead={markAsRead}
       onMarkAllAsRead={markAllAsRead}
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onLoadMore={loadMore}
+      onRefresh={refreshNotifications}
     />
   );
 }

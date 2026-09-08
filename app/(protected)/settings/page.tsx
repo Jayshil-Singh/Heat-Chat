@@ -52,6 +52,7 @@ export default function SettingsPage() {
     isSupported,
     isPushSupported,
     isPushSubscribed,
+    subscriptionStatus,
     isPushLoading,
     requestPermission,
     subscribeToPush,
@@ -199,36 +200,60 @@ export default function SettingsPage() {
             </div>
 
             {/* 2. Web Push PWA Notifications */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="h-3.5 w-3.5 text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 w-full min-w-0 max-w-full">
+              <div className="space-y-1 min-w-0 max-w-full flex-1">
+                <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+                  <Smartphone className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-white break-words min-w-0">
                     Web Push (PWA & Background Alerts)
                   </span>
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                      isPushSubscribed
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border shrink-0 text-center ${
+                      subscriptionStatus === "checking"
+                        ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900"
+                        : subscriptionStatus === "subscribed" || isPushSubscribed
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
+                        : subscriptionStatus === "recovering"
+                        ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
+                        : subscriptionStatus === "expired" || subscriptionStatus === "subscription_expired"
+                        ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900"
+                        : subscriptionStatus === "invalid" || subscriptionStatus === "subscription_invalid"
+                        ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
+                        : subscriptionStatus === "permission-denied" || permission === "denied"
+                        ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
+                        : !isPushSupported || subscriptionStatus === "unsupported"
+                        ? "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                         : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                     }`}
                   >
-                    {isPushSubscribed ? (
+                    {subscriptionStatus === "checking" ? (
+                      "Checking…"
+                    ) : subscriptionStatus === "subscribed" || isPushSubscribed ? (
                       <>
-                        <CheckCircle2 className="h-2.5 w-2.5" />
-                        Subscribed on this device
+                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                        <span>Subscribed on this device</span>
                       </>
+                    ) : subscriptionStatus === "recovering" ? (
+                      "Recovering…"
+                    ) : subscriptionStatus === "expired" || subscriptionStatus === "subscription_expired" ? (
+                      "Subscription expired"
+                    ) : subscriptionStatus === "invalid" || subscriptionStatus === "subscription_invalid" ? (
+                      "Subscription invalid"
+                    ) : subscriptionStatus === "permission-denied" || permission === "denied" ? (
+                      "Permission denied"
+                    ) : !isPushSupported || subscriptionStatus === "unsupported" ? (
+                      "Unsupported"
                     ) : (
                       "Not Registered"
                     )}
                   </span>
                 </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 break-words min-w-0">
                   Receive background push notifications even when Heat Chat is closed
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 w-full sm:w-auto pt-1 sm:pt-0">
                 {isPushSubscribed && (
                   <Button
                     type="button"
@@ -236,9 +261,10 @@ export default function SettingsPage() {
                     size="sm"
                     onClick={handleSendTestPush}
                     disabled={isSendingTestPush}
-                    className="h-8 text-xs gap-1.5"
+                    className="h-8 text-xs gap-1.5 flex-1 sm:flex-none min-w-[90px]"
+                    aria-label="Send test push notification"
                   >
-                    <Send className="h-3 w-3 text-heat-500" />
+                    <Send className="h-3 w-3 text-heat-500 shrink-0" />
                     <span>{isSendingTestPush ? "Sending..." : "Test Push"}</span>
                   </Button>
                 )}
@@ -248,7 +274,8 @@ export default function SettingsPage() {
                   size="sm"
                   onClick={handleToggleWebPush}
                   disabled={isPushLoading || !isPushSupported}
-                  className="h-8 text-xs shrink-0"
+                  className="h-8 text-xs flex-1 sm:flex-none shrink-0"
+                  aria-label={isPushSubscribed ? "Unsubscribe this device" : "Subscribe this device"}
                 >
                   {isPushLoading
                     ? "Updating..."
@@ -264,6 +291,139 @@ export default function SettingsPage() {
                 {testPushFeedback}
               </div>
             )}
+
+            {/* Granular Notification Channels */}
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 space-y-3">
+              <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                Notification Categories
+              </h3>
+
+              {/* Messages */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-messages" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Messages
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Direct 1-on-1 chats</p>
+                </div>
+                <input
+                  id="toggle-notif-messages"
+                  type="checkbox"
+                  checked={preferences.messages_notify ?? true}
+                  onChange={(e) => updatePreferences({ messages_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Mentions */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-mentions" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Mentions
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">When someone mentions @you</p>
+                </div>
+                <input
+                  id="toggle-notif-mentions"
+                  type="checkbox"
+                  checked={preferences.mentions_notify ?? true}
+                  onChange={(e) => updatePreferences({ mentions_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Replies */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-replies" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Replies
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Direct replies to your messages</p>
+                </div>
+                <input
+                  id="toggle-notif-replies"
+                  type="checkbox"
+                  checked={preferences.replies_notify ?? true}
+                  onChange={(e) => updatePreferences({ replies_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Group Activity */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-groups" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Group Activity
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">New messages and members in your groups</p>
+                </div>
+                <input
+                  id="toggle-notif-groups"
+                  type="checkbox"
+                  checked={preferences.group_activity_notify ?? true}
+                  onChange={(e) => updatePreferences({ group_activity_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Friends */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-friends" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Friends
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Incoming friend requests and accepted connections</p>
+                </div>
+                <input
+                  id="toggle-notif-friends"
+                  type="checkbox"
+                  checked={preferences.friend_activity_notify ?? true}
+                  onChange={(e) => updatePreferences({ friend_activity_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Reactions */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <label htmlFor="toggle-notif-reactions" className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer">
+                    Reactions
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Emoji reactions on your messages</p>
+                </div>
+                <input
+                  id="toggle-notif-reactions"
+                  type="checkbox"
+                  checked={preferences.reactions_notify ?? true}
+                  onChange={(e) => updatePreferences({ reactions_notify: e.target.checked } as any)}
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+
+              {/* Security Alerts - ALWAYS ON / PROTECTED */}
+              <div className="flex items-center justify-between py-2 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+                <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <label className="text-xs font-semibold text-zinc-900 dark:text-white">
+                      Security Alerts
+                    </label>
+                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                      Always on / Protected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Login attempts, password resets, and critical account security warnings
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={true}
+                  disabled={true}
+                  aria-label="Security Alerts (Always on / Protected)"
+                  className="h-4 w-4 rounded border-zinc-300 text-heat-500 opacity-80 cursor-not-allowed dark:border-zinc-700 dark:bg-zinc-800 shrink-0"
+                />
+              </div>
+            </div>
 
             {/* 3. Sound Effects Toggle */}
             <div className="flex items-center justify-between pt-4">
@@ -341,14 +501,14 @@ export default function SettingsPage() {
         </div>
 
         {/* Discover People Privacy Section */}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
-              <Compass className="h-4 w-4 text-heat-500" />
-              Discover People
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 space-y-4 min-w-0 max-w-full">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 min-w-0 max-w-full">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-2 min-w-0">
+              <Compass className="h-4 w-4 text-heat-500 shrink-0" />
+              <span>Discover People</span>
             </h2>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0 ${
                 isDiscoverable
                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400"
                   : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
@@ -358,15 +518,15 @@ export default function SettingsPage() {
             </span>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
-            <div className="space-y-0.5 max-w-md">
+          <div className="flex items-center justify-between pt-2 gap-3 min-w-0 max-w-full">
+            <div className="space-y-0.5 max-w-md min-w-0">
               <label
                 htmlFor="toggle-discoverability"
                 className="text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer"
               >
                 Allow people to discover me
               </label>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed break-words min-w-0">
                 When enabled, your public profile can appear in Discover People so other users can find you and connect.
               </p>
             </div>
@@ -376,17 +536,17 @@ export default function SettingsPage() {
               checked={isDiscoverable}
               disabled={isDiscoverLoading || isDiscoverToggling}
               onChange={toggleDiscoverability}
-              className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800"
+              className="h-4 w-4 rounded border-zinc-300 text-heat-500 focus:ring-heat-500 dark:border-zinc-700 dark:bg-zinc-800 shrink-0"
             />
           </div>
 
-          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 break-words min-w-0">
               Browse discoverable users or review incoming requests.
             </span>
             <Link
               href="/discover"
-              className="text-xs font-semibold text-heat-500 hover:text-heat-600 dark:text-heat-400 flex items-center gap-1"
+              className="text-xs font-semibold text-heat-500 hover:text-heat-600 dark:text-heat-400 flex items-center gap-1 shrink-0"
             >
               <span>Manage Discover People</span>
               <span>&rarr;</span>
@@ -415,12 +575,12 @@ export default function SettingsPage() {
           ) : (
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
               {registeredDevices.map((device) => (
-                <div key={device.id} className="py-3 flex items-center justify-between gap-4">
-                  <div className="space-y-0.5 min-w-0">
+                <div key={device.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 min-w-0 max-w-full">
+                  <div className="space-y-0.5 min-w-0 max-w-full flex-1">
                     <p className="text-xs font-semibold text-zinc-900 dark:text-white capitalize">
                       {device.device_type} Device
                     </p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-md">
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 break-all sm:truncate max-w-md min-w-0">
                       {device.user_agent || "Browser Client"}
                     </p>
                     <p className="text-[10px] text-zinc-400">
@@ -428,10 +588,12 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRevokeDevice(device.id)}
-                    className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1"
+                    className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 self-start sm:self-center shrink-0"
+                    aria-label="Revoke device"
                   >
                     <Trash2 className="h-3 w-3" />
                     <span>Revoke</span>

@@ -256,7 +256,12 @@ async function main() {
   assert(fs.existsSync(swPath), 29, "public/sw.js exists");
 
   const swContent = fs.readFileSync(swPath, "utf-8");
-  assert(swContent.includes('const CACHE_NAME = "heat-chat-shell-v3";'), 30, "CACHE_NAME bumped to heat-chat-shell-v3");
+  assert(
+    swContent.includes('const CACHE_NAME = "heat-chat-shell-v3";') ||
+    swContent.includes('const CACHE_NAME = "heat-chat-shell-v4";'),
+    30,
+    "CACHE_NAME bumped to heat-chat-shell-v3 or v4"
+  );
 
   assert(
     swContent.includes('"/offline"') &&

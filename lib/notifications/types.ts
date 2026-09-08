@@ -4,7 +4,9 @@ export type NotificationEventType =
   | "voice_message"
   | "mention"
   | "reply"
+  | "reaction"
   | "group_invite"
+  | "group_activity"
   | "member_added"
   | "member_removed"
   | "role_changed"
@@ -12,12 +14,16 @@ export type NotificationEventType =
   | "poll_result"
   | "friend_request"
   | "friend_accepted"
+  | "friend_request_accepted"
+  | "friend_request_declined"
   | "security_alert"
+  | "security"
   | "password_changed"
   | "new_device_login"
+  | "system"
   | "test_notification";
 
-export type NotificationCategory = "all" | "messages" | "mentions" | "groups" | "friends";
+export type NotificationCategory = "all" | "messages" | "mentions" | "groups" | "friends" | "reactions" | "system";
 
 export type DeviceType = "desktop" | "mobile" | "tablet" | "unknown";
 
@@ -26,17 +32,30 @@ export type DeliveryStatus = "pending" | "processing" | "delivered" | "failed" |
 export interface NotificationRecord {
   id: string;
   user_id: string;
+  recipient_id?: string;
   actor_id: string | null;
+  sender_id?: string | null;
   conversation_id: string | null;
+  message_id?: string | null;
+  friend_request_id?: string | null;
   event_type: NotificationEventType;
+  type?: string;
   dedupe_key: string | null;
   title: string;
   body: string;
   data: Record<string, any>;
+  metadata?: Record<string, any>;
   read_at: string | null;
+  is_read?: boolean;
   deleted_at: string | null;
   expires_at: string | null;
   created_at: string;
+}
+
+export interface NotificationsCursorPage {
+  items: NotificationRecord[];
+  has_more: boolean;
+  next_cursor: { created_at: string; id: string } | null;
 }
 
 export interface NotificationPreferences {
@@ -52,6 +71,10 @@ export interface NotificationPreferences {
   replies_notify: boolean;
   group_activity_notify: boolean;
   friend_activity_notify: boolean;
+  reactions_notify?: boolean;
+  security_notify?: boolean;
+  friend_requests_notify?: boolean;
+  friend_accept_notify?: boolean;
   quiet_hours_enabled: boolean;
   quiet_hours_start: string; // HH:MM (e.g. "22:00")
   quiet_hours_end: string;   // HH:MM (e.g. "08:00")
@@ -67,10 +90,27 @@ export interface PushSubscriptionRecord {
   auth: string;
   user_agent: string | null;
   device_type: DeviceType;
+  device_id?: string | null;
+  installation_id?: string | null;
   failure_count: number;
   last_seen_at: string;
   revoked_at: string | null;
   created_at: string;
+  updated_at?: string;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  expires_at?: string | null;
+}
+
+export interface NotificationDeliveryEvent {
+  id: string;
+  notification_id: string | null;
+  recipient_id: string;
+  channel: "realtime" | "push" | "in_app";
+  status: "attempted" | "sent" | "delivered" | "failed" | "expired";
+  provider_code: string | null;
+  created_at: string;
+  delivered_at: string | null;
 }
 
 export interface NotificationDeliveryRecord {

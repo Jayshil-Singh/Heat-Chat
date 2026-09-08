@@ -30,7 +30,7 @@ export async function GET() {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Unable to load notification preferences" }, { status: 500 });
   }
 
   const defaultPrefs = {
@@ -46,6 +46,8 @@ export async function GET() {
     replies_notify: true,
     group_activity_notify: true,
     friend_activity_notify: true,
+    reactions_notify: true,
+    security_notify: true,
     quiet_hours_enabled: false,
     quiet_hours_start: "22:00",
     quiet_hours_end: "08:00",
@@ -81,9 +83,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid quiet_hours_end format (HH:MM)" }, { status: 400 });
   }
 
-  const updates = {
+  // Enforce security_notify is ALWAYS true on server
+  const updates: Record<string, any> = {
     user_id: user.id,
     updated_at: new Date().toISOString(),
+    security_notify: true,
     ...(body.notifications_enabled !== undefined && { notifications_enabled: Boolean(body.notifications_enabled) }),
     ...(body.sound_enabled !== undefined && { sound_enabled: Boolean(body.sound_enabled) }),
     ...(body.desktop_notifications_enabled !== undefined && {
@@ -103,6 +107,9 @@ export async function PUT(req: NextRequest) {
     ...(body.friend_activity_notify !== undefined && {
       friend_activity_notify: Boolean(body.friend_activity_notify),
     }),
+    ...(body.reactions_notify !== undefined && {
+      reactions_notify: Boolean(body.reactions_notify),
+    }),
     ...(body.quiet_hours_enabled !== undefined && { quiet_hours_enabled: Boolean(body.quiet_hours_enabled) }),
     ...(body.quiet_hours_start && { quiet_hours_start: body.quiet_hours_start }),
     ...(body.quiet_hours_end && { quiet_hours_end: body.quiet_hours_end }),
@@ -116,7 +123,7 @@ export async function PUT(req: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Unable to update preferences" }, { status: 500 });
   }
 
   return NextResponse.json(data);

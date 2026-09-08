@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
+import { WebVitalsMonitor } from "@/components/instrumentation/web-vitals";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -81,6 +83,8 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <ServiceWorkerRegistration />
+            <NetworkStatusIndicator />
+            <WebVitalsMonitor />
             {children}
           </AuthProvider>
         </ThemeProvider>

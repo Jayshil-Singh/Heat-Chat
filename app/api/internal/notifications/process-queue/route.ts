@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (claimError) {
-    return NextResponse.json({ error: claimError.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to claim notification deliveries" }, { status: 500 });
   }
 
   const items = (claimed as ClaimedDeliveryItem[]) || [];
@@ -99,10 +99,73 @@ export async function POST(req: NextRequest) {
       p_permanent_failure: result.permanentFailure || false,
     });
 
+    const nowIso = new Date().toISOString();
+
     if (result.success) {
       deliveredCount++;
+
+      // Telemetry: record successful push delivery (zero notification text)
+      try {
+        await supabase.from("notification_delivery_events").insert({
+          notification_id: item.notification_id,
+          recipient_id: item.user_id,
+          channel: "push",
+          status: "delivered",
+          provider_code: null,
+          delivered_at: nowIso,
+        });
+
+        // Update subscription success tracking
+        await supabase
+          .from("push_subscriptions")
+          .update({
+            last_success_at: nowIso,
+            updated_at: nowIso,
+            failure_count: 0,
+          })
+          .eq("id", item.subscription_id);
+      } catch {
+        // Non-blocking telemetry failure
+      }
     } else {
       failedCount++;
+
+      const isPermanent =
+        Boolean(result.permanentFailure) ||
+        result.statusCode === 404 ||
+        result.statusCode === 410;
+      const errorCode = (result.error || "delivery_failed").slice(0, 120);
+
+      // Telemetry: record failed push delivery (zero notification text)
+      try {
+        await supabase.from("notification_delivery_events").insert({
+          notification_id: item.notification_id,
+          recipient_id: item.user_id,
+          channel: "push",
+          status: "failed",
+          provider_code: errorCode,
+        });
+
+        const subUpdates: Record<string, any> = {
+          last_failure_at: nowIso,
+          updated_at: nowIso,
+        };
+
+        if (isPermanent) {
+          subUpdates.revoked_at = nowIso;
+          subUpdates.revoked = true; // revoked: true on permanent subscription failures
+        }
+
+        // Bounded retry: permanent subscription errors are never retried
+        const retryLimit = isPermanent ? 0 : 3;
+
+        await supabase
+          .from("push_subscriptions")
+          .update(subUpdates)
+          .eq("id", item.subscription_id);
+      } catch {
+        // Non-blocking telemetry failure
+      }
     }
   }
 

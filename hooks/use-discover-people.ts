@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { classifyNetworkError, type NetworkErrorType } from "@/lib/utils/network-error";
 import type { DiscoverablePerson } from "@/types/chat";
 
 export interface UseDiscoverPeopleOptions {
@@ -20,6 +21,11 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
   const [isLoading, setIsLoading] = React.useState<boolean>(autoFetch);
   const [isPreferenceLoading, setIsPreferenceLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [errorType, setErrorType] = React.useState<NetworkErrorType | null>(null);
+  const [isRetryable, setIsRetryable] = React.useState<boolean>(false);
+
+  // Retain last known valid discoverable state in a ref
+  const lastKnownDiscoverableRef = React.useRef<boolean>(false);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -35,6 +41,13 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
   const fetchDiscoverability = React.useCallback(async () => {
     if (!user?.id) {
       setIsDiscoverable(false);
+      lastKnownDiscoverableRef.current = false;
+      setIsPreferenceLoading(false);
+      return;
+    }
+
+    // SSR-safe offline guard: retain last known state without attempting network
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       setIsPreferenceLoading(false);
       return;
     }
@@ -42,20 +55,51 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
     try {
       const { data, error: rpcError } = await (supabase.rpc as any)("get_my_discoverability");
       if (rpcError) {
-        console.warn("[Heat Chat] get_my_discoverability error:", rpcError.message);
-        // Fallback query to discovery_preferences
-        const { data: pref } = await (supabase
-          .from("discovery_preferences" as any)
-          .select("discoverable")
-          .eq("user_id", user.id)
-          .maybeSingle() as any);
-        setIsDiscoverable(pref?.discoverable ?? false);
+        const classified = classifyNetworkError(rpcError);
+
+        // Do not perform cascading fallback requests during network outages
+        if (
+          classified.type === "NETWORK_OFFLINE" ||
+          classified.type === "NETWORK_CONNECTION_CLOSED" ||
+          classified.type === "NETWORK_TIMEOUT"
+        ) {
+          // Retain last known valid state
+          setIsDiscoverable(lastKnownDiscoverableRef.current);
+          return;
+        }
+
+        // If RPC is missing or not deployed yet, attempt fallback query to discovery_preferences
+        try {
+          const { data: pref, error: prefError } = await (supabase
+            .from("discovery_preferences" as any)
+            .select("discoverable")
+            .eq("user_id", user.id)
+            .maybeSingle() as any);
+
+          if (!prefError && pref) {
+            const val = Boolean(pref.discoverable);
+            lastKnownDiscoverableRef.current = val;
+            setIsDiscoverable(val);
+          }
+        } catch {
+          // Retain last known state
+          setIsDiscoverable(lastKnownDiscoverableRef.current);
+        }
       } else {
-        setIsDiscoverable(Boolean(data));
+        const val = Boolean(data);
+        lastKnownDiscoverableRef.current = val;
+        setIsDiscoverable(val);
       }
     } catch (err) {
-      console.warn("[Heat Chat] fetchDiscoverability exception:", err);
-      setIsDiscoverable(false);
+      const classified = classifyNetworkError(err);
+      // Retain last known valid state without crashing or forcing false on transient error
+      setIsDiscoverable(lastKnownDiscoverableRef.current);
+      if (
+        classified.type !== "NETWORK_OFFLINE" &&
+        classified.type !== "NETWORK_CONNECTION_CLOSED"
+      ) {
+        console.warn("[Heat Chat] fetchDiscoverability exception:", classified.message);
+      }
     } finally {
       setIsPreferenceLoading(false);
     }
@@ -69,8 +113,20 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       return;
     }
 
+    // SSR-safe offline check
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const classified = classifyNetworkError(new Error("offline"));
+      setError(classified.message);
+      setErrorType("NETWORK_OFFLINE");
+      setIsRetryable(true);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
+    setErrorType(null);
+    setIsRetryable(false);
 
     try {
       const queryParam = debouncedQuery.length >= 2 ? debouncedQuery : null;
@@ -81,16 +137,30 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       });
 
       if (rpcError) {
-        console.error("[Heat Chat] discover_people error:", rpcError.message);
-        setError("Couldn't load people. Please try again.");
-        setPeople([]);
+        const classified = classifyNetworkError(rpcError);
+        setError(classified.message);
+        setErrorType(classified.type);
+        setIsRetryable(classified.isRetryable);
+
+        if (classified.type === "AUTH_EXPIRED") {
+          setPeople([]);
+        }
+        // Retain people on transient network errors if we already had them
       } else {
         setPeople((data as unknown as DiscoverablePerson[]) || []);
+        setError(null);
+        setErrorType(null);
+        setIsRetryable(false);
       }
     } catch (err) {
-      console.error("[Heat Chat] fetchPeople exception:", err);
-      setError("Network error while discovering people.");
-      setPeople([]);
+      const classified = classifyNetworkError(err);
+      setError(classified.message);
+      setErrorType(classified.type);
+      setIsRetryable(classified.isRetryable);
+
+      if (classified.type === "AUTH_EXPIRED") {
+        setPeople([]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -119,13 +189,22 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       });
 
       if (rpcError) {
-        console.error("[Heat Chat] set_discoverability error:", rpcError.message);
-        throw new Error(rpcError.message);
+        const classified = classifyNetworkError(rpcError);
+        setError(classified.message);
+        setErrorType(classified.type);
+        setIsRetryable(classified.isRetryable);
+        return;
       }
 
-      setIsDiscoverable(Boolean(data));
+      const val = Boolean(data);
+      lastKnownDiscoverableRef.current = val;
+      setIsDiscoverable(val);
+      setError(null);
     } catch (err) {
-      console.error("[Heat Chat] toggleDiscoverability error:", err);
+      const classified = classifyNetworkError(err);
+      setError(classified.message);
+      setErrorType(classified.type);
+      setIsRetryable(classified.isRetryable);
     } finally {
       setIsToggling(false);
     }
@@ -151,9 +230,9 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
         });
 
         if (rpcError) {
-          // Revert optimistic update
+          const classified = classifyNetworkError(rpcError);
           fetchPeople();
-          return { success: false, error: rpcError.message };
+          return { success: false, error: classified.message };
         }
 
         const res = data as any;
@@ -181,8 +260,9 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
 
         return { success: true };
       } catch (err: any) {
+        const classified = classifyNetworkError(err);
         fetchPeople();
-        return { success: false, error: err.message || "Failed to send request" };
+        return { success: false, error: classified.message };
       }
     },
     [user?.id, supabase, fetchPeople]
@@ -208,14 +288,16 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
         });
 
         if (rpcError) {
+          const classified = classifyNetworkError(rpcError);
           fetchPeople();
-          return { success: false, error: rpcError.message };
+          return { success: false, error: classified.message };
         }
 
         return { success: true };
       } catch (err: any) {
+        const classified = classifyNetworkError(err);
         fetchPeople();
-        return { success: false, error: err.message || "Failed to cancel request" };
+        return { success: false, error: classified.message };
       }
     },
     [user?.id, supabase, fetchPeople]
@@ -241,14 +323,16 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
         });
 
         if (rpcError) {
+          const classified = classifyNetworkError(rpcError);
           fetchPeople();
-          return { success: false, error: rpcError.message };
+          return { success: false, error: classified.message };
         }
 
         return { success: true };
       } catch (err: any) {
+        const classified = classifyNetworkError(err);
         fetchPeople();
-        return { success: false, error: err.message || "Failed to accept request" };
+        return { success: false, error: classified.message };
       }
     },
     [user?.id, supabase, fetchPeople]
@@ -262,9 +346,13 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
     people,
     isLoading,
     error,
+    errorType,
+    isRetryable,
     searchQuery,
     setSearchQuery,
     refreshPeople: fetchPeople,
+    retry: fetchPeople,
+    retryDiscoverability: fetchDiscoverability,
     sendRequest,
     cancelRequest,
     acceptRequest,
