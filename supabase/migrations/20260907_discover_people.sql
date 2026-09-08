@@ -196,6 +196,7 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+#variable_conflict use_column
 declare
   v_caller_id uuid;
   v_limit int;
@@ -237,16 +238,16 @@ begin
     (
       select count(distinct f1.friend_id)::integer
       from (
-        select case when user_id = v_caller_id then friend_id else user_id end as friend_id
-        from public.friendships
-        where (user_id = v_caller_id or friend_id = v_caller_id)
-          and status = 'accepted'
+        select case when fs1.user_id = v_caller_id then fs1.friend_id else fs1.user_id end as friend_id
+        from public.friendships fs1
+        where (fs1.user_id = v_caller_id or fs1.friend_id = v_caller_id)
+          and fs1.status = 'accepted'
       ) f1
       inner join (
-        select case when user_id = p.id then friend_id else user_id end as friend_id
-        from public.friendships
-        where (user_id = p.id or friend_id = p.id)
-          and status = 'accepted'
+        select case when fs2.user_id = p.id then fs2.friend_id else fs2.user_id end as friend_id
+        from public.friendships fs2
+        where (fs2.user_id = p.id or fs2.friend_id = p.id)
+          and fs2.status = 'accepted'
       ) f2 on f1.friend_id = f2.friend_id
     ) as mutual_friend_count,
     -- Server-side relationship status calculation

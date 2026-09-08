@@ -146,8 +146,8 @@ export function DiscoverPageContent() {
             isLoading={isPeopleLoading}
           />
 
-          {/* Error Banner */}
-          {peopleError && (
+          {/* Error Banner (shown if refreshing failed while preserving existing list) */}
+          {peopleError && people.length > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
@@ -185,6 +185,24 @@ export function DiscoverPageContent() {
                 />
               ))}
             </div>
+          ) : peopleError ? (
+            <EmptyState
+              icon={<AlertCircle className="h-7 w-7 text-rose-500" />}
+              title="Unable to load people"
+              description={peopleError}
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshPeople}
+                  className="h-9 px-3.5 text-xs gap-1.5 rounded-xl border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Try again</span>
+                </Button>
+              }
+              className="py-14"
+            />
           ) : (
             <EmptyState
               icon={<Users className="h-7 w-7 text-zinc-400" />}
@@ -203,7 +221,7 @@ export function DiscoverPageContent() {
       {/* Tab: Friend Requests */}
       {activeTab === "requests" && (
         <div className="space-y-4">
-          {requestsError && (
+          {requestsError && (incoming.length > 0 || outgoing.length > 0) && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
@@ -225,6 +243,8 @@ export function DiscoverPageContent() {
             incoming={incoming}
             outgoing={outgoing}
             isLoading={isRequestsLoading}
+            error={requestsError}
+            onRetry={refreshRequests}
             onAccept={acceptFriendRequest}
             onDecline={declineFriendRequest}
             onCancel={cancelFriendRequest}

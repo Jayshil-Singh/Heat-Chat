@@ -181,9 +181,12 @@ export function classifyNetworkError(error: unknown): ClassifiedNetworkError {
     };
   }
 
-  // 9. Server error detection (5xx)
+  // 9. Server error detection (5xx and Postgres engine errors)
   if (
     (typeof status === "number" && status >= 500 && status <= 599) ||
+    rawCode.startsWith("42") ||
+    rawCode.startsWith("XX") ||
+    rawCode.startsWith("58") ||
     rawMessage.includes("internal server error") ||
     rawMessage.includes("bad gateway") ||
     rawMessage.includes("service unavailable")

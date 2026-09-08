@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { UserCheck, Send, Clock, Inbox } from "lucide-react";
+import { UserCheck, Send, Clock, Inbox, AlertCircle, RefreshCw } from "lucide-react";
 import { FriendRequestCard } from "./friend-request-card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { PersonCardSkeleton } from "./person-card-skeleton";
 import type { FriendRequestWithProfile } from "@/types/chat";
 
@@ -11,6 +12,8 @@ interface FriendRequestListProps {
   incoming: FriendRequestWithProfile[];
   outgoing: FriendRequestWithProfile[];
   isLoading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   onAccept: (requestId: string) => Promise<{ success: boolean; error?: string }>;
   onDecline: (requestId: string) => Promise<{ success: boolean; error?: string }>;
   onCancel: (requestId: string) => Promise<{ success: boolean; error?: string }>;
@@ -20,6 +23,8 @@ export function FriendRequestList({
   incoming,
   outgoing,
   isLoading,
+  error,
+  onRetry,
   onAccept,
   onDecline,
   onCancel,
@@ -33,6 +38,30 @@ export function FriendRequestList({
           <PersonCardSkeleton key={i} />
         ))}
       </div>
+    );
+  }
+
+  if (error && incoming.length === 0 && outgoing.length === 0) {
+    return (
+      <EmptyState
+        icon={<AlertCircle className="h-7 w-7 text-rose-500" />}
+        title="Unable to load friend requests"
+        description={error}
+        action={
+          onRetry ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              className="h-9 px-3.5 text-xs gap-1.5 rounded-xl border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Try again</span>
+            </Button>
+          ) : undefined
+        }
+        className="py-14"
+      />
     );
   }
 
