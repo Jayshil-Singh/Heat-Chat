@@ -1,7 +1,7 @@
 // Heat Chat — Production PWA Service Worker
 // Version: 2.0.0 (PWA Shell Caching + Offline Fallback + Phase 9 Web Push)
 
-const CACHE_NAME = "heat-chat-shell-v2";
+const CACHE_NAME = "heat-chat-shell-v3";
 
 const PRECACHE_RESOURCES = [
   "/offline",
@@ -37,7 +37,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) => {
         return Promise.all(
           keys.map((key) => {
-            if (key !== CACHE_NAME) {
+            if (key.startsWith("heat-chat-") && key !== CACHE_NAME) {
               return caches.delete(key);
             }
           })
@@ -118,7 +118,20 @@ self.addEventListener("fetch", (event) => {
       fetch(request).catch(async () => {
         const cache = await caches.open(CACHE_NAME);
         const offlineResponse = await cache.match("/offline");
-        return offlineResponse || Response.error();
+        if (offlineResponse) {
+          return offlineResponse;
+        }
+        return new Response(
+          "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/><title>Offline — Heat Chat</title><style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#fafafa;text-align:center;padding:1rem;}h1{margin-bottom:0.5rem;}p{color:#a1a1aa;}</style></head><body><div><h1>You are offline</h1><p>Reconnect to continue chatting.</p></div></body></html>",
+          {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          }
+        );
       })
     );
     return;
