@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [isPlayingTestSound, setIsPlayingTestSound] = React.useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = React.useState(false);
   const [testPushFeedback, setTestPushFeedback] = React.useState<string | null>(null);
+  const [pushFeedback, setPushFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null);
   const [registeredDevices, setRegisteredDevices] = React.useState<RegisteredDevice[]>([]);
   const [isLoadingDevices, setIsLoadingDevices] = React.useState(false);
 
@@ -101,18 +102,35 @@ export default function SettingsPage() {
   };
 
   const handleToggleWebPush = async () => {
-    if (isPushSubscribed) {
-      await unsubscribeFromPush();
-      await updatePreferences({ push_enabled: false } as any);
-      fetchRegisteredDevices();
-    } else {
-      const res = await subscribeToPush();
-      if (res.success) {
-        await updatePreferences({ push_enabled: true } as any);
-        fetchRegisteredDevices();
+    setPushFeedback(null);
+    try {
+      if (isPushSubscribed) {
+        const res = await unsubscribeFromPush();
+        if (res.success) {
+          await updatePreferences({ push_enabled: false } as any);
+          fetchRegisteredDevices();
+          setPushFeedback({ type: "success", message: "Push notifications disabled on this device." });
+        } else {
+          setPushFeedback({ type: "error", message: res.error || "Failed to disable push notifications." });
+        }
       } else {
-        alert(res.error || "Failed to subscribe to push notifications");
+        const res = await subscribeToPush();
+        if (res.success) {
+          await updatePreferences({ push_enabled: true } as any);
+          fetchRegisteredDevices();
+          setPushFeedback({ type: "success", message: "Background push notifications enabled successfully!" });
+        } else {
+          const userFriendlyMsg =
+            res.code === "PUSH_PERMISSION_DENIED"
+              ? "Notifications are blocked by your browser. Enable notifications in your site settings and try again."
+              : res.code === "PUSH_UNSUPPORTED"
+              ? "Push notifications are not supported on this browser."
+              : "Push notifications couldn't be enabled. Check your browser permission and try again.";
+          setPushFeedback({ type: "error", message: userFriendlyMsg });
+        }
       }
+    } catch {
+      setPushFeedback({ type: "error", message: "An unexpected error occurred while updating push notifications." });
     }
   };
 
@@ -138,9 +156,12 @@ export default function SettingsPage() {
       });
       if (res.ok) {
         setRegisteredDevices((prev) => prev.filter((d) => d.id !== subId));
+        setPushFeedback({ type: "success", message: "Device subscription removed." });
+      } else {
+        setPushFeedback({ type: "error", message: "Failed to remove device subscription." });
       }
     } catch {
-      alert("Failed to revoke device");
+      setPushFeedback({ type: "error", message: "Network error while removing device." });
     }
   };
 
@@ -217,6 +238,8 @@ export default function SettingsPage() {
                         ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
                         : subscriptionStatus === "expired" || subscriptionStatus === "subscription_expired"
                         ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900"
+                        : subscriptionStatus === "error"
+                        ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
                         : subscriptionStatus === "invalid" || subscriptionStatus === "subscription_invalid"
                         ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
                         : subscriptionStatus === "permission-denied" || permission === "denied"
@@ -237,6 +260,8 @@ export default function SettingsPage() {
                       "Recovering…"
                     ) : subscriptionStatus === "expired" || subscriptionStatus === "subscription_expired" ? (
                       "Subscription expired"
+                    ) : subscriptionStatus === "error" ? (
+                      "Registration failed"
                     ) : subscriptionStatus === "invalid" || subscriptionStatus === "subscription_invalid" ? (
                       "Subscription invalid"
                     ) : subscriptionStatus === "permission-denied" || permission === "denied" ? (
@@ -281,10 +306,24 @@ export default function SettingsPage() {
                     ? "Updating..."
                     : isPushSubscribed
                     ? "Unsubscribe Device"
+                    : subscriptionStatus === "error" || subscriptionStatus === "invalid"
+                    ? "Try Again"
                     : "Subscribe This Device"}
                 </Button>
               </div>
             </div>
+
+            {pushFeedback && (
+              <div
+                className={`p-2.5 rounded-lg text-xs border ${
+                  pushFeedback.type === "success"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300"
+                    : "bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300"
+                }`}
+              >
+                {pushFeedback.message}
+              </div>
+            )}
 
             {testPushFeedback && (
               <div className="p-2.5 rounded-lg text-xs bg-heat-50 border border-heat-200 text-heat-800 dark:bg-heat-950/50 dark:border-heat-900 dark:text-heat-300">

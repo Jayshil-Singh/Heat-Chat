@@ -23,20 +23,57 @@ export type PushSubscriptionStatus =
 
 export type AppNotificationPreferenceState = "notifications_enabled" | "notifications_disabled";
 
+export interface PushOperationResult {
+  success: boolean;
+  error?: string;
+  code?: string;
+}
+
 // In-memory installation identifier (ephemeral, zero persistent payload)
 const IN_MEMORY_INSTALLATION_ID =
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `inst_${Math.random().toString(36).substring(2, 15)}`;
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = typeof window !== "undefined" ? window.atob(base64) : atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
+export function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  if (!base64String || typeof base64String !== "string" || base64String.trim().length === 0) {
+    const err = new Error("VAPID public key is missing or empty");
+    (err as any).code = "VAPID_PUBLIC_KEY_INVALID";
+    throw err;
+  }
+
+  const clean = base64String.trim();
+  const padding = "=".repeat((4 - (clean.length % 4)) % 4);
+  const base64 = (clean + padding).replace(/-/g, "+").replace(/_/g, "/");
+
+  let rawData: string;
+  try {
+    rawData = typeof window !== "undefined" ? window.atob(base64) : atob(base64);
+  } catch {
+    const err = new Error("VAPID public key contains invalid base64 characters");
+    (err as any).code = "VAPID_PUBLIC_KEY_INVALID";
+    throw err;
+  }
+
+  if (rawData.length !== 65) {
+    const err = new Error(`VAPID public key has invalid length (${rawData.length} bytes, expected 65 bytes)`);
+    (err as any).code = "VAPID_PUBLIC_KEY_INVALID";
+    throw err;
+  }
+
+  const outputArray = new Uint8Array(65);
+  for (let i = 0; i < 65; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
+
+  if (outputArray[0] !== 0x04) {
+    const err = new Error(
+      `VAPID public key is not an uncompressed P-256 EC point (expected first byte 0x04, got 0x${outputArray[0].toString(16)})`
+    );
+    (err as any).code = "VAPID_PUBLIC_KEY_INVALID";
+    throw err;
+  }
+
   return outputArray;
 }
 
@@ -55,9 +92,10 @@ export function useNotificationPermission() {
   const [isPushSupported, setIsPushSupported] = React.useState(false);
   const [isPushLoading, setIsPushLoading] = React.useState(false);
 
-  // Recovery tracking refs
+  // Recovery & concurrency tracking refs
   const healAttemptsRef = React.useRef(0);
   const isHealingRef = React.useRef(false);
+  const isSubscribingRef = React.useRef(false);
   const isMountedRef = React.useRef(true);
 
   // Backward-compatible boolean: isPushSubscribed
@@ -81,36 +119,89 @@ export function useNotificationPermission() {
   }, []);
 
   const subscribeToPush = React.useCallback(
-    async (isRecovery: boolean = false): Promise<{ success: boolean; error?: string }> => {
-      if (!isPushSupported) {
-        setSubscriptionStatus("unsupported");
-        return { success: false, error: "Push notifications not supported in this browser" };
+    async (isRecovery: boolean = false): Promise<PushOperationResult> => {
+      // Prevent concurrent duplicate subscribe attempts
+      if (isSubscribingRef.current) {
+        return {
+          success: false,
+          error: "Push subscription operation already in progress",
+          code: "PUSH_CONCURRENT_OPERATION",
+        };
       }
 
+      if (!isPushSupported) {
+        setSubscriptionStatus("unsupported");
+        return {
+          success: false,
+          error: "Push notifications not supported in this browser",
+          code: "PUSH_UNSUPPORTED",
+        };
+      }
+
+      isSubscribingRef.current = true;
       setIsPushLoading(true);
 
       try {
-        const permissionResult = await requestPermission();
-        if (permissionResult !== "granted") {
-          setIsPushLoading(false);
-          setSubscriptionStatus("permission-denied"); // subscription_unavailable
-          return { success: false, error: "Notification permission denied" };
+        // Fast-path: check if permission is already denied to avoid redundant browser prompts
+        if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+          if (isMountedRef.current) setSubscriptionStatus("permission-denied");
+          return {
+            success: false,
+            error: "Notification permission was blocked in your browser settings",
+            code: "PUSH_PERMISSION_DENIED",
+          };
         }
 
-        // 1. Register service worker
+        const permissionResult = await requestPermission();
+        if (permissionResult !== "granted") {
+          if (isMountedRef.current) setSubscriptionStatus("permission-denied"); // subscription_unavailable
+          return {
+            success: false,
+            error: "Notification permission denied",
+            code: "PUSH_PERMISSION_DENIED",
+          };
+        }
+
+        // 1. Register service worker and await readiness
+        if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+          if (isMountedRef.current) setSubscriptionStatus("unsupported"); // subscription_unavailable
+          return {
+            success: false,
+            error: "Service worker not supported in this browser",
+            code: "PUSH_SERVICE_WORKER_UNAVAILABLE",
+          };
+        }
+
         const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
         await navigator.serviceWorker.ready;
 
-        // 2. Fetch VAPID public key
-        const keyRes = await fetch("/api/notifications/push/public-key");
-        if (!keyRes.ok) throw new Error("Failed to fetch VAPID public key");
-        const { publicKey } = await keyRes.json();
+        // 2. Fetch & validate VAPID public key
+        let rawPublicKey: string = "";
+        if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+          rawPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        } else {
+          const keyRes = await fetch("/api/notifications/push/public-key");
+          if (!keyRes.ok) {
+            const err = new Error("Failed to fetch VAPID public key from server");
+            (err as any).code = "PUSH_VAPID_KEY_MISSING";
+            throw err;
+          }
+          const keyJson = await keyRes.json().catch(() => ({}));
+          rawPublicKey = keyJson.publicKey || "";
+        }
 
-        // 3. Subscribe with PushManager
-        const subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
-        });
+        // Validate VAPID key before calling PushManager
+        const applicationServerKey = urlBase64ToUint8Array(rawPublicKey);
+
+        // 3. Inspect existing subscription: reuse if valid, otherwise create new
+        let subscription = await reg.pushManager.getSubscription();
+
+        if (!subscription) {
+          subscription = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey as unknown as BufferSource,
+          });
+        }
 
         const p256dh = arrayBufferToBase64Url(subscription.getKey("p256dh"));
         const auth = arrayBufferToBase64Url(subscription.getKey("auth"));
@@ -136,7 +227,9 @@ export function useNotificationPermission() {
 
         if (!subRes.ok) {
           const errJson = await subRes.json().catch(() => ({}));
-          throw new Error(errJson.error || "Failed to register push subscription on server");
+          const err = new Error(errJson.message || errJson.error || "Failed to register push subscription on server");
+          (err as any).code = errJson.code || "PUSH_API_FAILED";
+          throw err;
         }
 
         // 5. Verify server record exists and is active
@@ -150,17 +243,28 @@ export function useNotificationPermission() {
             setSubscriptionStatus("subscribed");
             healAttemptsRef.current = 0;
           }
-          setIsPushLoading(false);
           return { success: true };
         } else {
-          throw new Error("Server verification failed for registered push subscription");
+          const err = new Error("Server verification failed for registered push subscription");
+          (err as any).code = "PUSH_VERIFICATION_FAILED";
+          throw err;
         }
-      } catch (err: any) {
-        setIsPushLoading(false);
+      } catch (err) {
+        const error = err as any;
         if (isMountedRef.current) {
           setSubscriptionStatus(isRecovery ? "error" : "permission-default");
         }
-        return { success: false, error: err.message || "Push subscription failed" };
+        return {
+          success: false,
+          error: error.message || "Push subscription failed",
+          code: error.code || "PUSH_SUBSCRIBE_FAILED",
+        };
+      } finally {
+        // Required Invariant: loading & concurrency flags must ALWAYS be cleared
+        if (isMountedRef.current) {
+          setIsPushLoading(false);
+        }
+        isSubscribingRef.current = false;
       }
     },
     [isPushSupported, requestPermission]
@@ -249,14 +353,9 @@ export function useNotificationPermission() {
         const verifyRes = await fetch(
           `/api/notifications/push/subscriptions?verify_endpoint=${encodeURIComponent(sub.endpoint)}`
         );
+        const verifyJson = await verifyRes.json().catch(() => ({}));
 
-        if (!verifyRes.ok) {
-          setSubscriptionStatus("error");
-          return;
-        }
-
-        const verifyData = await verifyRes.json().catch(() => ({}));
-        if (verifyData.verified) {
+        if (verifyJson.verified) {
           setSubscriptionStatus("subscribed");
           healAttemptsRef.current = 0;
         } else {
@@ -264,7 +363,7 @@ export function useNotificationPermission() {
           setSubscriptionStatus("invalid");
           await selfHealSubscription(sub);
         }
-      } catch (err) {
+      } catch {
         setSubscriptionStatus("error");
       }
     },
@@ -281,7 +380,7 @@ export function useNotificationPermission() {
 
       if (!("PushManager" in window) || !("serviceWorker" in navigator)) {
         setIsPushSupported(false);
-        setSubscriptionStatus("unsupported"); // subscription_unavailable
+        setSubscriptionStatus("unsupported");
       } else {
         setIsPushSupported(true);
         evaluateSubscription(true);
@@ -305,14 +404,15 @@ export function useNotificationPermission() {
     let permissionStatus: PermissionStatus | null = null;
     try {
       navigator.permissions.query({ name: "notifications" as PermissionName }).then((status) => {
-        permissionStatus = status;
-        status.onchange = () => {
-          if (!isMountedRef.current) return;
-          const updated = Notification.permission as BrowserPermissionState;
-          setPermission(updated);
-          evaluateSubscription(true);
-        };
-      }).catch(() => {});
+          permissionStatus = status;
+          status.onchange = () => {
+            if (!isMountedRef.current) return;
+            const updated = Notification.permission as BrowserPermissionState;
+            setPermission(updated);
+            evaluateSubscription(true);
+          };
+        })
+        .catch(() => {});
     } catch {}
 
     return () => {
@@ -353,7 +453,7 @@ export function useNotificationPermission() {
     };
   }, [isPushSupported, evaluateSubscription]);
 
-  const unsubscribeFromPush = React.useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const unsubscribeFromPush = React.useCallback(async (): Promise<PushOperationResult> => {
     setIsPushLoading(true);
     try {
       if ("serviceWorker" in navigator) {
@@ -370,25 +470,38 @@ export function useNotificationPermission() {
           await sub.unsubscribe();
         }
       }
-      setSubscriptionStatus("permission-default"); // setSubscriptionStatus("not_subscribed")
-      setIsPushLoading(false);
+      if (isMountedRef.current) {
+        setSubscriptionStatus("permission-default"); // setSubscriptionStatus("not_subscribed")
+      }
       return { success: true };
     } catch (err: any) {
-      setIsPushLoading(false);
-      return { success: false, error: err.message || "Failed to unsubscribe" };
+      return {
+        success: false,
+        error: err.message || "Failed to unsubscribe",
+        code: "PUSH_UNSUBSCRIBE_FAILED",
+      };
+    } finally {
+      // Required Invariant: loading flag must ALWAYS be cleared
+      if (isMountedRef.current) {
+        setIsPushLoading(false);
+      }
     }
   }, []);
 
-  const sendTestNotification = React.useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const sendTestNotification = React.useCallback(async (): Promise<PushOperationResult> => {
     try {
       const res = await fetch("/api/notifications/push/test", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        return { success: false, error: json.error || "Test notification request failed" };
+        return {
+          success: false,
+          error: json.error || "Test notification request failed",
+          code: json.code || "PUSH_TEST_FAILED",
+        };
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || "Network error" };
+      return { success: false, error: err.message || "Network error", code: "NETWORK_ERROR" };
     }
   }, []);
 

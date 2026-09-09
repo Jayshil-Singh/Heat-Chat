@@ -2177,6 +2177,8 @@ export interface Database {
           p_auth: string;
           p_user_agent?: string | null;
           p_device_type?: string;
+          p_device_id?: string | null;
+          p_installation_id?: string | null;
         };
         Returns: string;
       };
