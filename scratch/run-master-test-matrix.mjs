@@ -19,6 +19,7 @@ const suites = [
   { name: "Responsive Viewports & Menu Collision", cmd: "node scratch/test-responsive-viewports.mjs", category: "Responsive Tests" },
   { name: "Voice Composer UI Verification", cmd: "node scratch/test-voice-composer-ui.mjs", category: "Voice UI Tests" },
   { name: "Phase 11 Discover People Verification", cmd: "node scratch/phase11-discover-people-verification.mjs", category: "Social Discovery Tests" },
+  { name: "Phase 19 Web Push Background Delivery", cmd: "node scratch/phase19-web-push-background-verification.mjs", category: "Push Delivery Tests" },
 ];
 
 console.log("==================================================================");

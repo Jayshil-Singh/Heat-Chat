@@ -287,23 +287,25 @@ export async function POST(
       return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE", message: "Couldn't send this message. Please try again." }, { status: 500 });
     }
 
-    // Dispatch background Web Push to other conversation members (non-blocking)
+    // Dispatch background Web Push to other conversation members
     const senderName =
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       user.user_metadata?.username ||
       "Someone";
 
-    sendWebPushToConversationMembers({
-      conversationId,
-      senderId: user.id,
-      senderName,
-      content: content || (messageType === "voice" ? "Voice message" : "New message"),
-      messageType,
-      messageId: (data as any)?.id || (data as any)?.message_id,
-    }).catch((err) => {
-      console.error("[Heat Chat] Background push delivery error:", err);
-    });
+    try {
+      await sendWebPushToConversationMembers({
+        conversationId,
+        senderId: user.id,
+        senderName,
+        content: content || (messageType === "voice" ? "Voice message" : "New message"),
+        messageType,
+        messageId: (data as any)?.id || (data as any)?.message_id,
+      });
+    } catch (pushErr) {
+      console.error("[Heat Chat] Background push delivery error:", pushErr);
+    }
 
     return NextResponse.json({
       success: true,

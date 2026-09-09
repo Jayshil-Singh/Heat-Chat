@@ -230,19 +230,21 @@ export async function dispatchNotification(
       });
 
       // Execute immediate background delivery so notifications arrive even if the app/tab is closed
-      sendWebPushToUser({
-        userId: params.userId,
-        title: params.title,
-        body: params.body,
-        url: (params.data as any)?.url || "/chat",
-        eventType: params.eventType,
-        notificationId: notification.id,
-        conversationId: params.conversationId || undefined,
-        senderId: params.actorId || undefined,
-        data: params.data,
-      }).catch((err) => {
+      try {
+        await sendWebPushToUser({
+          userId: params.userId,
+          title: params.title,
+          body: params.body,
+          url: (params.data as any)?.url || "/chat",
+          eventType: params.eventType,
+          notificationId: notification.id,
+          conversationId: params.conversationId || undefined,
+          senderId: params.actorId || undefined,
+          data: params.data,
+        });
+      } catch (err) {
         console.error("[Dispatcher] Immediate push delivery error:", err);
-      });
+      }
     }
   }
 

@@ -35,6 +35,22 @@ export interface SendPushNotificationResult {
   permanentFailure?: boolean;
 }
 
+export function sanitizePushTargetUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== "string") return "/chat";
+  const trimmed = rawUrl.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\") || trimmed.includes("\\")) {
+    return "/chat";
+  }
+  if (
+    trimmed.toLowerCase().startsWith("/%2f") ||
+    trimmed.toLowerCase().includes("javascript:") ||
+    trimmed.toLowerCase().includes("data:")
+  ) {
+    return "/chat";
+  }
+  return trimmed;
+}
+
 /**
  * Dispatches physical Web Push notification:
  * 1. Executes egress validation (canonicalization fail-closed check + DNS public-IP check)
@@ -71,12 +87,17 @@ export async function sendPhysicalPushNotification(
   }
 
   // 2. Prepare payload string matching Phase 19 strict contract (Max 4KB payload limit for Web Push)
-  const targetUrl = payload.url || "/chat";
+  const targetUrl = sanitizePushTargetUrl(payload.url);
+  let safeBody = payload.body || "New notification";
+  if (Buffer.byteLength(safeBody, "utf-8") > 4000) {
+    safeBody = safeBody.slice(0, 3900) + "...";
+  }
+
   const pushPayload = JSON.stringify({
     version: 1,
     type: payload.eventType,
     title: payload.title,
-    body: payload.body,
+    body: safeBody,
     icon: "/icons/icon-192.png",
     badge: "/icons/badge-72.png",
     url: targetUrl,

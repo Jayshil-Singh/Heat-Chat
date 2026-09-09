@@ -225,9 +225,28 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       );
 
       try {
-        const { data, error: rpcError } = await (supabase.rpc as any)("send_friend_request", {
-          target_user_id: targetUserId,
-        });
+        let data: any = null;
+        let rpcError: any = null;
+
+        try {
+          const apiRes = await fetch("/api/friends/request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recipientId: targetUserId }),
+          });
+          const apiJson = await apiRes.json();
+          if (apiRes.ok) {
+            data = apiJson;
+          } else {
+            rpcError = new Error(apiJson.message || apiJson.error || "Failed to send request");
+          }
+        } catch {
+          const fallback = await (supabase.rpc as any)("send_friend_request", {
+            target_user_id: targetUserId,
+          });
+          data = fallback.data;
+          rpcError = fallback.error;
+        }
 
         if (rpcError) {
           const classified = classifyNetworkError(rpcError);
@@ -318,9 +337,22 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       );
 
       try {
-        const { error: rpcError } = await (supabase.rpc as any)("accept_friend_request", {
-          request_id: requestId,
-        });
+        let rpcError: any = null;
+
+        try {
+          const apiRes = await fetch(`/api/friends/requests/${requestId}/accept`, {
+            method: "POST",
+          });
+          if (!apiRes.ok) {
+            const apiJson = await apiRes.json().catch(() => ({}));
+            rpcError = new Error(apiJson.message || apiJson.error || "Failed to accept request");
+          }
+        } catch {
+          const fallback = await (supabase.rpc as any)("accept_friend_request", {
+            request_id: requestId,
+          });
+          rpcError = fallback.error;
+        }
 
         if (rpcError) {
           const classified = classifyNetworkError(rpcError);

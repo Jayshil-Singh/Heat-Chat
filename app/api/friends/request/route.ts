@@ -63,27 +63,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "FAILED_TO_SEND_REQUEST" }, { status: 500 });
     }
 
-    // Dispatch background Web Push to recipient (non-blocking)
+    // Dispatch background Web Push to recipient
     const senderName =
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       user.user_metadata?.username ||
       "Someone";
 
-    sendWebPushToUser({
-      userId: recipientId,
-      title: "New Friend Request",
-      body: `${senderName} sent you a friend request`,
-      url: "/friends/requests",
-      eventType: "friend_request",
-      senderId: user.id,
-      data: {
+    try {
+      await sendWebPushToUser({
+        userId: recipientId,
+        title: "New Friend Request",
+        body: `${senderName} sent you a friend request`,
+        url: "/friends/requests",
+        eventType: "friend_request",
         senderId: user.id,
-        senderName,
-      },
-    }).catch((err) => {
+        data: {
+          senderId: user.id,
+          senderName,
+        },
+      });
+    } catch (err) {
       console.error("[Heat Chat] Friend request push delivery error:", err);
-    });
+    }
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_VAPID_PUBLIC_KEY, DEFAULT_VAPID_SUBJECT } from "@/lib/notifications/push";
 
+function maskPushEndpoint(endpoint: string): string {
+  try {
+    const u = new URL(endpoint);
+    return `${u.protocol}//${u.host}/...${endpoint.slice(-6)}`;
+  } catch {
+    return `...${endpoint.slice(-8)}`;
+  }
+}
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -29,13 +38,7 @@ export async function GET() {
 
   // 3. Mask endpoints for privacy (only reveal protocol + domain + last 6 chars)
   const maskedSubscriptions = (subscriptions || []).map((sub) => {
-    let maskedEndpoint = "invalid_endpoint";
-    try {
-      const u = new URL(sub.endpoint);
-      maskedEndpoint = `${u.protocol}//${u.host}/...${sub.endpoint.slice(-6)}`;
-    } catch {
-      maskedEndpoint = `...${sub.endpoint.slice(-8)}`;
-    }
+    const maskedEndpoint = maskPushEndpoint(sub.endpoint);
 
     return {
       id: sub.id,

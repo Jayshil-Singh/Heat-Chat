@@ -859,11 +859,43 @@ export function useMessages(conversationId: string | null) {
         insertPayload.reply_to_message_id = replyToMessageId;
       }
 
-      const { data: insertedMsg, error: insertError } = await supabase
-        .from("messages")
-        .insert(insertPayload)
-        .select("*")
-        .single();
+      let insertedMsg: any = null;
+      let insertError: any = null;
+
+      try {
+        const apiRes = await fetch(`/api/conversations/${conversationId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: messageContent,
+            messageType: derivedType,
+            replyToMessageId: replyToMessageId || null,
+            clientMessageId: tempId,
+          }),
+        });
+
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson && (apiJson.id || apiJson.message_id)) {
+            insertedMsg = {
+              ...apiJson,
+              id: apiJson.id || apiJson.message_id,
+            };
+          }
+        } else {
+          const errJson = await apiRes.json().catch(() => ({}));
+          insertError = new Error(errJson.message || errJson.error || "Failed to send message");
+        }
+      } catch {
+        // Fallback directly to supabase if fetch fails
+        const res = await supabase
+          .from("messages")
+          .insert(insertPayload)
+          .select("*")
+          .single();
+        insertedMsg = res.data;
+        insertError = res.error;
+      }
 
       if (insertError || !insertedMsg) {
         setMessages((prev) => {

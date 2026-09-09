@@ -56,9 +56,22 @@ export function useFriendRequests() {
       setIncoming((prev) => prev.filter((r) => r.requestId !== requestId));
 
       try {
-        const { error: rpcError } = await (supabase.rpc as any)("accept_friend_request", {
-          request_id: requestId,
-        });
+        let rpcError: any = null;
+
+        try {
+          const apiRes = await fetch(`/api/friends/requests/${requestId}/accept`, {
+            method: "POST",
+          });
+          if (!apiRes.ok) {
+            const apiJson = await apiRes.json().catch(() => ({}));
+            rpcError = new Error(apiJson.message || apiJson.error || "Failed to accept request");
+          }
+        } catch {
+          const fallback = await (supabase.rpc as any)("accept_friend_request", {
+            request_id: requestId,
+          });
+          rpcError = fallback.error;
+        }
 
         if (rpcError) {
           fetchRequests();

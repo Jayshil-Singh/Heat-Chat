@@ -214,6 +214,18 @@ export async function sendWebPushToUser(
           provider_code: res.statusCode ? String(res.statusCode) : null,
           delivered_at: nowIso,
         });
+
+        if (payload.notificationId) {
+          await supabase
+            .from("notification_deliveries")
+            .update({
+              status: "delivered",
+              delivered_at: nowIso,
+              updated_at: nowIso,
+            })
+            .eq("notification_id", payload.notificationId)
+            .eq("subscription_id", sub.id);
+        }
       } catch {}
     } else {
       failedCount++;
@@ -228,6 +240,7 @@ export async function sendWebPushToUser(
             .from("push_subscriptions")
             .update({
               revoked_at: nowIso,
+              last_failure_at: nowIso,
               last_error: `permanent_failure_status_${res.statusCode || "unknown"}`,
               updated_at: nowIso,
             })
@@ -245,6 +258,7 @@ export async function sendWebPushToUser(
               .from("push_subscriptions")
               .update({
                 failure_count: (sub as any).failure_count ? (sub as any).failure_count + 1 : 1,
+                last_failure_at: nowIso,
                 last_error: (res.error || "delivery_error").slice(0, 200),
                 updated_at: nowIso,
               })
@@ -259,6 +273,18 @@ export async function sendWebPushToUser(
           status: "failed",
           provider_code: res.statusCode ? String(res.statusCode) : "network_error",
         });
+
+        if (payload.notificationId) {
+          await supabase
+            .from("notification_deliveries")
+            .update({
+              status: isPermanent ? "revoked" : "failed",
+              last_error: (res.error || "delivery_error").slice(0, 200),
+              updated_at: nowIso,
+            })
+            .eq("notification_id", payload.notificationId)
+            .eq("subscription_id", sub.id);
+        }
       } catch {}
     }
   }

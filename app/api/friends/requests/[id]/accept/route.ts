@@ -50,20 +50,22 @@ export async function POST(
         user.user_metadata?.username ||
         "Someone";
 
-      sendWebPushToUser({
-        userId: requesterId,
-        title: "Friend Request Accepted",
-        body: `${accepterName} accepted your friend request`,
-        url: "/friends",
-        eventType: "friend_request_accepted",
-        senderId: user.id,
-        data: {
+      try {
+        await sendWebPushToUser({
+          userId: requesterId,
+          title: "Friend Request Accepted",
+          body: `${accepterName} accepted your friend request`,
+          url: "/friends",
+          eventType: "friend_request_accepted",
           senderId: user.id,
-          senderName: accepterName,
-        },
-      }).catch((err) => {
+          data: {
+            senderId: user.id,
+            senderName: accepterName,
+          },
+        });
+      } catch (err) {
         console.error("[Heat Chat] Friend accept push delivery error:", err);
-      });
+      }
     }
 
     return NextResponse.json({ success: true, ...resData });
