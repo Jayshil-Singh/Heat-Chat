@@ -276,6 +276,16 @@ function sanitizeTargetUrl(rawUrl) {
   return trimmed;
 }
 
+function arrayBufferToBase64(buffer) {
+  if (!buffer) return "";
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 // Push Event Listener with Foreground/Background push detection
 self.addEventListener("push", (event) => {
   if (!event.data) {
@@ -296,19 +306,26 @@ self.addEventListener("push", (event) => {
   const title = typeof payload.title === "string" ? payload.title.slice(0, 128) : "Heat Chat";
   const body = typeof payload.body === "string" ? payload.body.slice(0, 256) : "New notification";
   const data = payload.data || {};
-  const notificationId = data.notificationId || "general";
-  const targetUrl = sanitizeTargetUrl(data.url);
+  const notificationId = payload.notificationId || data.notificationId || "general";
+  const conversationId = payload.conversationId || data.conversationId;
+  const senderId = payload.senderId || data.senderId;
+  const eventType = payload.type || payload.eventType || data.eventType || "message";
+  const targetUrl = sanitizeTargetUrl(payload.url || data.url);
 
   const options = {
     body,
     icon: payload.icon || "/icons/icon-192.png",
-    badge: payload.badge || "/icons/icon-192.png",
-    tag: `heat-chat-${notificationId}`,
+    badge: payload.badge || "/icons/badge-72.png",
+    tag: conversationId ? `chat-${conversationId}` : `heat-chat-${notificationId}`,
     renotify: true,
     data: {
       url: targetUrl,
       notificationId,
+      conversationId,
+      senderId,
+      eventType,
       receivedAt: Date.now(),
+      ...(data || {}),
     },
   };
 
@@ -332,7 +349,7 @@ self.addEventListener("push", (event) => {
         return;
       }
 
-      // Application is backgrounded or not focused: show OS push notification
+      // Application is backgrounded or closed: show OS push notification
       return self.registration.showNotification(title, options);
     })
   );
@@ -364,5 +381,53 @@ self.addEventListener("notificationclick", (event) => {
           return self.clients.openWindow(targetUrl);
         }
       })
+  );
+});
+
+// Push Subscription Change Listener (Browser rotates push endpoint)
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        let newSubscription = event.newSubscription;
+        if (!newSubscription) {
+          const keyRes = await fetch("/api/notifications/push/public-key");
+          if (keyRes.ok) {
+            const { publicKey } = await keyRes.json();
+            if (publicKey) {
+              newSubscription = await self.registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: publicKey,
+              });
+            }
+          }
+        }
+
+        if (newSubscription) {
+          const p256dh = newSubscription.getKey ? arrayBufferToBase64(newSubscription.getKey("p256dh")) : "";
+          const auth = newSubscription.getKey ? arrayBufferToBase64(newSubscription.getKey("auth")) : "";
+          await fetch("/api/notifications/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              endpoint: newSubscription.endpoint,
+              p256dh,
+              auth,
+              device_type: "desktop",
+            }),
+          });
+        }
+
+        if (event.oldSubscription && event.oldSubscription.endpoint) {
+          await fetch("/api/notifications/push/subscriptions", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: event.oldSubscription.endpoint }),
+          });
+        }
+      } catch (err) {
+        console.error("[SW] pushsubscriptionchange error:", err);
+      }
+    })()
   );
 });

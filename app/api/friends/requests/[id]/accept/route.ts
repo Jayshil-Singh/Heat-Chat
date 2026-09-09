@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { sendWebPushToUser } from "@/lib/notifications/push-delivery";
 
 export async function POST(
   _request: NextRequest,
@@ -39,7 +40,33 @@ export async function POST(
       return NextResponse.json({ error: "ACCEPT_FAILED" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, ...((data as Record<string, any>) || {}) });
+    const resData = (data as Record<string, any>) || {};
+    const requesterId = resData.senderId || resData.sender_id;
+
+    if (requesterId && typeof requesterId === "string") {
+      const accepterName =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.username ||
+        "Someone";
+
+      sendWebPushToUser({
+        userId: requesterId,
+        title: "Friend Request Accepted",
+        body: `${accepterName} accepted your friend request`,
+        url: "/friends",
+        eventType: "friend_request_accepted",
+        senderId: user.id,
+        data: {
+          senderId: user.id,
+          senderName: accepterName,
+        },
+      }).catch((err) => {
+        console.error("[Heat Chat] Friend accept push delivery error:", err);
+      });
+    }
+
+    return NextResponse.json({ success: true, ...resData });
   } catch (err: any) {
     console.error("[Heat Chat] POST /api/friends/requests/[id]/accept error:", err);
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });

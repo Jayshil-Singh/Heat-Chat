@@ -122,10 +122,10 @@ export default function SettingsPage() {
         } else {
           const userFriendlyMsg =
             res.code === "PUSH_PERMISSION_DENIED"
-              ? "Notifications are blocked by your browser. Enable notifications in your site settings and try again."
+              ? "Notifications are blocked by your browser. Enable notifications in browser settings."
               : res.code === "PUSH_UNSUPPORTED"
-              ? "Push notifications are not supported on this browser."
-              : "Push notifications couldn't be enabled. Check your browser permission and try again.";
+              ? "Push notifications aren't supported on this browser."
+              : "Couldn't enable notifications. Try again.";
           setPushFeedback({ type: "error", message: userFriendlyMsg });
         }
       }
@@ -274,7 +274,13 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400 break-words min-w-0">
-                  Receive background push notifications even when Heat Chat is closed
+                  {!isPushSupported || subscriptionStatus === "unsupported"
+                    ? "Push notifications aren't supported on this browser."
+                    : subscriptionStatus === "permission-denied" || permission === "denied"
+                    ? "Notifications are blocked by your browser. Enable notifications in browser settings."
+                    : subscriptionStatus === "error" || subscriptionStatus === "invalid"
+                    ? "Couldn't enable notifications. Try again."
+                    : "Receive background push notifications even when Heat Chat is closed"}
                 </p>
               </div>
 

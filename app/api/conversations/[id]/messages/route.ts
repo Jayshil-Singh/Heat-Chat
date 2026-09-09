@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidUuid } from "@/lib/validation/uuid";
+import { sendWebPushToConversationMembers } from "@/lib/notifications/push-delivery";
 
 export async function GET(
   request: NextRequest,
@@ -285,6 +286,24 @@ export async function POST(
       console.error("[Heat Chat] send_message RPC error:", error.message);
       return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE", message: "Couldn't send this message. Please try again." }, { status: 500 });
     }
+
+    // Dispatch background Web Push to other conversation members (non-blocking)
+    const senderName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.user_metadata?.username ||
+      "Someone";
+
+    sendWebPushToConversationMembers({
+      conversationId,
+      senderId: user.id,
+      senderName,
+      content: content || (messageType === "voice" ? "Voice message" : "New message"),
+      messageType,
+      messageId: (data as any)?.id || (data as any)?.message_id,
+    }).catch((err) => {
+      console.error("[Heat Chat] Background push delivery error:", err);
+    });
 
     return NextResponse.json({
       success: true,

@@ -53,6 +53,8 @@ export async function sendPhysicalPushNotification(
     url?: string;
     notificationId: string;
     eventType: string;
+    conversationId?: string;
+    senderId?: string;
     data?: Record<string, any>;
   }
 ): Promise<SendPushNotificationResult> {
@@ -68,16 +70,25 @@ export async function sendPhysicalPushNotification(
     };
   }
 
-  // 2. Prepare payload string (Max 4KB payload limit for Web Push)
+  // 2. Prepare payload string matching Phase 19 strict contract (Max 4KB payload limit for Web Push)
+  const targetUrl = payload.url || "/chat";
   const pushPayload = JSON.stringify({
+    version: 1,
+    type: payload.eventType,
     title: payload.title,
     body: payload.body,
     icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    badge: "/icons/badge-72.png",
+    url: targetUrl,
+    notificationId: payload.notificationId,
+    conversationId: payload.conversationId,
+    senderId: payload.senderId,
     data: {
-      url: payload.url || "/chat",
+      url: targetUrl,
       notificationId: payload.notificationId,
       eventType: payload.eventType,
+      conversationId: payload.conversationId,
+      senderId: payload.senderId,
       ...(payload.data || {}),
     },
   });

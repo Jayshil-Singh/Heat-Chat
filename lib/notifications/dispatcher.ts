@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { DispatchNotificationParams, NotificationRecord, NotificationPreferences } from "./types";
 import { isInQuietHours, sanitizeNotificationPayload } from "./events";
+import { sendWebPushToUser } from "./push-delivery";
 
 // Service role client for notification persistence and delivery queueing
 function getAdminSupabase() {
@@ -226,6 +227,21 @@ export async function dispatchNotification(
         channel: "push",
         status: "attempted",
         providerCode: "queued_for_delivery",
+      });
+
+      // Execute immediate background delivery so notifications arrive even if the app/tab is closed
+      sendWebPushToUser({
+        userId: params.userId,
+        title: params.title,
+        body: params.body,
+        url: (params.data as any)?.url || "/chat",
+        eventType: params.eventType,
+        notificationId: notification.id,
+        conversationId: params.conversationId || undefined,
+        senderId: params.actorId || undefined,
+        data: params.data,
+      }).catch((err) => {
+        console.error("[Dispatcher] Immediate push delivery error:", err);
       });
     }
   }

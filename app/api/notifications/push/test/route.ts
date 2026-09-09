@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/notifications/rate-limit";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { sendWebPushToUser } from "@/lib/notifications/push-delivery";
 import { DedupeKeyBuilders } from "@/lib/notifications/events";
 
 export async function POST() {
@@ -27,6 +28,7 @@ export async function POST() {
 
   const dedupeKey = DedupeKeyBuilders.test_notification(user.id, Date.now());
 
+  // 1. Dispatch persistent notification row
   const { notification, skippedReason } = await dispatchNotification({
     userId: user.id,
     eventType: "test_notification",
@@ -36,10 +38,40 @@ export async function POST() {
     data: { url: "/chat", timestamp: Date.now() },
   });
 
+  // 2. Direct physical Web Push dispatch to verify end-to-end delivery
+  const pushResult = await sendWebPushToUser({
+    userId: user.id,
+    title: "Test Push Notification",
+    body: "Web Push is properly configured and functioning on this device!",
+    url: "/chat",
+    eventType: "test_notification",
+    notificationId: notification?.id || undefined,
+    data: { timestamp: Date.now() },
+  });
+
+  if (pushResult.totalSubscriptions === 0) {
+    return NextResponse.json({
+      success: false,
+      message: "No active push subscription found on server. Please click 'Subscribe This Device' first.",
+      notificationId: notification?.id || null,
+      remainingTests: rl.remaining,
+      totalSubscriptions: 0,
+      sentCount: 0,
+    });
+  }
+
   return NextResponse.json({
-    success: true,
+    success: pushResult.sentCount > 0,
     notificationId: notification?.id || null,
-    skippedReason: skippedReason || null,
+    skippedReason: skippedReason || pushResult.skippedReason || null,
     remainingTests: rl.remaining,
+    totalSubscriptions: pushResult.totalSubscriptions,
+    sentCount: pushResult.sentCount,
+    failedCount: pushResult.failedCount,
+    revokedCount: pushResult.revokedCount,
+    message:
+      pushResult.sentCount > 0
+        ? "Test push notification sent successfully!"
+        : "Push delivery failed. Please check your browser notification permissions or re-subscribe.",
   });
 }
