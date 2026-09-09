@@ -8,22 +8,39 @@ import { validatePushEndpointEgress } from "@/lib/notifications/egress";
 function verifyInternalSecret(req: NextRequest): boolean {
   const secretHeader = req.headers.get("x-internal-secret");
   const authHeader = req.headers.get("authorization");
-  const configuredSecret = process.env.INTERNAL_WORKER_SECRET || "heat-chat-internal-worker-secret-production-2026";
+  const token = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "");
 
-  const candidate = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "");
-
-  if (!candidate || !configuredSecret) {
+  if (!token) {
     return false;
   }
 
-  try {
-    const a = Buffer.from(candidate, "utf-8");
-    const b = Buffer.from(configuredSecret, "utf-8");
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
+  const configuredSecrets = [
+    process.env.CRON_SECRET,
+    process.env.INTERNAL_WORKER_SECRET,
+  ].filter(Boolean) as string[];
+
+  // In production, only allow explicitly configured secrets from environment.
+  // In development/testing, allow the local fallback secret if no env secret is configured.
+  const validSecrets =
+    configuredSecrets.length > 0
+      ? configuredSecrets
+      : process.env.NODE_ENV === "production"
+      ? []
+      : ["heat-chat-internal-worker-secret-production-2026"];
+
+  for (const secret of validSecrets) {
+    try {
+      const a = Buffer.from(token, "utf-8");
+      const b = Buffer.from(secret, "utf-8");
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        return true;
+      }
+    } catch {
+      // ignore comparison error
+    }
   }
+
+  return false;
 }
 
 function getAdminSupabase() {
@@ -34,7 +51,7 @@ function getAdminSupabase() {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function handleProcessQueue(req: NextRequest) {
   if (!verifyInternalSecret(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -51,6 +68,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (claimError) {
+    console.error("[Worker Queue Error] Failed to claim notification deliveries:", claimError.message);
     return NextResponse.json({ error: "Failed to claim notification deliveries" }, { status: 500 });
   }
 
@@ -70,6 +88,7 @@ export async function POST(req: NextRequest) {
         p_permanent_failure: !egressCheck.isTransient,
       });
       failedCount++;
+      console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=failed reason=egress_check_failed`);
       continue;
     }
 
@@ -103,6 +122,8 @@ export async function POST(req: NextRequest) {
 
     if (result.success) {
       deliveredCount++;
+      // Structured logging without secrets
+      console.log(`[Worker Delivery] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=delivered`);
 
       // Telemetry: record successful push delivery (zero notification text)
       try {
@@ -129,6 +150,8 @@ export async function POST(req: NextRequest) {
       }
     } else {
       failedCount++;
+      // Structured error logging without secrets
+      console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=failed error=${result.error || "delivery_failed"}`);
 
       const isPermanent =
         Boolean(result.permanentFailure) ||
@@ -175,4 +198,13 @@ export async function POST(req: NextRequest) {
     failed: failedCount,
     timestamp: new Date().toISOString(),
   });
+}
+
+// Export both GET and POST so Vercel Cron (which invokes via GET) works without 405 Method Not Allowed
+export async function GET(req: NextRequest) {
+  return handleProcessQueue(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handleProcessQueue(req);
 }

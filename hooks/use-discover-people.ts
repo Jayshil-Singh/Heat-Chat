@@ -20,9 +20,17 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
   const [debouncedQuery, setDebouncedQuery] = React.useState<string>("");
   const [isLoading, setIsLoading] = React.useState<boolean>(autoFetch);
   const [isPreferenceLoading, setIsPreferenceLoading] = React.useState<boolean>(true);
+
+  // ── People-list error state ──────────────────────────────────────────────────
+  // Owned exclusively by fetchPeople(). toggleDiscoverability() MUST NOT write here.
   const [error, setError] = React.useState<string | null>(null);
   const [errorType, setErrorType] = React.useState<NetworkErrorType | null>(null);
   const [isRetryable, setIsRetryable] = React.useState<boolean>(false);
+
+  // ── Toggle-specific error state ──────────────────────────────────────────────
+  // Owned exclusively by toggleDiscoverability(). fetchPeople() MUST NOT write here.
+  const [toggleError, setToggleError] = React.useState<string | null>(null);
+  const [toggleErrorType, setToggleErrorType] = React.useState<NetworkErrorType | null>(null);
 
   // Retain last known valid discoverable state in a ref
   const lastKnownDiscoverableRef = React.useRef<boolean>(false);
@@ -106,6 +114,8 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
   }, [user?.id, supabase]);
 
   // Fetch discoverable people
+  // Writes ONLY to: error, errorType, isRetryable, people, isLoading
+  // NEVER touches: toggleError, toggleErrorType
   const fetchPeople = React.useCallback(async () => {
     if (!user?.id) {
       setPeople([]);
@@ -115,8 +125,7 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
 
     // SSR-safe offline check
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      const classified = classifyNetworkError(new Error("offline"));
-      setError(classified.message);
+      setError("You're offline. Please check your connection.");
       setErrorType("NETWORK_OFFLINE");
       setIsRetryable(true);
       setIsLoading(false);
@@ -137,6 +146,14 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       });
 
       if (rpcError) {
+        // Surface raw DB/PostgREST error details for production diagnosis
+        console.error("[Discover People RPC Error]", {
+          code: rpcError?.code,
+          message: rpcError?.message,
+          details: rpcError?.details,
+          hint: rpcError?.hint,
+        });
+
         const classified = classifyNetworkError(rpcError);
         setError(classified.message);
         setErrorType(classified.type);
@@ -153,6 +170,7 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
         setIsRetryable(false);
       }
     } catch (err) {
+      console.error("[Discover People fetch exception]", err);
       const classified = classifyNetworkError(err);
       setError(classified.message);
       setErrorType(classified.type);
@@ -178,10 +196,15 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
   }, [autoFetch, fetchPeople]);
 
   // Toggle discoverability
+  // Writes ONLY to: toggleError, toggleErrorType, isDiscoverable, isToggling
+  // NEVER touches: error, errorType, people, isLoading
   const toggleDiscoverability = React.useCallback(async () => {
     if (!user?.id || isToggling) return;
     const nextVal = !isDiscoverable;
     setIsToggling(true);
+    // Clear any previous toggle error at the start of a new attempt
+    setToggleError(null);
+    setToggleErrorType(null);
 
     try {
       const { data, error: rpcError } = await (supabase.rpc as any)("set_discoverability", {
@@ -189,22 +212,31 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
       });
 
       if (rpcError) {
+        console.error("[Discoverability Toggle RPC Error]", {
+          code: rpcError?.code,
+          message: rpcError?.message,
+          details: rpcError?.details,
+          hint: rpcError?.hint,
+        });
         const classified = classifyNetworkError(rpcError);
-        setError(classified.message);
-        setErrorType(classified.type);
-        setIsRetryable(classified.isRetryable);
+        // Write ONLY to toggle-specific state — never to people-list error state
+        setToggleError(classified.message);
+        setToggleErrorType(classified.type);
         return;
       }
 
       const val = Boolean(data);
       lastKnownDiscoverableRef.current = val;
       setIsDiscoverable(val);
-      setError(null);
+      // Clear toggle error on success
+      setToggleError(null);
+      setToggleErrorType(null);
     } catch (err) {
+      console.error("[Discoverability Toggle exception]", err);
       const classified = classifyNetworkError(err);
-      setError(classified.message);
-      setErrorType(classified.type);
-      setIsRetryable(classified.isRetryable);
+      // Write ONLY to toggle-specific state — never to people-list error state
+      setToggleError(classified.message);
+      setToggleErrorType(classified.type);
     } finally {
       setIsToggling(false);
     }
@@ -375,11 +407,15 @@ export function useDiscoverPeople(options: UseDiscoverPeopleOptions = {}) {
     isPreferenceLoading,
     isToggling,
     toggleDiscoverability,
+    // People-list error state
     people,
     isLoading,
     error,
     errorType,
     isRetryable,
+    // Toggle-specific error state (separate from people-list error)
+    toggleError,
+    toggleErrorType,
     searchQuery,
     setSearchQuery,
     refreshPeople: fetchPeople,

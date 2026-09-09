@@ -107,6 +107,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Defense-in-depth: ensure notification preferences have push enabled
+  try {
+    await supabase
+      .from("notification_preferences")
+      .upsert(
+        {
+          user_id: user.id,
+          push_enabled: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+  } catch {
+    // Non-blocking fallback
+  }
+
   return NextResponse.json({
     success: true,
     subscriptionId,

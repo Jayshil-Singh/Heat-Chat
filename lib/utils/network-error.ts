@@ -113,14 +113,19 @@ export function classifyNetworkError(error: unknown): ClassifiedNetworkError {
   }
 
   // 5. Authentication / session expired detection
+  // IMPORTANT: P0001 with message "UNAUTHENTICATED" is an explicit auth gate from our
+  // SECURITY DEFINER RPCs (discover_people, send_friend_request, etc.).
+  // Other P0001 codes are controlled server-side exceptions and must NOT be classified
+  // as auth failures — they are server errors (see step 9a below).
   if (
     status === 401 ||
     rawCode === "PGRST301" ||
     rawMessage.includes("jwt expired") ||
     rawMessage.includes("token is expired") ||
-    rawMessage.includes("unauthenticated") ||
     rawMessage.includes("invalid refresh token") ||
-    rawMessage.includes("session expired")
+    rawMessage.includes("session expired") ||
+    // P0001 with explicit UNAUTHENTICATED message from our RPCs
+    (rawCode === "P0001" && rawMessage.includes("unauthenticated"))
   ) {
     return {
       type: "AUTH_EXPIRED",
@@ -181,7 +186,21 @@ export function classifyNetworkError(error: unknown): ClassifiedNetworkError {
     };
   }
 
-  // 9. Server error detection (5xx and Postgres engine errors)
+  // 9a. P0001 — controlled server-side exception (non-auth)
+  // Our SECURITY DEFINER RPCs raise P0001 for expected business-logic errors
+  // like RATE_LIMIT_EXCEEDED, BLOCKED, TARGET_NOT_DISCOVERABLE, etc.
+  // These are transient server errors, not auth failures or unknown crashes.
+  if (rawCode === "P0001") {
+    return {
+      type: "SERVER_ERROR",
+      message: "Server is temporarily unavailable. Please try again later.",
+      isRetryable: true,
+      status: status || 500,
+      originalError: error,
+    };
+  }
+
+  // 9b. Server error detection (5xx and Postgres engine errors)
   if (
     (typeof status === "number" && status >= 500 && status <= 599) ||
     rawCode.startsWith("42") ||

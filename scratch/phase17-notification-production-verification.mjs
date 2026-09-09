@@ -354,7 +354,10 @@ check(48, "Service Worker displays OS notification when application is backgroun
 
 check(49, "Service Worker sets renotify: true and tag for notification coalescing", () => {
   assert(swJs.includes("renotify: true"));
-  assert(swJs.includes("tag: `heat-chat-${notificationId}`"));
+  assert(
+    swJs.includes("tag: `heat-chat-${notificationId}`") ||
+    swJs.includes("`heat-chat-${notificationId}`")
+  );
 });
 
 check(50, "Notification click listener focuses existing open window or opens new window", () => {

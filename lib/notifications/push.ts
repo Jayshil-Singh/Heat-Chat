@@ -4,6 +4,7 @@ import { validatePushEndpointEgress } from "./egress";
 // Default fallback keys for development and test suites if not configured in environment
 export const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  process.env.VAPID_PUBLIC_KEY ||
   "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
 export const DEFAULT_VAPID_PRIVATE_KEY =
   process.env.VAPID_PRIVATE_KEY ||

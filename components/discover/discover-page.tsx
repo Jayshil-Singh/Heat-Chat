@@ -25,10 +25,14 @@ export function DiscoverPageContent() {
     toggleDiscoverability,
     people,
     isLoading: isPeopleLoading,
+    // People-list error: set only when fetchPeople() fails
     error: peopleError,
+    // Toggle-specific error: set only when toggleDiscoverability() fails
+    toggleError,
     searchQuery,
     setSearchQuery,
     refreshPeople,
+    retry: retryPeople,
     sendRequest,
     cancelRequest,
     acceptRequest,
@@ -83,6 +87,35 @@ export function DiscoverPageContent() {
         onToggle={toggleDiscoverability}
       />
 
+      {/*
+        Toggle-specific error banner — displayed directly beneath the toggle card.
+        This is ONLY shown when toggleDiscoverability() fails.
+        It is completely independent of the people-list error state.
+        A toggle failure here MUST NOT cause "Unable to load people" to appear below.
+      */}
+      {toggleError && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
+            <span className="truncate">Unable to update discoverability. {toggleError}</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleDiscoverability}
+            disabled={isToggling}
+            className="h-8 px-2.5 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 gap-1 shrink-0"
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span>Retry</span>
+          </Button>
+        </div>
+      )}
+
       {/* Primary Section Switcher */}
       <div className="flex items-center gap-1.5 rounded-2xl bg-zinc-100 p-1.5 dark:bg-zinc-900/80 border border-zinc-200/80 dark:border-zinc-800">
         <button
@@ -120,8 +153,13 @@ export function DiscoverPageContent() {
       {/* Tab: Discover People */}
       {activeTab === "discover" && (
         <div className="space-y-4">
-          {/* If current user is not discoverable, show a soft informational banner */}
-          {!isDiscoverable && !isPreferenceLoading && (
+          {/*
+            "Hidden" informational banner.
+            Only shown when the user is not discoverable AND discoverability loaded successfully.
+            This must NOT be shown while the toggle is in error — the error banner above already
+            explains the situation.
+          */}
+          {!isDiscoverable && !isPreferenceLoading && !toggleError && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3.5 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
               <div className="flex items-center gap-2.5 min-w-0">
                 <Shield className="h-4 w-4 text-amber-500 shrink-0" />
@@ -146,7 +184,13 @@ export function DiscoverPageContent() {
             isLoading={isPeopleLoading}
           />
 
-          {/* Error Banner (shown if refreshing failed while preserving existing list) */}
+          {/*
+            People-list refresh error banner.
+            Shown ONLY when fetchPeople() fails while the list already has results
+            (i.e. a background refresh failure). The full error empty-state below
+            handles the initial-load failure case.
+            This is NEVER triggered by a toggleDiscoverability() failure.
+          */}
           {peopleError && people.length > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
               <div className="flex items-center gap-2">
@@ -165,14 +209,24 @@ export function DiscoverPageContent() {
             </div>
           )}
 
-          {/* Results List */}
+          {/*
+            Results area — three mutually exclusive states driven exclusively by
+            peopleError and people.length. toggleError CANNOT affect this area.
+
+            State A: Initial loading (skeleton)
+            State B: Loaded with results (person cards)
+            State C: fetchPeople() failed with no existing results (error empty-state + retry)
+            State D: Loaded successfully with zero results (empty state — "No discoverable people yet")
+          */}
           {isPeopleLoading && people.length === 0 ? (
+            // State A: Loading skeleton
             <div className="space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <PersonCardSkeleton key={i} />
               ))}
             </div>
           ) : people.length > 0 ? (
+            // State B: Results
             <div className="space-y-3" aria-label="Discoverable people list">
               {people.map((person) => (
                 <PersonCard
@@ -186,6 +240,9 @@ export function DiscoverPageContent() {
               ))}
             </div>
           ) : peopleError ? (
+            // State C: People fetch FAILED (initial load) — show error empty-state with retry.
+            // This state is ONLY reached when fetchPeople() itself returned an error.
+            // A toggleDiscoverability() failure CANNOT cause this branch to render.
             <EmptyState
               icon={<AlertCircle className="h-7 w-7 text-rose-500" />}
               title="Unable to load people"
@@ -194,7 +251,7 @@ export function DiscoverPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={refreshPeople}
+                  onClick={retryPeople}
                   className="h-9 px-3.5 text-xs gap-1.5 rounded-xl border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -204,6 +261,8 @@ export function DiscoverPageContent() {
               className="py-14"
             />
           ) : (
+            // State D: Loaded successfully with zero results — genuine empty state.
+            // This renders even if toggleError is set (toggle failure ≠ people fetch failure).
             <EmptyState
               icon={<Users className="h-7 w-7 text-zinc-400" />}
               title={searchQuery ? "No people found" : "No discoverable people yet"}

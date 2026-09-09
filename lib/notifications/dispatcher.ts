@@ -88,7 +88,7 @@ export async function dispatchNotification(
     sound_enabled: true,
     desktop_notifications_enabled: false,
     message_preview_enabled: true,
-    push_enabled: false,
+    push_enabled: true,
     email_notifications: false,
     messages_notify: true,
     mentions_notify: true,
@@ -213,7 +213,7 @@ export async function dispatchNotification(
         user_id: params.userId,
         status: "pending",
         attempt_count: 0,
-        next_attempt_at: new Date().toISOString(),
+        next_attempt_at: new Date(Date.now() + 120_000).toISOString(),
       }));
 
       await supabase
@@ -231,7 +231,7 @@ export async function dispatchNotification(
 
       // Execute immediate background delivery so notifications arrive even if the app/tab is closed
       try {
-        await sendWebPushToUser({
+        const pushResult = await sendWebPushToUser({
           userId: params.userId,
           title: params.title,
           body: params.body,
@@ -242,6 +242,23 @@ export async function dispatchNotification(
           senderId: params.actorId || undefined,
           data: params.data,
         });
+
+        // After successful immediate send, mark delivery rows as delivered to prevent cron worker double-send
+        if (pushResult && pushResult.sentCount > 0) {
+          const nowIso = new Date().toISOString();
+          await supabase
+            .from("notification_deliveries")
+            .update({
+              status: "delivered",
+              delivered_at: nowIso,
+              updated_at: nowIso,
+            })
+            .eq("notification_id", notification.id)
+            .in(
+              "subscription_id",
+              subscriptions.map((s) => s.id)
+            );
+        }
       } catch (err) {
         console.error("[Dispatcher] Immediate push delivery error:", err);
       }

@@ -5,7 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 function verifyInternalSecret(req: NextRequest): boolean {
   const secretHeader = req.headers.get("x-internal-secret");
   const authHeader = req.headers.get("authorization");
-  const configuredSecret = process.env.INTERNAL_WORKER_SECRET || "heat-chat-internal-worker-secret-production-2026";
+  const configuredSecret =
+    process.env.INTERNAL_WORKER_SECRET ||
+    (process.env.NODE_ENV === "production" ? "" : "heat-chat-internal-worker-secret-production-2026");
 
   const candidate = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "");
 

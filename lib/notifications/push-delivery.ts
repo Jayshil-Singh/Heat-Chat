@@ -89,7 +89,7 @@ export async function sendWebPushToUser(
     sound_enabled: true,
     desktop_notifications_enabled: false,
     message_preview_enabled: true,
-    push_enabled: false,
+    push_enabled: true,
     email_notifications: false,
     messages_notify: true,
     mentions_notify: true,
@@ -110,11 +110,11 @@ export async function sendWebPushToUser(
 
   // 2. Evaluate preference gates
   if (!isSecurity) {
-    if (!userPrefs.notifications_enabled) {
+    if (userPrefs.notifications_enabled === false) {
       return { success: true, totalSubscriptions: 0, sentCount: 0, failedCount: 0, revokedCount: 0, skippedReason: "notifications_disabled_globally" };
     }
 
-    if (!userPrefs.push_enabled && payload.eventType !== "test_notification") {
+    if (userPrefs.push_enabled === false && payload.eventType !== "test_notification") {
       return { success: true, totalSubscriptions: 0, sentCount: 0, failedCount: 0, revokedCount: 0, skippedReason: "push_disabled" };
     }
 
@@ -194,6 +194,9 @@ export async function sendWebPushToUser(
 
     if (res.success) {
       sentCount++;
+      // Structured logging without secrets
+      console.log(`[Push Delivery] notification_id=${payload.notificationId || "direct"} delivery_id=${payload.notificationId || "n/a"} subscription_id=${sub.id} status=sent`);
+
       // Update subscription tracking
       try {
         await supabase
@@ -215,7 +218,29 @@ export async function sendWebPushToUser(
           delivered_at: nowIso,
         });
 
-        if (payload.notificationId) {
+        const isValidUuid = (id?: string | null): id is string =>
+          typeof id === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
+        let targetNotifId: string | null = isValidUuid(payload.notificationId)
+          ? payload.notificationId
+          : null;
+
+        if (!targetNotifId && payload.data?.messageId && isValidUuid(payload.data.messageId)) {
+          try {
+            const { data: foundNotif } = await supabase
+              .from("notifications")
+              .select("id")
+              .eq("message_id", payload.data.messageId)
+              .eq("user_id", payload.userId)
+              .maybeSingle();
+            if (foundNotif?.id) {
+              targetNotifId = foundNotif.id;
+            }
+          } catch {}
+        }
+
+        if (targetNotifId) {
           await supabase
             .from("notification_deliveries")
             .update({
@@ -223,7 +248,7 @@ export async function sendWebPushToUser(
               delivered_at: nowIso,
               updated_at: nowIso,
             })
-            .eq("notification_id", payload.notificationId)
+            .eq("notification_id", targetNotifId)
             .eq("subscription_id", sub.id);
         }
       } catch {}
@@ -231,6 +256,9 @@ export async function sendWebPushToUser(
       failedCount++;
       const isPermanent =
         res.permanentFailure || (res.statusCode === 404 || res.statusCode === 410);
+
+      // Structured error logging without secrets
+      console.error(`[Push Delivery Error] notification_id=${payload.notificationId || "direct"} delivery_id=${payload.notificationId || "n/a"} status=failed http_status=${res.statusCode || "unknown"} retryable=${!isPermanent}`);
 
       try {
         if (isPermanent) {
@@ -300,6 +328,8 @@ export async function sendWebPushToUser(
 
 /**
  * Dispatches a push notification to all conversation members except the sender.
+ * Fully awaits all outbound pushes via Promise.allSettled to guarantee the serverless
+ * execution environment does not freeze or abort before requests are delivered.
  */
 export async function sendWebPushToConversationMembers(params: {
   conversationId: string;
@@ -346,26 +376,26 @@ export async function sendWebPushToConversationMembers(params: {
       bodyText = "Photo";
     }
 
-    // 3. Dispatch to all recipient members
-    for (const member of members) {
-      sendWebPushToUser({
-        userId: member.user_id,
-        title,
-        body: bodyText,
-        url: `/chat/${params.conversationId}`,
-        eventType,
-        conversationId: params.conversationId,
-        senderId: params.senderId,
-        notificationId: params.messageId ? `msg_${params.messageId}_${member.user_id}` : undefined,
-        data: {
+    // 3. Dispatch to all recipient members and await all promises before exiting
+    await Promise.allSettled(
+      members.map((member) =>
+        sendWebPushToUser({
+          userId: member.user_id,
+          title,
+          body: bodyText,
+          url: `/chat/${params.conversationId}`,
+          eventType,
           conversationId: params.conversationId,
-          messageId: params.messageId,
           senderId: params.senderId,
-        },
-      }).catch((err) => {
-        console.error("[Push Delivery] Member dispatch error:", err);
-      });
-    }
+          notificationId: params.messageId ? `msg_${params.messageId}_${member.user_id}` : undefined,
+          data: {
+            conversationId: params.conversationId,
+            messageId: params.messageId,
+            senderId: params.senderId,
+          },
+        })
+      )
+    );
   } catch (err) {
     console.error("[Push Delivery] Failed to dispatch conversation push:", err);
   }

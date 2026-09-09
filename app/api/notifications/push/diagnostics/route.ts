@@ -58,7 +58,9 @@ export async function GET() {
   const revokedCount = maskedSubscriptions.filter((s) => s.isRevoked).length;
 
   // 4. Check VAPID server configuration without revealing private key
-  const hasEnvPublicKey = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const hasEnvPublicKey = Boolean(
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+  );
   const hasEnvPrivateKey = Boolean(process.env.VAPID_PRIVATE_KEY);
   const hasEnvSubject = Boolean(process.env.VAPID_SUBJECT);
   const hasValidPublicKey = Boolean(DEFAULT_VAPID_PUBLIC_KEY && DEFAULT_VAPID_PUBLIC_KEY.length >= 65);
