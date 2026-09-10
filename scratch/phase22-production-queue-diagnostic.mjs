@@ -213,9 +213,10 @@ runTest(19, "DELETE push subscriptions handles revocation without RLS 500 error"
 
 // 20. Queue worker logging
 runTest(20, "Queue worker produces unmistakable structured telemetry", () => {
-  assert.match(processQueueCode, /\[Notification Queue Worker\]/);
+  assert.match(processQueueCode, /\[Queue Worker\] INVOKED/);
   assert.match(processQueueCode, /\[Notification Queue Claim\]/);
   assert.match(processQueueCode, /\[Notification Queue Complete\]/);
+  assert.match(processQueueCode, /\[Auth Diag\]/);
 });
 
 console.log("\n==================================================================");

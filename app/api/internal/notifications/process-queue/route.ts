@@ -5,135 +5,179 @@ import { ClaimedDeliveryItem } from "@/lib/notifications/types";
 import { sendPhysicalPushNotification } from "@/lib/notifications/push";
 import { validatePushEndpointEgress } from "@/lib/notifications/egress";
 
-function cleanAuthToken(raw?: string | null): string {
+// ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+/** Strip whitespace and surrounding quotes from a raw header/env value. */
+function clean(raw: string | null | undefined): string {
   if (!raw) return "";
-  let val = raw.trim();
-  // Strip matching surrounding quotes if accidentally pasted with quotes
-  if (
-    (val.startsWith('"') && val.endsWith('"') && val.length >= 2) ||
-    (val.startsWith("'") && val.endsWith("'") && val.length >= 2)
-  ) {
-    val = val.slice(1, -1).trim();
-  }
-  return val;
-}
-
-function verifyInternalSecret(req: NextRequest): boolean {
-  const secretHeader = cleanAuthToken(req.headers.get("x-internal-secret"));
-  const authHeader = req.headers.get("authorization")?.trim() || "";
-
-  let token = secretHeader;
-  if (!token && authHeader) {
-    // Case-insensitive check for Bearer with one or more whitespace characters
-    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-    if (bearerMatch) {
-      token = cleanAuthToken(bearerMatch[1]);
+  let v = raw.trim();
+  if (v.length >= 2) {
+    if ((v[0] === '"' && v[v.length - 1] === '"') ||
+        (v[0] === "'" && v[v.length - 1] === "'")) {
+      v = v.slice(1, -1).trim();
     }
   }
+  return v;
+}
 
-  // --- SAFE DIAGNOSTIC LOGGING (metadata only, no secret values) ---
-  const authSource = secretHeader ? "x-internal-secret" : authHeader ? "authorization" : "none";
-  const hasAuthHeader = Boolean(authHeader);
-  const authStartsWithBearer = /^Bearer\s+/i.test(authHeader);
-  const tokenLength = token.length;
+/** Constant-time string comparison. Returns false if either string is empty. */
+function timingSafeCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const ba = Buffer.from(a, "utf-8");
+  const bb = Buffer.from(b, "utf-8");
+  if (ba.length !== bb.length) return false;
+  try {
+    return crypto.timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract the bearer token from an Authorization header.
+ * Accepts any case of "Bearer" followed by one or more spaces.
+ */
+function extractBearerToken(authHeader: string): string {
+  const m = authHeader.match(/^Bearer\s+(.+)$/i);
+  return m ? clean(m[1]) : "";
+}
+
+/**
+ * Verify the incoming request carries a valid internal secret.
+ *
+ * Priority:
+ *   1. x-internal-secret header (recommended for cron-job.org)
+ *   2. Authorization: Bearer <token>
+ *
+ * Accepted secrets (OR logic):
+ *   - CRON_SECRET env var
+ *   - INTERNAL_WORKER_SECRET env var
+ *
+ * Emits safe diagnostic logs (metadata only — no secret values).
+ */
+function verifyInternalSecret(req: NextRequest): boolean {
+  // --- Extract token ---
+  const xSecret = clean(req.headers.get("x-internal-secret"));
+  const authRaw = req.headers.get("authorization") ?? "";
+  const bearerToken = extractBearerToken(authRaw);
+  const token = xSecret || bearerToken;
+
+  // --- Read configured secrets ---
+  const cronSecret = clean(process.env.CRON_SECRET);
+  const workerSecret = clean(process.env.INTERNAL_WORKER_SECRET);
+  const secrets = [cronSecret, workerSecret].filter(Boolean);
+
+  // --- SAFE DIAGNOSTIC LOGS (metadata only, no values) ---
   console.log(
-    `[Auth Diag] auth_source=${authSource} has_auth_header=${hasAuthHeader} starts_with_bearer=${authStartsWithBearer} token_length=${tokenLength}`
+    `[Auth Diag] ` +
+    `has_x_internal_secret=${xSecret.length > 0} ` +
+    `has_authorization=${authRaw.length > 0} ` +
+    `starts_with_bearer=${/^Bearer\s+/i.test(authRaw)} ` +
+    `token_length=${token.length} ` +
+    `auth_source=${xSecret ? "x-internal-secret" : bearerToken ? "bearer" : "none"}`
   );
-  // --- END DIAGNOSTIC LOGGING ---
+  console.log(
+    `[Auth Diag] ` +
+    `CRON_SECRET_set=${cronSecret.length > 0} ` +
+    `CRON_SECRET_length=${cronSecret.length} ` +
+    `INTERNAL_WORKER_SECRET_set=${workerSecret.length > 0} ` +
+    `INTERNAL_WORKER_SECRET_length=${workerSecret.length} ` +
+    `configured_count=${secrets.length} ` +
+    `node_env=${process.env.NODE_ENV}`
+  );
+  // --- END SAFE DIAGNOSTIC LOGS ---
 
   if (!token) {
-    console.warn("[Auth Diag] token_empty=true -> returning false");
+    console.warn("[Auth Diag] auth_result=rejected reason=no_token");
     return false;
   }
 
-  const cronSecretRaw = cleanAuthToken(process.env.CRON_SECRET);
-  const workerSecretRaw = cleanAuthToken(process.env.INTERNAL_WORKER_SECRET);
-
-  const configuredSecrets = [cronSecretRaw, workerSecretRaw].filter(Boolean) as string[];
-
-  // --- SAFE DIAGNOSTIC LOGGING ---
-  console.log(
-    `[Auth Diag] CRON_SECRET_set=${Boolean(cronSecretRaw)} CRON_SECRET_length=${cronSecretRaw.length} ` +
-    `INTERNAL_WORKER_SECRET_set=${Boolean(workerSecretRaw)} INTERNAL_WORKER_SECRET_length=${workerSecretRaw.length} ` +
-    `configured_secret_count=${configuredSecrets.length} node_env=${process.env.NODE_ENV}`
-  );
-  // --- END DIAGNOSTIC LOGGING ---
-
-  // In production, only allow explicitly configured secrets from environment.
-  // In development/testing, allow the local fallback secret if no env secret is configured.
-  if (configuredSecrets.length === 0 && process.env.NODE_ENV === "production") {
-    console.warn(
-      "[Notification Queue Worker] Authentication failed: No CRON_SECRET or INTERNAL_WORKER_SECRET configured in environment variables."
-    );
+  // Production guard: must have at least one configured secret
+  if (secrets.length === 0 && process.env.NODE_ENV === "production") {
+    console.warn("[Auth Diag] auth_result=rejected reason=no_secrets_configured");
     return false;
   }
 
-  const validSecrets =
-    configuredSecrets.length > 0
-      ? configuredSecrets
-      : ["heat-chat-internal-worker-secret-production-2026"];
+  // Fall through to dev fallback if no secrets configured
+  const validSecrets = secrets.length > 0
+    ? secrets
+    : ["heat-chat-internal-worker-secret-production-2026"];
 
   for (let i = 0; i < validSecrets.length; i++) {
-    const secret = validSecrets[i];
-    try {
-      const a = Buffer.from(token, "utf-8");
-      const b = Buffer.from(secret, "utf-8");
-      // --- SAFE DIAGNOSTIC LOGGING ---
-      console.log(`[Auth Diag] comparing secret_index=${i} token_length=${a.length} secret_length=${b.length} lengths_match=${a.length === b.length}`);
-      // --- END DIAGNOSTIC LOGGING ---
-      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-        console.log(`[Auth Diag] auth_result=success secret_index=${i}`);
-        return true;
-      }
-    } catch {
-      // ignore comparison error
+    const matched = timingSafeCompare(token, validSecrets[i]);
+    console.log(
+      `[Auth Diag] ` +
+      `comparing index=${i} ` +
+      `token_length=${token.length} ` +
+      `secret_length=${validSecrets[i].length} ` +
+      `lengths_match=${token.length === validSecrets[i].length} ` +
+      `matched=${matched}`
+    );
+    if (matched) {
+      console.log(`[Auth Diag] auth_result=success index=${i}`);
+      return true;
     }
   }
 
-  console.warn("[Auth Diag] auth_result=failed no_secret_matched=true");
+  console.warn("[Auth Diag] auth_result=rejected reason=no_match");
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Supabase admin client
+// ---------------------------------------------------------------------------
 
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rmvpdcftfdeizitnrvkw.supabase.co";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn(
-      "[Notification Queue Worker] Warning: SUPABASE_SERVICE_ROLE_KEY is not set in environment variables! Using fallback publishable key."
-    );
+    console.warn("[Queue Worker] SUPABASE_SERVICE_ROLE_KEY not set — using fallback publishable key.");
   }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
+
 async function handleProcessQueue(req: NextRequest) {
+  // --- ABSOLUTE FIRST LOG LINE — confirms Lambda code is executing ---
+  const reqId = req.headers.get("x-vercel-id") || req.headers.get("x-request-id") || "unknown";
+  const method = req.method;
   const source = req.headers.get("x-vercel-cron")
     ? "vercel-cron"
+    : req.headers.get("x-internal-secret")
+    ? "x-internal-secret"
     : req.headers.get("authorization")
-    ? "cron"
-    : "internal";
+    ? "authorization"
+    : "none";
+  console.log(`[Queue Worker] INVOKED method=${method} source=${source} req_id=${reqId}`);
 
-  console.log(`[Notification Queue Worker] started=true source=${source}`);
-
-  if (!verifyInternalSecret(req)) {
-    console.warn(`[Notification Queue Worker] unauthorized request attempt source=${source}`);
+  // --- Authentication ---
+  const authed = verifyInternalSecret(req);
+  if (!authed) {
+    console.warn(`[Queue Worker] UNAUTHORIZED method=${method} source=${source} req_id=${reqId}`);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = getAdminSupabase();
-  const searchParams = req.nextUrl.searchParams;
-  const batchSize = Math.min(100, Math.max(1, parseInt(searchParams.get("batch_size") || "25", 10)));
-  const leaseSeconds = Math.min(300, Math.max(15, parseInt(searchParams.get("lease_seconds") || "60", 10)));
+  console.log(`[Queue Worker] AUTHORIZED method=${method} source=${source} req_id=${reqId}`);
 
-  // 1. Claim batch of deliveries using FOR UPDATE SKIP LOCKED
+  // --- Queue processing ---
+  const supabase = getAdminSupabase();
+  const batchSize = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get("batch_size") || "25", 10)));
+  const leaseSeconds = Math.min(300, Math.max(15, parseInt(req.nextUrl.searchParams.get("lease_seconds") || "60", 10)));
+
   const { data: claimed, error: claimError } = await supabase.rpc("claim_notification_deliveries", {
     p_batch_size: batchSize,
     p_lease_seconds: leaseSeconds,
   });
 
   if (claimError) {
-    console.error("[Worker Queue Error] Failed to claim notification deliveries:", claimError.message);
+    console.error("[Queue Worker] claim_error:", claimError.message);
     return NextResponse.json({ error: "Failed to claim notification deliveries" }, { status: 500 });
   }
 
@@ -144,7 +188,7 @@ async function handleProcessQueue(req: NextRequest) {
   let failedCount = 0;
 
   for (const item of items) {
-    // 2. Defense-in-depth egress check on endpoint before dispatch
+    // Egress check
     const egressCheck = await validatePushEndpointEgress(item.endpoint);
     if (!egressCheck.ok) {
       await supabase.rpc("complete_notification_delivery", {
@@ -159,13 +203,9 @@ async function handleProcessQueue(req: NextRequest) {
       continue;
     }
 
-    // 3. Dispatch Physical Push Notification
+    // Send push
     const result = await sendPhysicalPushNotification(
-      {
-        endpoint: item.endpoint,
-        p256dh: item.p256dh,
-        auth: item.auth,
-      },
+      { endpoint: item.endpoint, p256dh: item.p256dh, auth: item.auth },
       {
         title: item.title,
         body: item.body,
@@ -176,7 +216,7 @@ async function handleProcessQueue(req: NextRequest) {
       }
     );
 
-    // 4. Complete delivery in database
+    // Mark delivery complete
     await supabase.rpc("complete_notification_delivery", {
       p_delivery_id: item.delivery_id,
       p_claim_token: item.claim_token,
@@ -189,10 +229,7 @@ async function handleProcessQueue(req: NextRequest) {
 
     if (result.success) {
       deliveredCount++;
-      // Structured logging without secrets
       console.log(`[Worker Delivery] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=delivered`);
-
-      // Telemetry: record successful push delivery (zero notification text)
       try {
         await supabase.from("notification_delivery_events").insert({
           notification_id: item.notification_id,
@@ -202,59 +239,39 @@ async function handleProcessQueue(req: NextRequest) {
           provider_code: null,
           delivered_at: nowIso,
         });
-
-        // Update subscription success tracking
         await supabase
           .from("push_subscriptions")
-          .update({
-            last_success_at: nowIso,
-            updated_at: nowIso,
-            failure_count: 0,
-          })
+          .update({ last_success_at: nowIso, updated_at: nowIso, failure_count: 0 })
           .eq("id", item.subscription_id);
       } catch {
-        // Non-blocking telemetry failure
+        // Non-blocking telemetry
       }
     } else {
       failedCount++;
-      // Structured error logging without secrets
       console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=failed error=${result.error || "delivery_failed"}`);
 
       const isPermanent =
         Boolean(result.permanentFailure) ||
         result.statusCode === 404 ||
         result.statusCode === 410;
-      const errorCode = (result.error || "delivery_failed").slice(0, 120);
 
-      // Telemetry: record failed push delivery (zero notification text)
       try {
         await supabase.from("notification_delivery_events").insert({
           notification_id: item.notification_id,
           recipient_id: item.user_id,
           channel: "push",
           status: "failed",
-          provider_code: errorCode,
+          provider_code: (result.error || "delivery_failed").slice(0, 120),
         });
 
-        const subUpdates: Record<string, any> = {
-          last_failure_at: nowIso,
-          updated_at: nowIso,
-        };
-
+        const subUpdates: Record<string, unknown> = { last_failure_at: nowIso, updated_at: nowIso };
         if (isPermanent) {
           subUpdates.revoked_at = nowIso;
-          subUpdates.revoked = true; // revoked: true on permanent subscription failures
+          subUpdates.revoked = true;
         }
-
-        // Bounded retry: permanent subscription errors are never retried
-        const retryLimit = isPermanent ? 0 : 3;
-
-        await supabase
-          .from("push_subscriptions")
-          .update(subUpdates)
-          .eq("id", item.subscription_id);
+        await supabase.from("push_subscriptions").update(subUpdates).eq("id", item.subscription_id);
       } catch {
-        // Non-blocking telemetry failure
+        // Non-blocking telemetry
       }
     }
   }
@@ -269,7 +286,9 @@ async function handleProcessQueue(req: NextRequest) {
   });
 }
 
-// Export both GET and POST so Vercel Cron (which invokes via GET) works without 405 Method Not Allowed
+// Export both GET and POST.
+// GET is used by Vercel Cron (x-vercel-cron header).
+// POST is used by external cron providers (cron-job.org).
 export async function GET(req: NextRequest) {
   return handleProcessQueue(req);
 }
