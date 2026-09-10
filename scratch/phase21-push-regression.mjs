@@ -228,20 +228,19 @@ runTest("public/sw.js contains push, notificationclick, and pushsubscriptionchan
 });
 
 // ----------------------------------------------------------------------------
-// Group 5: Vercel Cron Configuration
+// Group 5: Vercel Cron Configuration (External cron provider used)
 // ----------------------------------------------------------------------------
 console.log("\n--- Group 5: Vercel Cron Configuration ---");
 
 const vercelJsonPath = path.join(ROOT_DIR, "vercel.json");
 const vercelJson = JSON.parse(fs.readFileSync(vercelJsonPath, "utf-8"));
 
-runTest("vercel.json configures queue processor cron job", () => {
-  assert.ok(Array.isArray(vercelJson.crons), "crons must be an array");
-  const queueCron = vercelJson.crons.find(
-    (c) => c.path === "/api/internal/notifications/process-queue"
+runTest("vercel.json does not register conflicting Vercel Hobby cron (external cron provider used)", () => {
+  assert.ok(typeof vercelJson === "object", "vercel.json must be a valid JSON object");
+  assert.ok(
+    !vercelJson.crons || vercelJson.crons.length === 0,
+    "vercel.json crons must be omitted to prevent Vercel Hobby rejection"
   );
-  assert.ok(queueCron, "Cron for process-queue not found in vercel.json");
-  assert.strictEqual(queueCron.schedule, "* * * * *");
 });
 
 // ----------------------------------------------------------------------------
