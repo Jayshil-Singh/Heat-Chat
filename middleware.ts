@@ -15,7 +15,8 @@ export const config = {
      * - icons (public icons)
      * - sounds (public sound files)
      * - manifest.json
+     * - api/ (all API routes handle their own auth; edge middleware must not interfere)
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|sounds|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|sounds|manifest.json|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

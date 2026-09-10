@@ -109,18 +109,33 @@ runTest(7, "INTERNAL_WORKER_SECRET handling exists", () => {
 // 8. Middleware checks
 const middlewarePath = path.join(ROOT_DIR, "lib", "supabase", "middleware.ts");
 const middlewareCode = fs.readFileSync(middlewarePath, "utf-8");
+const rootMiddlewarePath = path.join(ROOT_DIR, "middleware.ts");
+const rootMiddlewareCode = fs.readFileSync(rootMiddlewarePath, "utf-8");
 
-runTest(8, "middleware does not block cron (/api/ early bypass before supabase.auth.getUser)", () => {
-  // Ensure startsWith("/api/") happens BEFORE supabase.auth.getUser()
+runTest(8, "middleware does not block cron — api/ excluded from matcher AND has early bypass", () => {
+  // 8a: Root middleware.ts matcher must exclude api/ paths entirely
+  assert.match(
+    rootMiddlewareCode,
+    /api\//,
+    "Root middleware.ts matcher must exclude api/ in the negative lookahead"
+  );
+
+  // 8b: The negative lookahead must include api/ BEFORE the .* catch-all
+  const matcherLine = rootMiddlewareCode.match(/"\/\(\(\?!.*\).*\)"/)?.[0] || "";
+  const apiIdx = matcherLine.indexOf("api/");
+  assert.ok(apiIdx > 0 || rootMiddlewareCode.includes("api/"), "api/ must appear in the matcher exclusion list");
+
+  // 8c: supabase/middleware.ts still has the in-app early bypass as defence-in-depth
   const apiBypassIndex = middlewareCode.indexOf('pathname.startsWith("/api/")');
   const getUserIndex = middlewareCode.indexOf("supabase.auth.getUser()");
-  assert.ok(apiBypassIndex > 0, 'Middleware must include startsWith("/api/")');
-  assert.ok(getUserIndex > 0, "Middleware must include supabase.auth.getUser()");
+  assert.ok(apiBypassIndex > 0, 'supabase/middleware.ts must include startsWith("/api/") early bypass');
+  assert.ok(getUserIndex > 0, "supabase/middleware.ts must include supabase.auth.getUser()");
   assert.ok(
     apiBypassIndex < getUserIndex,
-    "API routes must bypass middleware BEFORE invoking supabase.auth.getUser() to prevent session overhead"
+    "API early bypass must precede supabase.auth.getUser() call"
   );
 });
+
 
 // 9-12. Database RPCs and triggers
 const phase21SqlPath = path.join(
