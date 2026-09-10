@@ -1,7 +1,41 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidUuid } from "@/lib/validation/uuid";
-import { sendWebPushToConversationMembers } from "@/lib/notifications/push-delivery";
+
+interface MessagePostDiagParams {
+  requestId: string;
+  conversationId: string;
+  userId?: string;
+  stage:
+    | "validation"
+    | "auth"
+    | "group_permission_check"
+    | "rpc_start"
+    | "rpc_success"
+    | "rpc_failure"
+    | "response_completion";
+  status?: number;
+  errorCode?: string;
+  errorMessage?: string;
+  elapsedMs: number;
+}
+
+/**
+ * Emits safe structured diagnostics across major message-sending stages.
+ * Strictly avoids logging private content, tokens, cookies, passwords, keys, or full headers.
+ */
+function logMessageDiag(params: MessagePostDiagParams) {
+  const safeUserId = params.userId ? `${params.userId.slice(0, 8)}...` : "none";
+  const errCode = params.errorCode || "none";
+  const errMsg = params.errorMessage
+    ? `"${params.errorMessage.replace(/[\r\n"']/g, " ").slice(0, 80)}"`
+    : "none";
+  const statusStr = params.status !== undefined ? String(params.status) : "none";
+
+  console.log(
+    `[Messages POST Diag] req_id=${params.requestId} conv_id=${params.conversationId} user_id=${safeUserId} stage=${params.stage} status=${statusStr} error_code=${errCode} error_msg=${errMsg} elapsed_ms=${params.elapsedMs}`
+  );
+}
 
 export async function GET(
   request: NextRequest,
@@ -205,16 +239,36 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id: conversationId } = await params;
+  const startTime = Date.now();
+  const requestId =
+    request.headers.get("x-vercel-id") ||
+    request.headers.get("x-request-id") ||
+    `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
+  let conversationId = "unknown";
+
+  try {
+    const resolvedParams = await params;
+    conversationId = resolvedParams.id;
+
+    // 1. Validate conversation ID
     if (!isValidUuid(conversationId)) {
+      logMessageDiag({
+        requestId,
+        conversationId,
+        stage: "validation",
+        status: 400,
+        errorCode: "INVALID_CONVERSATION_ID",
+        errorMessage: "Invalid conversation ID format",
+        elapsedMs: Date.now() - startTime,
+      });
       return NextResponse.json(
         { error: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" },
         { status: 400 }
       );
     }
 
+    // 2. Authenticate session
     const supabase = await createClient();
     const {
       data: { user },
@@ -222,10 +276,28 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      logMessageDiag({
+        requestId,
+        conversationId,
+        stage: "auth",
+        status: 401,
+        errorCode: authError?.name || "UNAUTHORIZED",
+        errorMessage: authError?.message || "User session not found",
+        elapsedMs: Date.now() - startTime,
+      });
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    // Check group message permissions
+    logMessageDiag({
+      requestId,
+      conversationId,
+      userId: user.id,
+      stage: "auth",
+      status: 200,
+      elapsedMs: Date.now() - startTime,
+    });
+
+    // 3. Check group message permissions
     const { data: conv } = await supabase
       .from("conversations")
       .select("type, permissions")
@@ -244,6 +316,16 @@ export async function POST(
           .maybeSingle();
 
         if (!member || (member.role !== "owner" && member.role !== "admin")) {
+          logMessageDiag({
+            requestId,
+            conversationId,
+            userId: user.id,
+            stage: "group_permission_check",
+            status: 403,
+            errorCode: "FORBIDDEN",
+            errorMessage: "Only group admins can send messages in this group",
+            elapsedMs: Date.now() - startTime,
+          });
           return NextResponse.json(
             { error: "FORBIDDEN", message: "Only group admins can send messages in this group." },
             { status: 403 }
@@ -252,8 +334,37 @@ export async function POST(
       }
     }
 
-    const body = await request.json();
-    const { content, clientMessageId, replyToMessageId, forwardedFromMessageId, messageType } = body;
+    // 4. Parse request body
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      logMessageDiag({
+        requestId,
+        conversationId,
+        userId: user.id,
+        stage: "validation",
+        status: 400,
+        errorCode: "INVALID_REQUEST_BODY",
+        errorMessage: "Malformed JSON request body",
+        elapsedMs: Date.now() - startTime,
+      });
+      return NextResponse.json(
+        { error: "INVALID_REQUEST_BODY", message: "Invalid JSON format" },
+        { status: 400 }
+      );
+    }
+
+    const { content, clientMessageId, replyToMessageId, forwardedFromMessageId, messageType } = body || {};
+
+    // 5. Invoke send_message RPC
+    logMessageDiag({
+      requestId,
+      conversationId,
+      userId: user.id,
+      stage: "rpc_start",
+      elapsedMs: Date.now() - startTime,
+    });
 
     const { data, error } = await supabase.rpc("send_message", {
       p_conversation_id: conversationId,
@@ -264,82 +375,118 @@ export async function POST(
       p_message_type: messageType || "text",
     });
 
+    // 6. Handle RPC failures with preserved HTTP status mappings
     if (error) {
+      let status = 500;
+      let publicError = "FAILED_TO_SEND_MESSAGE";
+      let publicMsg = "Couldn't send this message. Please try again.";
+
       if (error.message.includes("CONVERSATION_ACCESS_DENIED")) {
-        return NextResponse.json({ error: "FORBIDDEN", message: "You are not a member of this conversation." }, { status: 403 });
+        status = 403;
+        publicError = "FORBIDDEN";
+        publicMsg = "You are not a member of this conversation.";
+      } else if (error.message.includes("CONVERSATION_NOT_FOUND")) {
+        status = 404;
+        publicError = "NOT_FOUND";
+        publicMsg = "Conversation not found.";
+      } else if (error.message.includes("UNAUTHENTICATED")) {
+        status = 401;
+        publicError = "UNAUTHORIZED";
+        publicMsg = "Authentication required.";
+      } else if (error.message.includes("MESSAGE_BLOCKED")) {
+        status = 403;
+        publicError = "MESSAGE_BLOCKED";
+        publicMsg = "You cannot message this user.";
+      } else if (error.message.includes("PRIVACY_RESTRICTED")) {
+        status = 403;
+        publicError = "PRIVACY_RESTRICTED";
+        publicMsg = "This user does not accept direct messages.";
+      } else if (
+        error.message.includes("MESSAGE_TOO_LONG") ||
+        error.message.includes("message_content_length")
+      ) {
+        status = 400;
+        publicError = "MESSAGE_TOO_LONG";
+        publicMsg = "Message or caption exceeds character limit.";
+      } else if (error.message.includes("MESSAGE_EMPTY")) {
+        status = 400;
+        publicError = "MESSAGE_EMPTY";
+        publicMsg = "Cannot send an empty message.";
+      } else if (error.message.includes("INVALID_REPLY_TARGET")) {
+        status = 400;
+        publicError = "INVALID_REPLY_TARGET";
+        publicMsg = "Cannot reply to a message outside this conversation.";
+      } else if (error.message.includes("INVALID_FORWARD_TARGET")) {
+        status = 400;
+        publicError = "INVALID_FORWARD_TARGET";
+        publicMsg = "Original message not found or inaccessible.";
       }
-      if (error.message.includes("CONVERSATION_NOT_FOUND")) {
-        return NextResponse.json({ error: "NOT_FOUND", message: "Conversation not found." }, { status: 404 });
-      }
-      if (error.message.includes("UNAUTHENTICATED")) {
-        return NextResponse.json({ error: "UNAUTHORIZED", message: "Authentication required." }, { status: 401 });
-      }
-      if (error.message.includes("MESSAGE_BLOCKED")) {
-        return NextResponse.json({ error: "MESSAGE_BLOCKED", message: "You cannot message this user." }, { status: 403 });
-      }
-      if (error.message.includes("PRIVACY_RESTRICTED")) {
-        return NextResponse.json({ error: "PRIVACY_RESTRICTED", message: "This user does not accept direct messages." }, { status: 403 });
-      }
-      if (error.message.includes("MESSAGE_TOO_LONG") || error.message.includes("message_content_length")) {
-        return NextResponse.json({ error: "MESSAGE_TOO_LONG", message: "Message or caption exceeds character limit." }, { status: 400 });
-      }
-      if (error.message.includes("MESSAGE_EMPTY")) {
-        return NextResponse.json({ error: "MESSAGE_EMPTY", message: "Cannot send an empty message." }, { status: 400 });
-      }
-      if (error.message.includes("INVALID_REPLY_TARGET")) {
-        return NextResponse.json({ error: "INVALID_REPLY_TARGET", message: "Cannot reply to a message outside this conversation." }, { status: 400 });
-      }
-      if (error.message.includes("INVALID_FORWARD_TARGET")) {
-        return NextResponse.json({ error: "INVALID_FORWARD_TARGET", message: "Original message not found or inaccessible." }, { status: 400 });
-      }
-      console.error(`[Messages POST RPC Error] conversation_id=${conversationId} user_id=${user.id} error="${error.message}" code=${(error as any).code || "none"}`);
-      return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE", message: "Couldn't send this message. Please try again." }, { status: 500 });
-    }
 
-    // Message successfully persisted in database.
-    // Resolve the canonical message ID (send_message returns camelCase 'messageId')
-    const persistedMessageId = (data as any)?.messageId || (data as any)?.id || (data as any)?.message_id;
-
-    // Dispatch background Web Push to other conversation members.
-    // Bounded execution: Web Push failures or delays MUST NOT fail a persisted message.
-    // The notification queue worker (via cron-job.org) provides the guaranteed background retry.
-    const senderName =
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.user_metadata?.username ||
-      "Someone";
-
-    try {
-      const pushPromise = sendWebPushToConversationMembers({
+      logMessageDiag({
+        requestId,
         conversationId,
-        senderId: user.id,
-        senderName,
-        content: content || (messageType === "voice" ? "Voice message" : "New message"),
-        messageType,
-        messageId: persistedMessageId,
+        userId: user.id,
+        stage: "rpc_failure",
+        status,
+        errorCode: (error as any).code || publicError,
+        errorMessage: error.message,
+        elapsedMs: Date.now() - startTime,
       });
 
-      // Allow up to 1500ms for immediate push dispatch; if push service is slow,
-      // let it finish in background without blocking the HTTP 201 response.
-      await Promise.race([
-        pushPromise,
-        new Promise((resolve) => setTimeout(resolve, 1500)),
-      ]);
-    } catch (pushErr) {
-      console.warn("[Messages POST] Non-blocking push dispatch warning (queue worker will deliver):", pushErr);
+      return NextResponse.json({ error: publicError, message: publicMsg }, { status });
     }
+
+    logMessageDiag({
+      requestId,
+      conversationId,
+      userId: user.id,
+      stage: "rpc_success",
+      status: 200,
+      elapsedMs: Date.now() - startTime,
+    });
+
+    // 7. Resolve the canonical message ID supporting messageId, message_id, and id
+    const rawData = (data as Record<string, any>) || {};
+    const persistedMessageId =
+      rawData.messageId ||
+      rawData.message_id ||
+      rawData.id ||
+      (typeof data === "string" ? data : undefined);
+
+    // 8. Return HTTP 201 immediately.
+    // Web Push notifications are enqueued in PostgreSQL by the trg_enqueue_notification_delivery trigger
+    // and reliably processed by the cron-job.org worker at /api/internal/notifications/process-queue.
+    // No push dispatch occurs on the critical response path.
+    logMessageDiag({
+      requestId,
+      conversationId,
+      userId: user.id,
+      stage: "response_completion",
+      status: 201,
+      elapsedMs: Date.now() - startTime,
+    });
 
     return NextResponse.json(
       {
         success: true,
-        ...((data as Record<string, any>) || {}),
+        ...rawData,
         id: persistedMessageId,
         messageId: persistedMessageId,
+        message_id: persistedMessageId,
       },
       { status: 201 }
     );
   } catch (err: any) {
-    console.error("[Heat Chat] POST /api/conversations/[id]/messages error:", err);
+    logMessageDiag({
+      requestId,
+      conversationId,
+      stage: "response_completion",
+      status: 500,
+      errorCode: "INTERNAL_SERVER_ERROR",
+      errorMessage: err?.message || "Unexpected exception",
+      elapsedMs: Date.now() - startTime,
+    });
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
   }
 }
+

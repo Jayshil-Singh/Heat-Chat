@@ -485,8 +485,8 @@ check(88, "Test push endpoint enforces hourly rate limit", () => {
   assert(testPushRouteTs.includes("Rate limit exceeded") || testPushRouteTs.includes("RATE_LIMIT_EXCEEDED"));
 });
 
-check(89, "Messages route awaits sendWebPushToConversationMembers before returning response", () => {
-  assert(messagesRouteTs.includes("await sendWebPushToConversationMembers"));
+check(89, "Messages route decouples push delivery and returns 201 immediately (queue worker delivers)", () => {
+  assert(messagesRouteTs.includes("status: 201") && !messagesRouteTs.includes("await sendWebPushToConversationMembers"));
 });
 
 check(90, "Friend request route awaits sendWebPushToUser before returning response", () => {
@@ -558,8 +558,8 @@ check(104, "All Web Push interactive buttons have explicit type='button'", () =>
 // --- SECTION V: PRODUCTION BUILD CONTRACTS & CRON ---
 console.log("\n--- SECTION V: PRODUCTION BUILD CONTRACTS & CRON ---");
 
-check(105, "Vercel cron is configured in vercel.json for background queue processing", () => {
-  assert(vercelJson.includes("/api/internal/notifications/process-queue"));
+check(105, "External cron-job.org handles background queue processing (no unsupported hobby cron in vercel.json)", () => {
+  assert(!vercelJson.includes("crons"));
 });
 
 check(106, "Dispatcher awaits sendWebPushToUser for immediate closed-app delivery", () => {
