@@ -5,19 +5,59 @@ import { ClaimedDeliveryItem } from "@/lib/notifications/types";
 import { sendPhysicalPushNotification } from "@/lib/notifications/push";
 import { validatePushEndpointEgress } from "@/lib/notifications/egress";
 
+function cleanAuthToken(raw?: string | null): string {
+  if (!raw) return "";
+  let val = raw.trim();
+  // Strip matching surrounding quotes if accidentally pasted with quotes
+  if (
+    (val.startsWith('"') && val.endsWith('"') && val.length >= 2) ||
+    (val.startsWith("'") && val.endsWith("'") && val.length >= 2)
+  ) {
+    val = val.slice(1, -1).trim();
+  }
+  return val;
+}
+
 function verifyInternalSecret(req: NextRequest): boolean {
-  const secretHeader = req.headers.get("x-internal-secret")?.trim();
-  const authHeader = req.headers.get("authorization")?.trim();
-  const token = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "");
+  const secretHeader = cleanAuthToken(req.headers.get("x-internal-secret"));
+  const authHeader = req.headers.get("authorization")?.trim() || "";
+
+  let token = secretHeader;
+  if (!token && authHeader) {
+    // Case-insensitive check for Bearer with one or more whitespace characters
+    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (bearerMatch) {
+      token = cleanAuthToken(bearerMatch[1]);
+    }
+  }
+
+  // --- SAFE DIAGNOSTIC LOGGING (metadata only, no secret values) ---
+  const authSource = secretHeader ? "x-internal-secret" : authHeader ? "authorization" : "none";
+  const hasAuthHeader = Boolean(authHeader);
+  const authStartsWithBearer = /^Bearer\s+/i.test(authHeader);
+  const tokenLength = token.length;
+  console.log(
+    `[Auth Diag] auth_source=${authSource} has_auth_header=${hasAuthHeader} starts_with_bearer=${authStartsWithBearer} token_length=${tokenLength}`
+  );
+  // --- END DIAGNOSTIC LOGGING ---
 
   if (!token) {
+    console.warn("[Auth Diag] token_empty=true -> returning false");
     return false;
   }
 
-  const configuredSecrets = [
-    process.env.CRON_SECRET?.trim(),
-    process.env.INTERNAL_WORKER_SECRET?.trim(),
-  ].filter(Boolean) as string[];
+  const cronSecretRaw = cleanAuthToken(process.env.CRON_SECRET);
+  const workerSecretRaw = cleanAuthToken(process.env.INTERNAL_WORKER_SECRET);
+
+  const configuredSecrets = [cronSecretRaw, workerSecretRaw].filter(Boolean) as string[];
+
+  // --- SAFE DIAGNOSTIC LOGGING ---
+  console.log(
+    `[Auth Diag] CRON_SECRET_set=${Boolean(cronSecretRaw)} CRON_SECRET_length=${cronSecretRaw.length} ` +
+    `INTERNAL_WORKER_SECRET_set=${Boolean(workerSecretRaw)} INTERNAL_WORKER_SECRET_length=${workerSecretRaw.length} ` +
+    `configured_secret_count=${configuredSecrets.length} node_env=${process.env.NODE_ENV}`
+  );
+  // --- END DIAGNOSTIC LOGGING ---
 
   // In production, only allow explicitly configured secrets from environment.
   // In development/testing, allow the local fallback secret if no env secret is configured.
@@ -33,11 +73,16 @@ function verifyInternalSecret(req: NextRequest): boolean {
       ? configuredSecrets
       : ["heat-chat-internal-worker-secret-production-2026"];
 
-  for (const secret of validSecrets) {
+  for (let i = 0; i < validSecrets.length; i++) {
+    const secret = validSecrets[i];
     try {
       const a = Buffer.from(token, "utf-8");
       const b = Buffer.from(secret, "utf-8");
+      // --- SAFE DIAGNOSTIC LOGGING ---
+      console.log(`[Auth Diag] comparing secret_index=${i} token_length=${a.length} secret_length=${b.length} lengths_match=${a.length === b.length}`);
+      // --- END DIAGNOSTIC LOGGING ---
       if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        console.log(`[Auth Diag] auth_result=success secret_index=${i}`);
         return true;
       }
     } catch {
@@ -45,6 +90,7 @@ function verifyInternalSecret(req: NextRequest): boolean {
     }
   }
 
+  console.warn("[Auth Diag] auth_result=failed no_secret_matched=true");
   return false;
 }
 
