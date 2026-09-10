@@ -8,6 +8,18 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+
+  // 0. Explicit early bypass for auth callback, update-password recovery, and API routes
+  // Prevents session overhead, token refresh, and network delays on cron/API routes
+  if (
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/update-password") ||
+    pathname.startsWith("/api/")
+  ) {
+    return supabaseResponse;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabasePublishableKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
@@ -44,17 +56,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-
-  // 0. Explicit bypass for auth callback, update-password recovery, and API routes
-  if (
-    pathname.startsWith("/auth/callback") ||
-    pathname.startsWith("/update-password") ||
-    pathname.startsWith("/api/")
-  ) {
-    return supabaseResponse;
-  }
 
   const isEmailVerified = Boolean(user?.email_confirmed_at);
 

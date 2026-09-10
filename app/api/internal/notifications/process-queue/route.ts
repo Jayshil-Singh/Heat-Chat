@@ -6,26 +6,31 @@ import { sendPhysicalPushNotification } from "@/lib/notifications/push";
 import { validatePushEndpointEgress } from "@/lib/notifications/egress";
 
 function verifyInternalSecret(req: NextRequest): boolean {
-  const secretHeader = req.headers.get("x-internal-secret");
-  const authHeader = req.headers.get("authorization");
-  const token = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "");
+  const secretHeader = req.headers.get("x-internal-secret")?.trim();
+  const authHeader = req.headers.get("authorization")?.trim();
+  const token = secretHeader || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "");
 
   if (!token) {
     return false;
   }
 
   const configuredSecrets = [
-    process.env.CRON_SECRET,
-    process.env.INTERNAL_WORKER_SECRET,
+    process.env.CRON_SECRET?.trim(),
+    process.env.INTERNAL_WORKER_SECRET?.trim(),
   ].filter(Boolean) as string[];
 
   // In production, only allow explicitly configured secrets from environment.
   // In development/testing, allow the local fallback secret if no env secret is configured.
+  if (configuredSecrets.length === 0 && process.env.NODE_ENV === "production") {
+    console.warn(
+      "[Notification Queue Worker] Authentication failed: No CRON_SECRET or INTERNAL_WORKER_SECRET configured in environment variables."
+    );
+    return false;
+  }
+
   const validSecrets =
     configuredSecrets.length > 0
       ? configuredSecrets
-      : process.env.NODE_ENV === "production"
-      ? []
       : ["heat-chat-internal-worker-secret-production-2026"];
 
   for (const secret of validSecrets) {
@@ -46,13 +51,27 @@ function verifyInternalSecret(req: NextRequest): boolean {
 function getAdminSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rmvpdcftfdeizitnrvkw.supabase.co";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn(
+      "[Notification Queue Worker] Warning: SUPABASE_SERVICE_ROLE_KEY is not set in environment variables! Using fallback publishable key."
+    );
+  }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
 async function handleProcessQueue(req: NextRequest) {
+  const source = req.headers.get("x-vercel-cron")
+    ? "vercel-cron"
+    : req.headers.get("authorization")
+    ? "cron"
+    : "internal";
+
+  console.log(`[Notification Queue Worker] started=true source=${source}`);
+
   if (!verifyInternalSecret(req)) {
+    console.warn(`[Notification Queue Worker] unauthorized request attempt source=${source}`);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -73,6 +92,8 @@ async function handleProcessQueue(req: NextRequest) {
   }
 
   const items = (claimed as ClaimedDeliveryItem[]) || [];
+  console.log(`[Notification Queue Claim] claimed_count=${items.length}`);
+
   let deliveredCount = 0;
   let failedCount = 0;
 
@@ -191,6 +212,8 @@ async function handleProcessQueue(req: NextRequest) {
       }
     }
   }
+
+  console.log(`[Notification Queue Complete] delivered_count=${deliveredCount} failed_count=${failedCount}`);
 
   return NextResponse.json({
     claimed: items.length,

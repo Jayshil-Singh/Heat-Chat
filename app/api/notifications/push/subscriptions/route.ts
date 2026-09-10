@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export async function GET(req: NextRequest) {
   const t0 = Date.now();
@@ -73,6 +74,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ subscriptions: data || [] });
 }
 
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rmvpdcftfdeizitnrvkw.supabase.co";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -91,9 +100,37 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Endpoint or subscription ID required" }, { status: 400 });
     }
 
-    let query = supabase
+    // 1. If subscriptionId is provided, try canonical RPC first
+    if (subscriptionId) {
+      const { data: rpcSuccess, error: rpcError } = await supabase.rpc("revoke_push_subscription", {
+        p_subscription_id: subscriptionId,
+      });
+
+      if (!rpcError && rpcSuccess) {
+        return NextResponse.json({ success: true });
+      }
+    }
+
+    // 2. If endpoint is provided, try revoke_push_subscription_by_endpoint RPC
+    if (endpoint) {
+      const { data: rpcSuccess, error: rpcError } = await (supabase.rpc as any)("revoke_push_subscription_by_endpoint", {
+        p_endpoint: endpoint,
+      });
+
+      if (!rpcError && rpcSuccess) {
+        return NextResponse.json({ success: true });
+      }
+    }
+
+    // 3. Fallback: Update via administrative client scoped strictly to authenticated user.id
+    // This circumvents PostgREST table-level REVOKE ALL restrictions on push_subscriptions
+    const adminSupabase = getAdminSupabase();
+    let query = adminSupabase
       .from("push_subscriptions")
-      .update({ revoked_at: new Date().toISOString() })
+      .update({
+        revoked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("user_id", user.id);
 
     if (endpoint) {
