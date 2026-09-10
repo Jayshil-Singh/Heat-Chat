@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { ClaimedDeliveryItem } from "@/lib/notifications/types";
-import { sendPhysicalPushNotification } from "@/lib/notifications/push";
+import { sendPhysicalPushNotification, getVapidDiagnostics } from "@/lib/notifications/push";
 import { validatePushEndpointEgress } from "@/lib/notifications/egress";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +166,19 @@ async function handleProcessQueue(req: NextRequest) {
 
   console.log(`[Queue Worker] AUTHORIZED method=${method} source=${source} req_id=${reqId}`);
 
+  // --- Safe VAPID diagnostics (lengths & booleans only — no secrets) ---
+  const vapidDiag = getVapidDiagnostics();
+  console.log(
+    `[VAPID Diag] ` +
+    `VAPID_PUBLIC_KEY_set=${vapidDiag.VAPID_PUBLIC_KEY_set} ` +
+    `VAPID_PUBLIC_KEY_length=${vapidDiag.VAPID_PUBLIC_KEY_length} ` +
+    `VAPID_PRIVATE_KEY_set=${vapidDiag.VAPID_PRIVATE_KEY_set} ` +
+    `VAPID_PRIVATE_KEY_length=${vapidDiag.VAPID_PRIVATE_KEY_length} ` +
+    `VAPID_SUBJECT_set=${vapidDiag.VAPID_SUBJECT_set} ` +
+    `VAPID_SUBJECT_length=${vapidDiag.VAPID_SUBJECT_length} ` +
+    `using_fallback_private=${vapidDiag.using_fallback_private}`
+  );
+
   // --- Queue processing ---
   const supabase = getAdminSupabase();
   const batchSize = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get("batch_size") || "25", 10)));
@@ -186,6 +199,15 @@ async function handleProcessQueue(req: NextRequest) {
 
   let deliveredCount = 0;
   let failedCount = 0;
+  const sampleErrors: Array<{
+    delivery_id: string;
+    notification_id: string;
+    provider: string;
+    provider_status: number;
+    error_class: string;
+    error: string;
+    details?: string;
+  }> = [];
 
   for (const item of items) {
     // Egress check
@@ -199,7 +221,7 @@ async function handleProcessQueue(req: NextRequest) {
         p_permanent_failure: !egressCheck.isTransient,
       });
       failedCount++;
-      console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=failed reason=egress_check_failed`);
+      console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} provider_status=0 error_class=egress_check_failed error=egress_check_failed`);
       continue;
     }
 
@@ -229,7 +251,7 @@ async function handleProcessQueue(req: NextRequest) {
 
     if (result.success) {
       deliveredCount++;
-      console.log(`[Worker Delivery] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=delivered`);
+      console.log(`[Worker Delivery] delivery_id=${item.delivery_id} notification_id=${item.notification_id} provider=${result.provider || "unknown"} status=delivered`);
       try {
         await supabase.from("notification_delivery_events").insert({
           notification_id: item.notification_id,
@@ -248,7 +270,28 @@ async function handleProcessQueue(req: NextRequest) {
       }
     } else {
       failedCount++;
-      console.error(`[Worker Delivery Error] delivery_id=${item.delivery_id} notification_id=${item.notification_id} status=failed error=${result.error || "delivery_failed"}`);
+      console.error(
+        `[Worker Delivery Error] ` +
+        `delivery_id=${item.delivery_id} ` +
+        `notification_id=${item.notification_id} ` +
+        `provider=${result.provider || "unknown"} ` +
+        `provider_status=${result.statusCode ?? 0} ` +
+        `error_class=${result.errorClass || "unknown"} ` +
+        `error=${result.error || "delivery_failed"}` +
+        (result.safeDetails ? ` details="${result.safeDetails}"` : "")
+      );
+
+      if (sampleErrors.length < 5) {
+        sampleErrors.push({
+          delivery_id: item.delivery_id,
+          notification_id: item.notification_id,
+          provider: result.provider || "unknown",
+          provider_status: result.statusCode ?? 0,
+          error_class: result.errorClass || "unknown",
+          error: result.error || "delivery_failed",
+          details: result.safeDetails,
+        });
+      }
 
       const isPermanent =
         Boolean(result.permanentFailure) ||
@@ -261,7 +304,7 @@ async function handleProcessQueue(req: NextRequest) {
           recipient_id: item.user_id,
           channel: "push",
           status: "failed",
-          provider_code: (result.error || "delivery_failed").slice(0, 120),
+          provider_code: `HTTP_${result.statusCode || 0}_${result.errorClass || "unknown"}`.slice(0, 120),
         });
 
         const subUpdates: Record<string, unknown> = { last_failure_at: nowIso, updated_at: nowIso };
@@ -282,6 +325,16 @@ async function handleProcessQueue(req: NextRequest) {
     claimed: items.length,
     delivered: deliveredCount,
     failed: failedCount,
+    vapid: {
+      publicKeySet: vapidDiag.VAPID_PUBLIC_KEY_set,
+      publicKeyLength: vapidDiag.VAPID_PUBLIC_KEY_length,
+      privateKeySet: vapidDiag.VAPID_PRIVATE_KEY_set,
+      privateKeyLength: vapidDiag.VAPID_PRIVATE_KEY_length,
+      subjectSet: vapidDiag.VAPID_SUBJECT_set,
+      subjectLength: vapidDiag.VAPID_SUBJECT_length,
+      usingFallbackPrivate: vapidDiag.using_fallback_private,
+    },
+    sampleErrors: sampleErrors.length > 0 ? sampleErrors : undefined,
     timestamp: new Date().toISOString(),
   });
 }
