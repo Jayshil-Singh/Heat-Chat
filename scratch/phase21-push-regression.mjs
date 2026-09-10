@@ -277,6 +277,113 @@ runTest("URL Sanitization function logic behaves correctly", () => {
   assert.strictEqual(sanitizePushTargetUrl(undefined), "/chat");
 });
 
+// ----------------------------------------------------------------------------
+// Group 7: Push Subscriptions Route Hardening & 500 Prevention
+// ----------------------------------------------------------------------------
+console.log("\n--- Group 7: Push Subscriptions Route Hardening ---");
+
+const subscriptionsRoutePath = path.join(
+  ROOT_DIR,
+  "app",
+  "api",
+  "notifications",
+  "push",
+  "subscriptions",
+  "route.ts"
+);
+const subscriptionsRouteCode = fs.readFileSync(subscriptionsRoutePath, "utf-8");
+
+runTest("subscriptions route handles verify_endpoint non-blockingly without returning 500", () => {
+  assert.match(subscriptionsRouteCode, /verifyEndpoint/);
+  assert.match(subscriptionsRouteCode, /verify_push_subscription/);
+  assert.match(subscriptionsRouteCode, /verified:\s*false/);
+  // Must NOT return status 500 when verifyError occurs
+  assert.ok(
+    !subscriptionsRouteCode.includes('return NextResponse.json({ error: "Failed to verify push subscription" }, { status: 500 });'),
+    "verifyError must not return 500"
+  );
+});
+
+runTest("subscriptions route logs structured errors safely without leaking secrets", () => {
+  assert.match(subscriptionsRouteCode, /\[Push Subscriptions\]/);
+  assert.match(subscriptionsRouteCode, /code:\s*verifyError\.code/);
+  assert.match(subscriptionsRouteCode, /message:\s*verifyError\.message/);
+  // Ensure no secret tokens or keys are logged
+  assert.ok(!subscriptionsRouteCode.includes("vapidPrivateKey"));
+  assert.ok(!subscriptionsRouteCode.includes("p256dh"));
+  assert.ok(!subscriptionsRouteCode.includes("cookie"));
+});
+
+// ----------------------------------------------------------------------------
+// Group 8: SSR Hydration Safety (Fix React #418)
+// ----------------------------------------------------------------------------
+console.log("\n--- Group 8: SSR Hydration Safety ---");
+
+const networkStatusHookPath = path.join(ROOT_DIR, "hooks", "use-network-status.ts");
+const networkStatusCode = fs.readFileSync(networkStatusHookPath, "utf-8");
+
+runTest("useNetworkStatus uses deterministic initial state without reading navigator.onLine during render", () => {
+  const fnBody = networkStatusCode.split("export function useNetworkStatus")[1] || "";
+  assert.ok(
+    !fnBody.includes("navigator.onLine"),
+    "useNetworkStatus body must not read navigator.onLine during initial render/hydration"
+  );
+  assert.match(networkStatusCode, /isOnline:\s*true/);
+  assert.match(networkStatusCode, /connectionState:\s*"online"/);
+});
+
+// ----------------------------------------------------------------------------
+// Group 9: Service Worker Shell Cache Bump (Fix 503 on new deployments)
+// ----------------------------------------------------------------------------
+console.log("\n--- Group 9: Service Worker Shell Cache Bump ---");
+
+runTest("public/sw.js shell cache is bumped to heat-chat-shell-v5", () => {
+  assert.match(swCode, /const CACHE_NAME = "heat-chat-shell-v5";/);
+  assert.match(swCode, /Offline - heat-chat-shell-v5/);
+});
+
+// ----------------------------------------------------------------------------
+// Group 10: PWA Controller Change Seamless Reload
+// ----------------------------------------------------------------------------
+console.log("\n--- Group 10: PWA Controller Change Seamless Reload ---");
+
+const swRegPath = path.join(
+  ROOT_DIR,
+  "components",
+  "pwa",
+  "service-worker-registration.tsx"
+);
+const swRegCode = fs.readFileSync(swRegPath, "utf-8");
+
+runTest("service-worker-registration listens for controllerchange and reloads active clients", () => {
+  assert.match(swRegCode, /controllerchange/);
+  assert.match(swRegCode, /window\.location\.reload\(\)/);
+  assert.match(swRegCode, /hadControllerAtStart/);
+});
+
+// ----------------------------------------------------------------------------
+// Group 11: Phase 22 Database Migration
+// ----------------------------------------------------------------------------
+console.log("\n--- Group 11: Phase 22 Database Migration ---");
+
+const phase22Path = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260921_phase22_push_subscriptions_500_fix.sql"
+);
+
+runTest("Phase 22 migration exists and guards push_subscriptions columns", () => {
+  assert.ok(fs.existsSync(phase22Path), "Phase 22 migration file missing");
+  const phase22Sql = fs.readFileSync(phase22Path, "utf-8");
+  assert.match(phase22Sql, /add column if not exists updated_at/i);
+  assert.match(phase22Sql, /add column if not exists device_id/i);
+  assert.match(phase22Sql, /add column if not exists installation_id/i);
+  assert.match(phase22Sql, /create or replace function public\.verify_push_subscription/i);
+  assert.match(phase22Sql, /grant execute on function public\.verify_push_subscription\(text\) to authenticated/i);
+  assert.match(phase22Sql, /grant execute on function public\.get_user_push_subscriptions\(\) to authenticated/i);
+});
+
 console.log("\n=======================================================");
 console.log(`  Tests Completed: ${passed + failed} | Passed: ${passed} | Failed: ${failed}`);
 console.log("=======================================================\n");

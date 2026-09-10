@@ -19,6 +19,22 @@ export function ServiceWorkerRegistration() {
     }
 
     let isSubscribed = true;
+    let hadControllerAtStart = Boolean(navigator.serviceWorker.controller);
+    let refreshing = false;
+
+    const onControllerChange = () => {
+      // Only reload if the page was previously controlled by an older service worker
+      if (!hadControllerAtStart) {
+        hadControllerAtStart = true;
+        return;
+      }
+      if (refreshing) return;
+      refreshing = true;
+      console.info("[PWA] Service worker updated. Reloading page to fetch latest deployment assets...");
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
     const registerSW = async () => {
       try {
@@ -56,14 +72,12 @@ export function ServiceWorkerRegistration() {
       registerSW();
     } else {
       window.addEventListener("load", registerSW);
-      return () => {
-        isSubscribed = false;
-        window.removeEventListener("load", registerSW);
-      };
     }
 
     return () => {
       isSubscribed = false;
+      window.removeEventListener("load", registerSW);
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
     };
   }, []);
 

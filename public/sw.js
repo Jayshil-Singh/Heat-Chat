@@ -1,7 +1,7 @@
 // Heat Chat — Production PWA Service Worker
-// Version: 4.0.0 (Hardened Fetch Safety + Offline 503 Fallback + Zero Undefined Responses)
+// Version: 5.0.0 (Cache Busting + Fresh Shell Asset Pipeline)
 
-const CACHE_NAME = "heat-chat-shell-v4";
+const CACHE_NAME = "heat-chat-shell-v5";
 
 const PRECACHE_RESOURCES = [
   "/offline",
@@ -63,7 +63,7 @@ function createOfflinePageResponse() {
 }
 
 function createOfflineAssetResponse() {
-  return new Response("Offline - heat-chat-shell-v4", {
+  return new Response("Offline - heat-chat-shell-v5", {
     status: 503,
     statusText: "Service Unavailable",
     headers: {

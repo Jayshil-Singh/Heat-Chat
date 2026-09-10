@@ -100,10 +100,10 @@ if (typeof window !== "undefined") {
 }
 
 export function useNetworkStatus(): NetworkStatus {
-  const [state, setState] = React.useState<{ isOnline: boolean; connectionState: ConnectionState }>(() => ({
-    isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
-    connectionState: globalConnectionState,
-  }));
+  const [state, setState] = React.useState<{ isOnline: boolean; connectionState: ConnectionState }>({
+    isOnline: true,
+    connectionState: "online",
+  });
 
   React.useEffect(() => {
     // Initial sync

@@ -421,7 +421,7 @@ check(74, "Service worker explicitly bypasses notification API payloads from cac
 });
 
 check(75, "Service worker shell cache version is modern and unique", () => {
-  assert(swJs.includes("heat-chat-shell-v4"));
+  assert(/heat-chat-shell-v[45]/.test(swJs));
 });
 
 // --- SECTION Q: PWA MANIFEST INTEGRITY ---
