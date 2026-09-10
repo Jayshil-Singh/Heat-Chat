@@ -268,6 +268,12 @@ export async function POST(
       if (error.message.includes("CONVERSATION_ACCESS_DENIED")) {
         return NextResponse.json({ error: "FORBIDDEN", message: "You are not a member of this conversation." }, { status: 403 });
       }
+      if (error.message.includes("CONVERSATION_NOT_FOUND")) {
+        return NextResponse.json({ error: "NOT_FOUND", message: "Conversation not found." }, { status: 404 });
+      }
+      if (error.message.includes("UNAUTHENTICATED")) {
+        return NextResponse.json({ error: "UNAUTHORIZED", message: "Authentication required." }, { status: 401 });
+      }
       if (error.message.includes("MESSAGE_BLOCKED")) {
         return NextResponse.json({ error: "MESSAGE_BLOCKED", message: "You cannot message this user." }, { status: 403 });
       }
@@ -283,11 +289,20 @@ export async function POST(
       if (error.message.includes("INVALID_REPLY_TARGET")) {
         return NextResponse.json({ error: "INVALID_REPLY_TARGET", message: "Cannot reply to a message outside this conversation." }, { status: 400 });
       }
-      console.error("[Heat Chat] send_message RPC error:", error.message);
+      if (error.message.includes("INVALID_FORWARD_TARGET")) {
+        return NextResponse.json({ error: "INVALID_FORWARD_TARGET", message: "Original message not found or inaccessible." }, { status: 400 });
+      }
+      console.error(`[Messages POST RPC Error] conversation_id=${conversationId} user_id=${user.id} error="${error.message}" code=${(error as any).code || "none"}`);
       return NextResponse.json({ error: "FAILED_TO_SEND_MESSAGE", message: "Couldn't send this message. Please try again." }, { status: 500 });
     }
 
-    // Dispatch background Web Push to other conversation members
+    // Message successfully persisted in database.
+    // Resolve the canonical message ID (send_message returns camelCase 'messageId')
+    const persistedMessageId = (data as any)?.messageId || (data as any)?.id || (data as any)?.message_id;
+
+    // Dispatch background Web Push to other conversation members.
+    // Bounded execution: Web Push failures or delays MUST NOT fail a persisted message.
+    // The notification queue worker (via cron-job.org) provides the guaranteed background retry.
     const senderName =
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
@@ -295,22 +310,34 @@ export async function POST(
       "Someone";
 
     try {
-      await sendWebPushToConversationMembers({
+      const pushPromise = sendWebPushToConversationMembers({
         conversationId,
         senderId: user.id,
         senderName,
         content: content || (messageType === "voice" ? "Voice message" : "New message"),
         messageType,
-        messageId: (data as any)?.id || (data as any)?.message_id,
+        messageId: persistedMessageId,
       });
+
+      // Allow up to 1500ms for immediate push dispatch; if push service is slow,
+      // let it finish in background without blocking the HTTP 201 response.
+      await Promise.race([
+        pushPromise,
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
     } catch (pushErr) {
-      console.error("[Heat Chat] Background push delivery error:", pushErr);
+      console.warn("[Messages POST] Non-blocking push dispatch warning (queue worker will deliver):", pushErr);
     }
 
-    return NextResponse.json({
-      success: true,
-      ...((data as Record<string, any>) || {}),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        ...((data as Record<string, any>) || {}),
+        id: persistedMessageId,
+        messageId: persistedMessageId,
+      },
+      { status: 201 }
+    );
   } catch (err: any) {
     console.error("[Heat Chat] POST /api/conversations/[id]/messages error:", err);
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
