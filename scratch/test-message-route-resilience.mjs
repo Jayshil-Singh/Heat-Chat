@@ -219,6 +219,32 @@ test("28. Unauthenticated request returns 401 with UNAUTHORIZED", () => {
   assert(routeCode.includes('{ error: "UNAUTHORIZED" }, { status: 401 }'));
 });
 
+// --- SECTION 7: CLIENT MESSAGE ID NORMALIZATION & 22P02 PREVENTION (PRODUCTION BUG REGRESSION) ---
+console.log("\n--- SECTION 7: CLIENT MESSAGE ID NORMALIZATION & 22P02 REGRESSION ---");
+
+test("29. Route sanitizes clientMessageId with toValidUuidOrNull", () => {
+  assert(routeCode.includes("toValidUuidOrNull"), "Route must define and use toValidUuidOrNull");
+  assert(routeCode.includes("safeClientMessageId = toValidUuidOrNull(clientMessageId)"), "Route must sanitize clientMessageId");
+  assert(routeCode.includes("p_client_message_id: safeClientMessageId"), "RPC must receive safeClientMessageId");
+});
+
+test("30. Route sanitizes replyToMessageId and forwardedFromMessageId", () => {
+  assert(routeCode.includes("safeReplyToMessageId = isValidUuid(replyToMessageId)"), "Route must sanitize replyToMessageId");
+  assert(routeCode.includes("safeForwardedFromMessageId = isValidUuid(forwardedFromMessageId)"), "Route must sanitize forwardedFromMessageId");
+  assert(routeCode.includes("p_reply_to_message_id: safeReplyToMessageId"), "RPC must receive safeReplyToMessageId");
+  assert(routeCode.includes("p_forwarded_from_message_id: safeForwardedFromMessageId"), "RPC must receive safeForwardedFromMessageId");
+});
+
+test("31. Route safely maps Postgres 22P02 syntax error to 400 INVALID_PARAMETER_FORMAT", () => {
+  assert(routeCode.includes('"22P02"'), "Route must handle Postgres 22P02 error code");
+  assert(routeCode.includes("invalid input syntax for type uuid"), "Route must check for uuid syntax error message");
+  assert(routeCode.includes("INVALID_PARAMETER_FORMAT"), "Route must return INVALID_PARAMETER_FORMAT");
+});
+
+test("32. Route preserves clientMessageId in 201 response", () => {
+  assert(routeCode.includes("clientMessageId: clientMessageId || rawData.clientMessageId"), "Route must echo clientMessageId in 201 response");
+});
+
 console.log("\n================================================================================");
 console.log(` TEST SUMMARY: ${passed} PASSED, ${failed} FAILED (TOTAL: ${passed + failed})`);
 console.log("================================================================================\n");

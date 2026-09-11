@@ -773,7 +773,10 @@ export function useMessages(conversationId: string | null) {
 
     const derivedType = hasAttachments ? inferMessageType(stagedAttachments!) : "text";
 
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tempId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Build optimistic attachments
     const optimisticAttachments: AttachmentWithUrl[] = (stagedAttachments || []).map((att, i) => ({

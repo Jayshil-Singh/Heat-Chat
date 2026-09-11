@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidUuid } from "@/lib/validation/uuid";
+import { createHash } from "node:crypto";
 
 interface MessagePostDiagParams {
   requestId: string;
@@ -18,6 +19,21 @@ interface MessagePostDiagParams {
   errorCode?: string;
   errorMessage?: string;
   elapsedMs: number;
+}
+
+/**
+ * Normalizes clientMessageId into a valid UUID.
+ * If already a valid UUID, returns it unchanged.
+ * If a non-empty string (such as client tempId 'temp_123_abc'), deterministically
+ * hashes it into a valid UUID v4 format so PostgreSQL accepts it and idempotency works.
+ * If null/empty, returns null.
+ */
+function toValidUuidOrNull(val?: string | null): string | null {
+  if (!val || typeof val !== "string") return null;
+  const trimmed = val.trim();
+  if (isValidUuid(trimmed)) return trimmed;
+  const hash = createHash("md5").update(trimmed).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
 /**
@@ -357,6 +373,10 @@ export async function POST(
 
     const { content, clientMessageId, replyToMessageId, forwardedFromMessageId, messageType } = body || {};
 
+    const safeClientMessageId = toValidUuidOrNull(clientMessageId);
+    const safeReplyToMessageId = isValidUuid(replyToMessageId) ? replyToMessageId : null;
+    const safeForwardedFromMessageId = isValidUuid(forwardedFromMessageId) ? forwardedFromMessageId : null;
+
     // 5. Invoke send_message RPC
     logMessageDiag({
       requestId,
@@ -369,9 +389,9 @@ export async function POST(
     const { data, error } = await supabase.rpc("send_message", {
       p_conversation_id: conversationId,
       p_content: content,
-      p_client_message_id: clientMessageId || null,
-      p_reply_to_message_id: replyToMessageId || null,
-      p_forwarded_from_message_id: forwardedFromMessageId || null,
+      p_client_message_id: safeClientMessageId,
+      p_reply_to_message_id: safeReplyToMessageId,
+      p_forwarded_from_message_id: safeForwardedFromMessageId,
       p_message_type: messageType || "text",
     });
 
@@ -420,6 +440,13 @@ export async function POST(
         status = 400;
         publicError = "INVALID_FORWARD_TARGET";
         publicMsg = "Original message not found or inaccessible.";
+      } else if (
+        (error as any).code === "22P02" ||
+        error.message.includes("invalid input syntax for type uuid")
+      ) {
+        status = 400;
+        publicError = "INVALID_PARAMETER_FORMAT";
+        publicMsg = "One or more provided identifiers have an invalid format.";
       }
 
       logMessageDiag({
@@ -473,6 +500,7 @@ export async function POST(
         id: persistedMessageId,
         messageId: persistedMessageId,
         message_id: persistedMessageId,
+        clientMessageId: clientMessageId || rawData.clientMessageId,
       },
       { status: 201 }
     );
