@@ -22,6 +22,18 @@ import { useSearch } from "@/hooks/use-search";
 import { UserProfileDialog } from "@/components/profile/user-profile-dialog";
 import type { SearchCategory } from "@/types/chat";
 import type { UserSearchResult } from "@/types/user";
+import { parseMessageDate } from "@/lib/utils/date";
+
+function formatSearchDate(val: unknown): string {
+  const date = parseMessageDate(val);
+  if (!date) return "";
+  try {
+    const formatted = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    return formatted && formatted !== "Invalid Date" ? formatted : "";
+  } catch {
+    return "";
+  }
+}
 
 interface SearchDialogProps {
   isOpen: boolean;
@@ -327,10 +339,7 @@ export function SearchDialog({
                             </span>
                           </p>
                           <span className="text-[10px] text-zinc-400 shrink-0">
-                            {new Date(msg.createdAt).toLocaleDateString([], {
-                              month: "short",
-                              day: "numeric",
-                            })}
+                            {formatSearchDate(msg.createdAt ?? (msg as any).created_at)}
                           </span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
@@ -372,10 +381,7 @@ export function SearchDialog({
                             </span>
                           </p>
                           <span className="text-[10px] text-zinc-400 shrink-0">
-                            {new Date(msg.createdAt).toLocaleDateString([], {
-                              month: "short",
-                              day: "numeric",
-                            })}
+                            {formatSearchDate(msg.createdAt ?? (msg as any).created_at)}
                           </span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">

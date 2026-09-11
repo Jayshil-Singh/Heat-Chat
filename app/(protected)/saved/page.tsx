@@ -21,6 +21,32 @@ import { Button } from "@/components/ui/button";
 import { useSavedMessages } from "@/hooks/use-saved-messages";
 import { MentionText } from "@/components/mentions/mention-text";
 import { SearchHighlight } from "@/components/search/search-highlight";
+import { parseMessageDate } from "@/lib/utils/date";
+
+function formatSavedMessageDate(val: unknown): string {
+  const date = parseMessageDate(val);
+  if (!date) return "";
+  try {
+    const formatted = date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    });
+    return formatted && formatted !== "Invalid Date" ? formatted : "";
+  } catch {
+    return "";
+  }
+}
+
+function formatSavedAtDate(val: unknown): string {
+  const date = parseMessageDate(val);
+  if (!date) return "";
+  try {
+    const formatted = date.toLocaleDateString();
+    return formatted && formatted !== "Invalid Date" ? formatted : "";
+  } catch {
+    return "";
+  }
+}
 
 const CATEGORY_TABS = [
   { id: "all", label: "All Items", icon: Bookmark },
@@ -190,10 +216,7 @@ export default function SavedMessagesPage() {
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-[10px] text-zinc-400">
-                        {new Date(item.createdAt).toLocaleDateString([], {
-                          month: "short",
-                          day: "numeric",
-                        })}
+                        {formatSavedMessageDate(item.createdAt ?? (item as any).created_at)}
                       </span>
                       <button
                         type="button"
@@ -263,7 +286,7 @@ export default function SavedMessagesPage() {
                 {/* Card Footer: Jump to message */}
                 <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-400">
                   <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> Saved on {new Date(item.savedAt).toLocaleDateString()}
+                    <Calendar className="h-3 w-3" /> Saved on {formatSavedAtDate(item.savedAt)}
                   </span>
                   <span className="flex items-center gap-1 font-semibold text-heat-600 dark:text-heat-400 group-hover:translate-x-0.5 transition-transform">
                     Jump to chat <ExternalLink className="h-3 w-3" />

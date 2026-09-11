@@ -5,6 +5,7 @@ import { Check, X, Clock, Loader2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
+import { parseMessageDate } from "@/lib/utils/date";
 import type { FriendRequestWithProfile } from "@/types/chat";
 
 interface FriendRequestCardProps {
@@ -87,7 +88,7 @@ export function FriendRequestCard({
           <p className="text-[10px] text-zinc-400 dark:text-zinc-500 pt-0.5 flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>
-              {type === "received" ? "Received" : "Sent"} {new Date(request.createdAt).toLocaleDateString()}
+              {type === "received" ? "Received" : "Sent"} {parseMessageDate(request.createdAt)?.toLocaleDateString() || ""}
             </span>
           </p>
         </div>

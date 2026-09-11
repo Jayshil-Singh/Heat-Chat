@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImageViewer } from "./image-viewer";
+import { parseMessageDate } from "@/lib/utils/date";
 import type { AttachmentWithUrl } from "@/types/chat";
 
 type MediaCategory = "media" | "audio" | "files";
@@ -56,13 +57,16 @@ function formatDuration(s: number | null | undefined): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: unknown): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    const d = parseMessageDate(iso);
+    if (!d) return "";
+    const formatted = new Intl.DateTimeFormat(undefined, {
       month: "short",
       day: "numeric",
       year: "numeric",
-    }).format(new Date(iso));
+    }).format(d);
+    return formatted && formatted !== "Invalid Date" ? formatted : "";
   } catch {
     return "";
   }

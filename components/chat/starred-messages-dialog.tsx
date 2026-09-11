@@ -5,6 +5,7 @@ import { Star, Bookmark, X, MessageSquare, ExternalLink, Trash2 } from "lucide-r
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { StarredMessageWithDetails } from "@/types/chat";
+import { parseMessageDate } from "@/lib/utils/date";
 
 interface StarredMessagesDialogProps {
   isOpen: boolean;
@@ -189,7 +190,7 @@ export function StarredMessagesDialog({
                         )}
                       </div>
                       <span className="text-[10px] text-zinc-400 shrink-0">
-                        {formatDate(item.message.createdAt)}
+                        {formatDate((item.message as any).createdAt ?? (item.message as any).created_at)}
                       </span>
                     </div>
 
@@ -223,13 +224,20 @@ export function StarredMessagesDialog({
   );
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
+function formatDate(dateStr?: string | null): string {
+  const date = parseMessageDate(dateStr);
+  if (!date) return "Just now";
+  try {
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
 
-  if (isToday) {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    if (isToday) {
+      const formatted = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      return formatted && formatted !== "Invalid Date" ? formatted : "Just now";
+    }
+    const formatted = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    return formatted && formatted !== "Invalid Date" ? formatted : "Just now";
+  } catch {
+    return "Just now";
   }
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }

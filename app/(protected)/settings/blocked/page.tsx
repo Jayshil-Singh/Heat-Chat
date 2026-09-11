@@ -15,6 +15,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockDialog } from "@/components/profile/block-dialog";
+import { parseMessageDate } from "@/lib/utils/date";
 
 interface BlockedUserEntry {
   id: string;
@@ -147,7 +148,7 @@ export default function BlockedUsersPage() {
                     </p>
                   )}
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-600 mt-0.5">
-                    Blocked {new Date(entry.createdAt).toLocaleDateString()}
+                    Blocked {parseMessageDate(entry.createdAt)?.toLocaleDateString() || ""}
                   </p>
                 </div>
 

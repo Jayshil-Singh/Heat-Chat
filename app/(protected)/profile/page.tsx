@@ -22,6 +22,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditProfileDialog } from "@/components/profile/edit-profile-dialog";
+import { parseMessageDate } from "@/lib/utils/date";
 import type { OwnProfileDto, UserPrivacySettings } from "@/types/database";
 
 const PRESENCE_LABELS: Record<string, { label: string; color: string }> = {
@@ -207,13 +208,21 @@ export default function ProfilePage() {
               <span>Member Since</span>
             </div>
             <p className="font-semibold text-zinc-900 dark:text-zinc-100">
-              {ownProfile?.created_at || profile?.created_at
-                ? new Date(ownProfile?.created_at || profile?.created_at || "").toLocaleDateString(undefined, {
+              {(() => {
+                const raw = ownProfile?.created_at || profile?.created_at;
+                const d = parseMessageDate(raw);
+                if (!d) return "Active";
+                try {
+                  const formatted = d.toLocaleDateString(undefined, {
                     year: "numeric",
                     month: "long",
                     day: "numeric",
-                  })
-                : "Active"}
+                  });
+                  return formatted && formatted !== "Invalid Date" ? formatted : "Active";
+                } catch {
+                  return "Active";
+                }
+              })()}
             </p>
           </div>
 

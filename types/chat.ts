@@ -59,6 +59,7 @@ export interface ChatMessage extends Message {
   isPinned?: boolean;
   forwardedFrom?: { id: string; senderName?: string; content?: string } | null;
   isDeletedForMe?: boolean;
+  createdAt?: string;
 }
 
 export interface ConversationMemberWithProfile {
@@ -217,6 +218,7 @@ export interface SearchMessageResult {
   content: string;
   messageType: string;
   createdAt: string;
+  created_at?: string;
   editedAt?: string | null;
   rank: number;
   isSaved?: boolean;
@@ -272,6 +274,7 @@ export interface SavedMessageDto {
   messageType: string;
   isDeleted: boolean;
   createdAt: string;
+  created_at?: string;
   editedAt?: string | null;
   attachments?: AttachmentWithUrl[];
 }

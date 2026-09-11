@@ -51,6 +51,15 @@ export function setCachedConversationMessages(conversationId: string, messages: 
 
   const now = Date.now();
 
+  const normalized = messages.map((m) => {
+    const canonical = (m as any).createdAt || m.created_at || new Date().toISOString();
+    return {
+      ...m,
+      createdAt: canonical,
+      created_at: canonical,
+    };
+  });
+
   // If over capacity, evict least-recently-accessed entry
   if (memoryConversationCache.size >= MAX_CACHED_CONVERSATIONS && !memoryConversationCache.has(conversationId)) {
     let oldestKey: string | null = null;
@@ -69,7 +78,7 @@ export function setCachedConversationMessages(conversationId: string, messages: 
   }
 
   memoryConversationCache.set(conversationId, {
-    messages,
+    messages: normalized,
     expiresAt: now + CONVERSATION_CACHE_TTL_MS,
     lastAccessed: now,
   });

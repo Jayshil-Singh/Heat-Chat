@@ -240,6 +240,7 @@ export async function GET(request: NextRequest) {
         messageType: msg.message_type,
         isDeleted,
         createdAt: msg.created_at,
+        created_at: msg.created_at,
         editedAt: msg.edited_at,
         attachments,
       };

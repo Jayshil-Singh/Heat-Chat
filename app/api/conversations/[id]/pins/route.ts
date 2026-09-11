@@ -80,6 +80,7 @@ export async function GET(
               id: msg.id,
               content: msg.deleted_at ? "This message was deleted" : msg.content,
               createdAt: msg.created_at,
+              created_at: msg.created_at,
               isDeleted: msg.deleted_at !== null,
               sender,
             }

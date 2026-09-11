@@ -96,7 +96,15 @@ async function main() {
     json = JSON.parse(text);
   } catch {}
 
+  const requestId = res.headers.get("x-vercel-id") || "none";
+  const serverTiming = res.headers.get("server-timing") || "none";
+  const diagTimings = res.headers.get("x-diag-timings") || "none";
+
   console.log(`   Response Status: ${status} (took ${elapsedMs}ms)`);
+  console.log(`   Vercel Request ID: ${requestId}`);
+  console.log(`   Server-Timing Header: ${serverTiming}`);
+  console.log(`   Diag Timings Header: ${diagTimings}`);
+  console.log("   Timings from Route JSON:", json?.timings);
   console.log("   Response JSON:", json);
 
   assert.strictEqual(status, 201, `Expected HTTP 201 Created, got ${status}`);

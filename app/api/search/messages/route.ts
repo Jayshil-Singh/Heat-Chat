@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
         content: row.content || "",
         messageType: row.message_type,
         createdAt: row.created_at,
+        created_at: row.created_at,
         editedAt: row.edited_at,
         rank: row.rank || 0,
         isSaved: Boolean(row.is_saved),

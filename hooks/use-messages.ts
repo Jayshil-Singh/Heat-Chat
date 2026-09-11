@@ -52,7 +52,17 @@ export function useMessages(conversationId: string | null) {
 
   // Initialize from in-memory cache if available for instant opening
   const [messages, setMessages] = React.useState<ChatMessage[]>(() => {
-    return conversationId ? getCachedConversationMessages(conversationId) || [] : [];
+    if (!conversationId) return [];
+    const cached = getCachedConversationMessages(conversationId);
+    if (!cached) return [];
+    return cached.map((m) => {
+      const canonical = (m as any).createdAt || m.created_at || new Date().toISOString();
+      return {
+        ...m,
+        createdAt: canonical,
+        created_at: canonical,
+      };
+    });
   });
   const [isLoading, setIsLoading] = React.useState<boolean>(() => {
     return conversationId ? !getCachedConversationMessages(conversationId) : true;
@@ -78,7 +88,15 @@ export function useMessages(conversationId: string | null) {
 
     const cached = getCachedConversationMessages(conversationId);
     if (cached && cached.length > 0) {
-      setMessages(cached);
+      const normalized = cached.map((m) => {
+        const canonical = (m as any).createdAt || m.created_at || new Date().toISOString();
+        return {
+          ...m,
+          createdAt: canonical,
+          created_at: canonical,
+        };
+      });
+      setMessages(normalized);
       setIsLoading(false);
     } else {
       setMessages([]);
@@ -303,8 +321,17 @@ export function useMessages(conversationId: string | null) {
             status = reads.length > 0 ? "read" : deliveries.length > 0 ? "delivered" : "sent";
           }
 
+          const canonicalCreatedAt =
+            (m as any).createdAt ||
+            m.created_at ||
+            (m as any).sentAt ||
+            (m as any).sent_at ||
+            new Date().toISOString();
+
           return {
             ...m,
+            createdAt: canonicalCreatedAt,
+            created_at: canonicalCreatedAt,
             sender: profilesMap.get(m.sender_id) || null,
             status,
             readBy: reads,
@@ -427,7 +454,7 @@ export function useMessages(conversationId: string | null) {
     }
 
     setIsLoadingOlder(true);
-    const oldestCreatedAt = messages[0].created_at;
+    const oldestCreatedAt = messages[0].createdAt || messages[0].created_at;
 
     try {
       const { data: olderRaw, error: olderErr } = await supabase
@@ -791,6 +818,7 @@ export function useMessages(conversationId: string | null) {
       signedUrl: att.processed?.previewUrl || "",
     }));
 
+    const nowIso = new Date().toISOString();
     const optimisticMessage: ChatMessage = {
       id: tempId,
       tempId,
@@ -801,8 +829,9 @@ export function useMessages(conversationId: string | null) {
       reply_to_message_id: replyToMessageId || null,
       forwarded_from_message_id: null,
       client_message_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: nowIso,
+      createdAt: nowIso,
+      updated_at: nowIso,
       edited_at: null,
       deleted_at: null,
       deleted_by: null,
@@ -880,9 +909,17 @@ export function useMessages(conversationId: string | null) {
         if (apiRes.ok) {
           const apiJson = await apiRes.json();
           if (apiJson && (apiJson.id || apiJson.message_id)) {
+            const canonicalCreatedAt =
+              apiJson.createdAt ||
+              apiJson.created_at ||
+              apiJson.sentAt ||
+              apiJson.sent_at ||
+              nowIso;
             insertedMsg = {
               ...apiJson,
               id: apiJson.id || apiJson.message_id,
+              createdAt: canonicalCreatedAt,
+              created_at: canonicalCreatedAt,
             };
           }
         } else {
@@ -896,7 +933,13 @@ export function useMessages(conversationId: string | null) {
           .insert(insertPayload)
           .select("*")
           .single();
-        insertedMsg = res.data;
+        insertedMsg = res.data
+          ? {
+              ...res.data,
+              createdAt: res.data.created_at,
+              created_at: res.data.created_at,
+            }
+          : null;
         insertError = res.error;
       }
 
@@ -999,7 +1042,10 @@ export function useMessages(conversationId: string | null) {
         const next = prev.map((m) =>
           m.tempId === tempId
             ? {
+                ...m,
                 ...insertedMsg,
+                createdAt: insertedMsg.createdAt || m.createdAt || m.created_at,
+                created_at: insertedMsg.created_at || m.created_at || m.createdAt,
                 status: "sent" as const,
                 readBy: [],
                 reactions: [],

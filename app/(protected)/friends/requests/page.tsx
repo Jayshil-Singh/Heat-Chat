@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { parseMessageDate } from "@/lib/utils/date";
 
 export default function FriendRequestsPage() {
   const [activeTab, setActiveTab] = React.useState<"incoming" | "sent">("incoming");
@@ -147,7 +148,7 @@ export default function FriendRequestsPage() {
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-[11px] text-zinc-400">
-                        {new Date(req.createdAt).toLocaleDateString()}
+                        {parseMessageDate(req.createdAt)?.toLocaleDateString() || ""}
                       </p>
                       {req.mutualCount !== undefined && req.mutualCount > 0 && (
                         <span className="rounded-full bg-heat-50 dark:bg-heat-950/40 px-2 py-0.5 text-[10px] font-semibold text-heat-600 dark:text-heat-400">

@@ -24,6 +24,7 @@ import { MentionText } from "@/components/mentions/mention-text";
 import { PollCard } from "@/components/groups/poll-card";
 import type { ChatMessage, PollDto } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
+import { formatMessageTime, parseMessageDate } from "@/lib/utils/date";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -50,22 +51,16 @@ interface MessageItemProps {
   onScrollToMessage?: (messageId: string) => boolean | void;
 }
 
-function formatMessageTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
-
 function isMessageEdited(message: ChatMessage): boolean {
   if (message.deleted_at) return false;
   if (message.edited_at) return true;
-  if (!message.updated_at || !message.created_at) return false;
-  const updatedMs = new Date(message.updated_at).getTime();
-  const createdMs = new Date(message.created_at).getTime();
-  return updatedMs - createdMs > 1000;
+  const updated = message.updated_at ?? (message as any).updatedAt;
+  const created = message.createdAt ?? message.created_at;
+  if (!updated || !created) return false;
+  const updatedDate = parseMessageDate(updated);
+  const createdDate = parseMessageDate(created);
+  if (!updatedDate || !createdDate) return false;
+  return updatedDate.getTime() - createdDate.getTime() > 1000;
 }
 
 export function MessageItem({
@@ -93,7 +88,7 @@ export function MessageItem({
   onScrollToMessage,
 }: MessageItemProps) {
   const [showReportDialog, setShowReportDialog] = React.useState(false);
-  const timeFormatted = formatMessageTime(message.created_at);
+  const timeFormatted = formatMessageTime(message.createdAt ?? message.created_at);
   const isFailed = message.status === "failed";
   const isSending = message.status === "sending";
   const isDeleted = !!message.deleted_at;

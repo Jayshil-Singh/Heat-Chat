@@ -228,8 +228,17 @@ export async function GET(
         }
       }
 
+      const canonicalCreatedAt =
+        (m as any).createdAt ||
+        m.created_at ||
+        (m as any).sentAt ||
+        (m as any).sent_at ||
+        new Date().toISOString();
+
       return {
         ...m,
+        createdAt: canonicalCreatedAt,
+        created_at: canonicalCreatedAt,
         content: isDeleted ? "This message was deleted" : m.content,
         sender: profilesMap.get(m.sender_id) || null,
         status: m.sender_id === user.id ? "sent" : undefined,
@@ -506,6 +515,13 @@ export async function POST(
       elapsedMs: totalMs,
     });
 
+    const canonicalCreatedAt =
+      rawData.createdAt ||
+      rawData.created_at ||
+      rawData.sentAt ||
+      rawData.sent_at ||
+      new Date().toISOString();
+
     return NextResponse.json(
       {
         success: true,
@@ -514,6 +530,8 @@ export async function POST(
         messageId: persistedMessageId,
         message_id: persistedMessageId,
         clientMessageId: clientMessageId || rawData.clientMessageId,
+        createdAt: canonicalCreatedAt,
+        created_at: canonicalCreatedAt,
         timings: {
           valMs,
           authMs,

@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
+import { parseMessageDate } from "@/lib/utils/date";
 import type { ReportCategory, ReportStatus } from "@/types/database";
 
 interface ReportHistoryItem {
@@ -79,13 +80,20 @@ const STATUS_CONFIG: Record<
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const d = parseMessageDate(iso);
+  if (!d) return "";
+  try {
+    const formatted = d.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return formatted && formatted !== "Invalid Date" ? formatted : "";
+  } catch {
+    return "";
+  }
 }
 
 export default function MyReportsPage() {

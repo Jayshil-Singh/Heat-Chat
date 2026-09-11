@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { CreateGroupDialog } from "./create-group-dialog";
 import { setCachedProfile } from "@/lib/cache/profile-cache";
+import { formatRelativeTime } from "@/lib/utils/date";
 import type { ConversationWithDetails } from "@/types/chat";
 
 interface ConversationListProps {
@@ -31,30 +32,6 @@ interface ConversationListProps {
   onSelectConversation?: (id: string) => void;
   onMarkUnread?: (id: string) => void;
   onMarkRead?: (id: string) => void;
-}
-
-function formatRelativeTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) {
-      return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    }
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: "short" });
-    }
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
 }
 
 export function ConversationList({

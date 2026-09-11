@@ -8,6 +8,7 @@ import type { ChatMessage, TypingUser, PollDto } from "@/types/chat";
 import type { ReactionType } from "@/types/database";
 
 import { UnreadDivider } from "@/components/messages/unread-divider";
+import { formatDateSeparator, parseMessageDate } from "@/lib/utils/date";
 
 export interface MessageFeedHandle {
   /**
@@ -43,27 +44,6 @@ interface MessageFeedProps {
   onTogglePin?: (messageId: string) => void;
   onForwardMessage?: (message: ChatMessage) => void;
   onToggleStar?: (messageId: string) => void;
-}
-
-function formatDateSeparator(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) return "Today";
-    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year:
-        date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
-    });
-  } catch {
-    return "";
-  }
 }
 
 const HIGHLIGHT_DURATION_MS = 2000;
@@ -178,7 +158,9 @@ export const MessageFeed = React.forwardRef<
     let currentGroup: ChatMessage[] = [];
 
     messages.forEach((msg) => {
-      const msgDate = new Date(msg.created_at).toDateString();
+      const rawTimestamp = msg.createdAt ?? msg.created_at;
+      const parsedDate = parseMessageDate(rawTimestamp);
+      const msgDate = parsedDate ? parsedDate.toDateString() : "Today";
       if (msgDate !== currentDate) {
         if (currentGroup.length > 0) {
           groups.push({ date: currentDate, items: currentGroup });
@@ -330,7 +312,7 @@ export const MessageFeed = React.forwardRef<
           <div key={group.date} className="w-full min-w-0">
             <div className="my-4 flex items-center justify-center">
               <span className="rounded-full bg-zinc-100 px-3 py-1 text-[11px] font-semibold text-zinc-500 shadow-2xs dark:bg-zinc-800 dark:text-zinc-400">
-                {formatDateSeparator(group.items[0].created_at)}
+                {formatDateSeparator(group.items[0]?.createdAt ?? group.items[0]?.created_at)}
               </span>
             </div>
 

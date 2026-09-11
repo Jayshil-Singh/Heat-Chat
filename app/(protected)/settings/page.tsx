@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/layout/theme-provider";
 import { Button } from "@/components/ui/button";
 import { useNotificationContext } from "@/components/notifications/notification-provider";
+import { parseMessageDate } from "@/lib/utils/date";
 import { useNotificationPermission } from "@/hooks/use-notification-permission";
 import { useDiscoverPeople } from "@/hooks/use-discover-people";
 import { playTestSound } from "@/lib/audio/sound-cue";
@@ -629,7 +630,7 @@ export default function SettingsPage() {
                       {device.user_agent || "Browser Client"}
                     </p>
                     <p className="text-[10px] text-zinc-400">
-                      Last active: {new Date(device.last_seen_at).toLocaleDateString()}
+                      Last active: {parseMessageDate(device.last_seen_at)?.toLocaleDateString() || "Recently"}
                     </p>
                   </div>
                   <Button
