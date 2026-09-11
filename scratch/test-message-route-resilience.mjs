@@ -42,7 +42,7 @@ test("3. Route does NOT have an awaited push promise or Promise.race on response
 });
 
 test("4. Route returns HTTP 201 immediately upon RPC success", () => {
-  assert(routeCode.includes("{ status: 201 }"), "Must return HTTP status 201");
+  assert(routeCode.includes("status: 201"), "Must return HTTP status 201");
   assert(routeCode.includes("stage: \"response_completion\""), "Must log response_completion diagnostic");
 });
 

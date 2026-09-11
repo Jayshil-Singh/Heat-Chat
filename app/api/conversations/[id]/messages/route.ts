@@ -268,6 +268,7 @@ export async function POST(
     conversationId = resolvedParams.id;
 
     // 1. Validate conversation ID
+    const valMs = Date.now() - startTime;
     if (!isValidUuid(conversationId)) {
       logMessageDiag({
         requestId,
@@ -276,7 +277,7 @@ export async function POST(
         status: 400,
         errorCode: "INVALID_CONVERSATION_ID",
         errorMessage: "Invalid conversation ID format",
-        elapsedMs: Date.now() - startTime,
+        elapsedMs: valMs,
       });
       return NextResponse.json(
         { error: "INVALID_CONVERSATION_ID", message: "Invalid conversation ID format" },
@@ -285,11 +286,13 @@ export async function POST(
     }
 
     // 2. Authenticate session
+    const tAuthStart = Date.now();
     const supabase = await createClient();
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
+    const authMs = Date.now() - tAuthStart;
 
     if (authError || !user) {
       logMessageDiag({
@@ -310,10 +313,12 @@ export async function POST(
       userId: user.id,
       stage: "auth",
       status: 200,
+      errorMessage: `auth_ms=${authMs}`,
       elapsedMs: Date.now() - startTime,
     });
 
     // 3. Check group message permissions
+    const tPermStart = Date.now();
     const { data: conv } = await supabase
       .from("conversations")
       .select("type, permissions")
@@ -349,6 +354,7 @@ export async function POST(
         }
       }
     }
+    const permMs = Date.now() - tPermStart;
 
     // 4. Parse request body
     let body: any;
@@ -386,6 +392,7 @@ export async function POST(
       elapsedMs: Date.now() - startTime,
     });
 
+    const tRpcStart = Date.now();
     const { data, error } = await supabase.rpc("send_message", {
       p_conversation_id: conversationId,
       p_content: content,
@@ -394,6 +401,7 @@ export async function POST(
       p_forwarded_from_message_id: safeForwardedFromMessageId,
       p_message_type: messageType || "text",
     });
+    const rpcMs = Date.now() - tRpcStart;
 
     // 6. Handle RPC failures with preserved HTTP status mappings
     if (error) {
@@ -469,6 +477,7 @@ export async function POST(
       userId: user.id,
       stage: "rpc_success",
       status: 200,
+      errorMessage: `rpc_ms=${rpcMs}`,
       elapsedMs: Date.now() - startTime,
     });
 
@@ -480,6 +489,9 @@ export async function POST(
       rawData.id ||
       (typeof data === "string" ? data : undefined);
 
+    const totalMs = Date.now() - startTime;
+    const serverTiming = `val;dur=${valMs}, auth;dur=${authMs}, perm;dur=${permMs}, rpc;dur=${rpcMs}, total;dur=${totalMs}`;
+
     // 8. Return HTTP 201 immediately.
     // Web Push notifications are enqueued in PostgreSQL by the trg_enqueue_notification_delivery trigger
     // and reliably processed by the cron-job.org worker at /api/internal/notifications/process-queue.
@@ -490,7 +502,8 @@ export async function POST(
       userId: user.id,
       stage: "response_completion",
       status: 201,
-      elapsedMs: Date.now() - startTime,
+      errorMessage: `val_ms=${valMs} auth_ms=${authMs} perm_ms=${permMs} rpc_ms=${rpcMs}`,
+      elapsedMs: totalMs,
     });
 
     return NextResponse.json(
@@ -501,8 +514,21 @@ export async function POST(
         messageId: persistedMessageId,
         message_id: persistedMessageId,
         clientMessageId: clientMessageId || rawData.clientMessageId,
+        timings: {
+          valMs,
+          authMs,
+          permMs,
+          rpcMs,
+          totalMs,
+        },
       },
-      { status: 201 }
+      {
+        status: 201,
+        headers: {
+          "Server-Timing": serverTiming,
+          "x-diag-timings": `val=${valMs}ms, auth=${authMs}ms, perm=${permMs}ms, rpc=${rpcMs}ms, total=${totalMs}ms`,
+        },
+      }
     );
   } catch (err: any) {
     logMessageDiag({
