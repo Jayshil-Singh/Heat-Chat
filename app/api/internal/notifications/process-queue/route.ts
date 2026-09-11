@@ -226,6 +226,12 @@ async function handleProcessQueue(req: NextRequest) {
     }
 
     // Send push
+    const conversationId = item.data?.conversationId || item.data?.conversation_id;
+    const messageId = item.data?.messageId || item.data?.message_id;
+    const senderName = item.data?.senderName;
+    const senderId = item.data?.senderId || item.data?.sender_id;
+    const targetUrl = item.data?.url || (conversationId ? `/chat/${conversationId}` : "/chat");
+
     const result = await sendPhysicalPushNotification(
       { endpoint: item.endpoint, p256dh: item.p256dh, auth: item.auth },
       {
@@ -233,7 +239,11 @@ async function handleProcessQueue(req: NextRequest) {
         body: item.body,
         notificationId: item.notification_id,
         eventType: item.event_type,
-        url: item.data?.url || "/chat",
+        url: targetUrl,
+        conversationId,
+        messageId,
+        senderId,
+        senderName,
         data: item.data,
       }
     );

@@ -336,9 +336,9 @@ runTest("useNetworkStatus uses deterministic initial state without reading navig
 // ----------------------------------------------------------------------------
 console.log("\n--- Group 9: Service Worker Shell Cache Bump ---");
 
-runTest("public/sw.js shell cache is bumped to heat-chat-shell-v5", () => {
-  assert.match(swCode, /const CACHE_NAME = "heat-chat-shell-v5";/);
-  assert.match(swCode, /Offline - heat-chat-shell-v5/);
+runTest("public/sw.js shell cache is bumped to heat-chat-shell-v5 or higher", () => {
+  assert.match(swCode, /const CACHE_NAME = "heat-chat-shell-v[5-9]";/);
+  assert.match(swCode, /Offline - heat-chat-shell-v[5-9]/);
 });
 
 // ----------------------------------------------------------------------------

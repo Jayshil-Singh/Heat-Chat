@@ -1,7 +1,7 @@
 // Heat Chat — Production PWA Service Worker
-// Version: 5.0.0 (Cache Busting + Fresh Shell Asset Pipeline)
+// Version: 6.0.0 (Sender-Name Web Push Notifications & Fresh Shell Asset Pipeline)
 
-const CACHE_NAME = "heat-chat-shell-v5";
+const CACHE_NAME = "heat-chat-shell-v6";
 
 const PRECACHE_RESOURCES = [
   "/offline",
@@ -63,7 +63,7 @@ function createOfflinePageResponse() {
 }
 
 function createOfflineAssetResponse() {
-  return new Response("Offline - heat-chat-shell-v5", {
+  return new Response("Offline - heat-chat-shell-v6", {
     status: 503,
     statusText: "Service Unavailable",
     headers: {
@@ -286,6 +286,20 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+function sanitizeNotificationText(val, fallback) {
+  if (val === null || val === undefined) return fallback;
+  const str = String(val).trim();
+  if (
+    !str ||
+    str.toLowerCase() === "undefined" ||
+    str.toLowerCase() === "null" ||
+    str.toLowerCase() === "nan"
+  ) {
+    return fallback;
+  }
+  return str;
+}
+
 // Push Event Listener with Foreground/Background push detection
 self.addEventListener("push", (event) => {
   if (!event.data) {
@@ -297,20 +311,55 @@ self.addEventListener("push", (event) => {
     payload = event.data.json();
   } catch (err) {
     try {
-      payload = { title: "Heat Chat", body: event.data.text() };
+      payload = { title: "New message", body: event.data.text() };
     } catch {
-      payload = { title: "Heat Chat", body: "You have a new notification" };
+      payload = { title: "New message", body: "You have a new message" };
     }
   }
 
-  const title = typeof payload.title === "string" ? payload.title.slice(0, 128) : "Heat Chat";
-  const body = typeof payload.body === "string" ? payload.body.slice(0, 256) : "New notification";
-  const data = payload.data || {};
-  const notificationId = payload.notificationId || data.notificationId || "general";
-  const conversationId = payload.conversationId || data.conversationId;
-  const senderId = payload.senderId || data.senderId;
-  const eventType = payload.type || payload.eventType || data.eventType || "message";
-  const targetUrl = sanitizeTargetUrl(payload.url || data.url);
+  if (!payload || typeof payload !== "object") {
+    payload = {};
+  }
+
+  const data = (payload.data && typeof payload.data === "object") ? payload.data : {};
+  const rawTitle = sanitizeNotificationText(payload.title, "");
+  const rawBody = sanitizeNotificationText(payload.body, "");
+  const senderName = sanitizeNotificationText(payload.senderName || data.senderName, "");
+  const conversationName = sanitizeNotificationText(payload.conversationName || data.conversationName, "");
+
+  // Resolve notification title:
+  // 1. If rawTitle is already specifically formatted (e.g. sender name or "sender in group"), use it.
+  // 2. If rawTitle is generic ("New Message", "New message", "Heat Chat") and senderName is present, format title.
+  // 3. Otherwise use rawTitle if available.
+  // 4. Safe fallback is always "New message" (never undefined, null, or empty).
+  let title = "";
+  if (rawTitle && rawTitle !== "Heat Chat" && rawTitle !== "New Message" && rawTitle !== "New message") {
+    title = rawTitle;
+  } else if (senderName) {
+    if (conversationName) {
+      title = `${senderName} in ${conversationName}`;
+    } else {
+      title = senderName;
+    }
+  } else if (rawTitle) {
+    title = rawTitle;
+  }
+
+  title = sanitizeNotificationText(title, "New message").slice(0, 128);
+
+  // Resolve notification body preview:
+  // Safe fallback is "You have a new message" (never undefined, null, or empty)
+  let body = rawBody;
+  if (!body) {
+    body = "You have a new message";
+  }
+  body = sanitizeNotificationText(body, "You have a new message").slice(0, 256);
+
+  const notificationId = sanitizeNotificationText(payload.notificationId || data.notificationId, "general");
+  const conversationId = sanitizeNotificationText(payload.conversationId || data.conversationId, "");
+  const senderId = sanitizeNotificationText(payload.senderId || data.senderId, "");
+  const eventType = sanitizeNotificationText(payload.type || payload.eventType || data.eventType, "new_message");
+  const targetUrl = sanitizeTargetUrl(payload.url || data.url || (conversationId ? `/chat/${conversationId}` : "/chat"));
 
   const options = {
     body,
@@ -323,9 +372,10 @@ self.addEventListener("push", (event) => {
       notificationId,
       conversationId,
       senderId,
+      senderName,
       eventType,
       receivedAt: Date.now(),
-      ...(data || {}),
+      ...data,
     },
   };
 

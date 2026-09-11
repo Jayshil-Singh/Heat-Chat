@@ -138,6 +138,8 @@ export async function sendPhysicalPushNotification(
     eventType: string;
     conversationId?: string;
     senderId?: string;
+    senderName?: string;
+    messageId?: string;
     data?: Record<string, any>;
   }
 ): Promise<SendPushNotificationResult> {
@@ -165,23 +167,32 @@ export async function sendPhysicalPushNotification(
     safeBody = safeBody.slice(0, 3900) + "...";
   }
 
+  const senderName = payload.senderName || payload.data?.senderName || undefined;
+  const conversationId = payload.conversationId || payload.data?.conversationId || payload.data?.conversation_id || undefined;
+  const messageId = payload.messageId || payload.data?.messageId || payload.data?.message_id || undefined;
+  const notificationType = payload.eventType === "message" ? "new_message" : (payload.eventType || "new_message");
+
   const pushPayload = JSON.stringify({
     version: 1,
-    type: payload.eventType,
+    type: notificationType,
     title: payload.title,
     body: safeBody,
+    senderName,
+    conversationId,
+    messageId,
     icon: "/icons/icon-192.png",
     badge: "/icons/badge-72.png",
     url: targetUrl,
     notificationId: payload.notificationId,
-    conversationId: payload.conversationId,
     senderId: payload.senderId,
     data: {
       url: targetUrl,
       notificationId: payload.notificationId,
       eventType: payload.eventType,
-      conversationId: payload.conversationId,
+      conversationId,
+      messageId,
       senderId: payload.senderId,
+      senderName,
       ...(payload.data || {}),
     },
   });
